@@ -1414,7 +1414,8 @@ function readErr(e){
   if(e&&e.code==="timeout") return m;
   if(e&&e.code==="invalid_json") return "사진에서 숫자를 찾지 못했습니다. 화면 전체가 또렷하게 나오도록 다시 찍어 주세요.";
   if(/AI 키가 아직 없습니다/.test(m)) return "AI 키가 아직 없습니다. 스크립트 편집기에서 setGeminiKey 로 키를 저장한 뒤 다시 눌러 주세요.";
-  if(/요청이 몰렸/.test(m)) return m;
+  if(/혼잡|요청이 몰렸|high demand/i.test(m))
+    return "구글 모델이 지금 혼잡합니다. 1~2분 뒤 다시 눌러 주세요. 급하면 아래 칸에 직접 넣으셔도 됩니다.";
   if(m) return m;
   return "읽어내지 못했습니다. 아래 칸에 직접 넣어 주세요.";
 }

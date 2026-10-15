@@ -497,6 +497,35 @@ function keepOnly() {
   return txt;
 }
 
+/**
+ * 특정 모델이 계속 혼잡하면 다른 모델로 고정한다.
+ * testPhotoSpeed 나 listModels_ 로 이름을 확인한 뒤 아래 pick 에 적고 실행하세요.
+ * 빈 문자열로 두고 실행하면 고정을 풀고 다시 자동으로 고릅니다.
+ */
+function useModel() {
+  var pick = '';
+  var props = PropertiesService.getScriptProperties();
+  if (!pick) {
+    props.deleteProperty('GEMINI_MODEL');
+    props.deleteProperty('GEMINI_MODEL_OK');
+    props.deleteProperty('GEMINI_MODELS');
+    var txt0 = '모델 고정을 풀었습니다. 쓸 수 있는 모델: ' + listModels_(key_()).slice(0, 8).join(', ');
+    Logger.log(txt0); return txt0;
+  }
+  props.setProperty('GEMINI_MODEL', pick);
+  props.deleteProperty('BUSY_' + pick);
+  var txt = '"' + pick + '" 로 고정했습니다.';
+  Logger.log(txt); return txt;
+}
+
+/** 혼잡 표시를 전부 지운다. */
+function clearBusy() {
+  var props = PropertiesService.getScriptProperties(), n = 0;
+  props.getKeys().forEach(function (k) { if (k.indexOf('BUSY_') === 0) { props.deleteProperty(k); n++; } });
+  var txt = '혼잡 표시 ' + n + '개를 지웠습니다.';
+  Logger.log(txt); return txt;
+}
+
 /** 잠긴 것만 풀고 비밀번호는 그대로 둔다. */
 function unlockAll() {
   var props = PropertiesService.getScriptProperties();
@@ -946,14 +975,25 @@ function gemini_(parts) {
   var busy = [];      /* 혼잡으로 비킨 모델 */
   var lastMsg = '';
 
-  /* 사진이 붙은 호출은 한 번이 무겁다. 한 번에 20~40초가 걸리는데
-     모델을 바꿔가며 네 번 두드리면 사용자는 2분을 기다리다 끊긴다.
-     그래서 사진이 붙으면 딱 한 번만 시도하고, 안 되면 바로 이유를 돌려준다. */
+  /* 사진이 붙은 호출은 한 번이 20~40초로 무겁다.
+     같은 모델을 쉬었다 또 두드리면 시간만 쓰므로 그건 하지 않는다.
+     다만 혼잡(503)은 그 모델만의 사정이라 **다른 모델로는 바로 넘어간다.**
+     503 은 즉시 돌아오므로 세 모델을 거쳐도 대기는 거의 늘지 않는다. */
   var heavy = false;
   for (var pi = 0; pi < parts.length; pi++) if (parts[pi] && parts[pi].inline_data) heavy = true;
-  var maxModels = heavy ? 1 : 4;
+  var maxModels = heavy ? 3 : 4;
   var maxTries  = heavy ? 1 : 2;
-  var napMs = 1800;
+  var napMs = heavy ? 0 : 1800;
+
+  /* 최근 혼잡했던 모델은 잠시 건너뛴다. 매번 같은 벽에 부딪힐 이유가 없다. */
+  var now = Date.now();
+  var fresh = [];
+  for (var bi = 0; bi < list.length; bi++) {
+    var until = Number(props.getProperty('BUSY_' + list[bi]) || 0);
+    if (until > now) continue;
+    fresh.push(list[bi]);
+  }
+  if (fresh.length) list = fresh;
 
   for (var i = 0; i < list.length && i < maxModels; i++) {
     var name = list[i];
@@ -979,11 +1019,13 @@ function gemini_(parts) {
       var msg = errMsg_(body);
       lastMsg = code + ' ' + msg;
 
-      /* 혼잡·일시 오류 — 잠깐 쉬고 한 번 더, 그래도 안 되면 다음 모델 */
+      /* 혼잡·일시 오류 */
       if (code === 429 || code === 500 || code === 503) {
-        if (tryNo === 0) { Utilities.sleep(napMs); continue; }
+        props.setProperty('BUSY_' + name, String(Date.now() + 5 * 60 * 1000));  /* 5분간 건너뛴다 */
+        if (props.getProperty('GEMINI_MODEL_OK') === name) props.deleteProperty('GEMINI_MODEL_OK');
         busy.push(name);
-        break;
+        if (napMs && tryNo === 0 && maxTries > 1) { Utilities.sleep(napMs); continue; }
+        break;                                   /* 바로 다음 모델로 */
       }
       /* 모델이 없어졌다 — 목록을 새로 받고 다음 모델 */
       if (code === 404) { models_(true); break; }
@@ -996,8 +1038,9 @@ function gemini_(parts) {
   }
 
   if (busy.length) {
-    throw new Error('지금 구글 쪽 모델이 혼잡합니다(' + busy.join(', ') + '). ' +
-                    '1~2분 뒤 다시 눌러 주세요. 급하면 아래 칸에 직접 넣으셔도 됩니다.');
+    throw new Error('구글 모델 ' + busy.length + '개가 모두 혼잡합니다(' + busy.join(', ') + '). ' +
+                    '지금은 구글 쪽 사정이라 기다리는 수밖에 없습니다. ' +
+                    '1~2분 뒤 다시 누르시거나, 아래 칸에 직접 넣어 주세요.');
   }
   throw new Error('읽어내지 못했습니다. ' + lastMsg);
 }
