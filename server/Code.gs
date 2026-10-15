@@ -163,14 +163,36 @@ function findUser_(loginId) {
   if (last < 2) return null;
   var head = HEAD[SH.user];
   var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  /* 예전 버전으로 가입한 줄은 2번 칸이 영문 아이디이고 5번 칸이 이름이다.
+     둘 중 어느 쪽으로 넣어도 들어오게 한다. */
+  var alt = null;
   for (var i = 0; i < vals.length; i++) {
-    if (normId_(vals[i][1]) !== want) continue;
     var o = {};
     for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
     o.__row = i + 2;
-    return o;
+    if (normId_(vals[i][1]) === want) return o;
+    if (!alt && normId_(vals[i][4]) === want) alt = o;
   }
-  return null;
+  return alt;
+}
+
+/**
+ * 누가 등록돼 있는지 본다. 스크립트 편집기에서 실행하면 실행 기록에 찍힌다.
+ * 비밀번호는 알아볼 수 없는 값이라 여기 나오지 않는다.
+ */
+function listUsers() {
+  var sh = sheet_(SH.user), last = sh.getLastRow();
+  if (last < 2) { Logger.log('등록된 사람이 없습니다.'); return '등록된 사람이 없습니다.'; }
+  var head = HEAD[SH.user];
+  var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  var lines = vals.map(function (r, i) {
+    return (i + 1) + '. 로그인 이름 "' + r[1] + '"' +
+      (r[4] && String(r[4]) !== String(r[1]) ? (' / 표시 이름 "' + r[4] + '"') : '') +
+      ' / 가입 ' + (r[5] ? fmtDate_(r[5]) : '-') + ' / id ' + r[0];
+  });
+  var txt = lines.join('\n');
+  Logger.log(txt);
+  return txt;
 }
 
 function userById_(uid) {
