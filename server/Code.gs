@@ -434,6 +434,69 @@ function resetPassword() {
   return txt;
 }
 
+/**
+ * 계정을 하나만 남기고 전부 정리한다. 기록은 남길 계정으로 몰아 준다.
+ *
+ * 되돌릴 수 없다. 아래 keep 을 남길 이름으로 바꾸고 한 번만 실행하세요.
+ * 실행 전에 listUsers 로 이름을 정확히 확인하는 편이 안전합니다.
+ */
+function keepOnly() {
+  var keep = '여기에_남길_이름';
+  if (keep.indexOf('여기에') >= 0) throw new Error('이 함수 안의 keep 을 남길 이름으로 바꾼 뒤 실행하세요.');
+
+  var me = findUser_(keep);
+  if (!me) throw new Error('"' + keep + '" 이라는 이름이 없습니다. listUsers 로 확인하세요.');
+
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { ensureOwnerCol_(n); });
+
+  /* 1) 모든 기록을 남길 사람 것으로 — 주인이 비어 있든 남의 것이든 전부 */
+  var moved = 0;
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (name) {
+    var sh = sheet_(name), last = sh.getLastRow();
+    if (last < 2) return;
+    var col = HEAD[name].length;
+    var vals = sh.getRange(2, col, last - 1, 1).getValues();
+    var changed = false;
+    for (var i = 0; i < vals.length; i++) {
+      if (String(vals[i][0]) !== String(me.id)) { vals[i][0] = me.id; moved++; changed = true; }
+    }
+    if (changed) sh.getRange(2, col, vals.length, 1).setValues(vals);
+  });
+
+  /* 2) 다른 계정 줄 삭제 — 아래에서 위로 지워야 번호가 밀리지 않는다 */
+  var ush = sheet_(SH.user), ulast = ush.getLastRow(), removed = [];
+  if (ulast >= 2) {
+    var urows = ush.getRange(2, 1, ulast - 1, 2).getValues();
+    for (var r = urows.length - 1; r >= 0; r--) {
+      if (String(urows[r][0]) === String(me.id)) continue;
+      removed.push(urows[r][1]);
+      ush.deleteRow(r + 2);
+    }
+  }
+
+  /* 3) 지운 계정의 로그인 증표와 잠금 기록도 치운다 */
+  var props = PropertiesService.getScriptProperties();
+  props.getKeys().forEach(function (k) {
+    if (k.indexOf('TK_') === 0) {
+      var uidOf = String(props.getProperty(k) || '').split('|')[0];
+      if (uidOf !== me.id) props.deleteProperty(k);
+    }
+    if (k.indexOf('FAIL_N_') === 0 || k.indexOf('FAIL_UNTIL_') === 0) props.deleteProperty(k);
+  });
+  props.setProperty('LEGACY_UID', me.id);
+  props.setProperty('LEGACY_DONE', '1');
+
+  /* 4) 기준값이 없으면 한 벌 깔아 준다 */
+  CUR_UID = me.id;
+  seedCfg_(me.id);
+
+  var txt = '"' + me['이름'] + '" 하나만 남겼습니다.\n' +
+    '기록 ' + moved + '줄을 넘겼습니다.\n' +
+    (removed.length ? ('지운 계정: ' + removed.join(', ')) : '지울 계정이 없었습니다.');
+  Logger.log(txt);
+  return txt;
+}
+
 /** 잠긴 것만 풀고 비밀번호는 그대로 둔다. */
 function unlockAll() {
   var props = PropertiesService.getScriptProperties();
