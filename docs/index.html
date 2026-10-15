@@ -221,6 +221,14 @@ body.locked > :not(#lockHost){display:none !important}
   -webkit-tap-highlight-color:transparent}
 .opt input{width:17px;height:17px;accent-color:var(--accent);margin:0;cursor:pointer}
 .photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
+.shots{display:flex;gap:9px;overflow-x:auto;margin-top:10px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
+.shot{flex:none;width:92px;margin:0}
+.shot img{width:92px;height:70px;object-fit:cover;border-radius:9px;background:var(--surface2);
+  border:1.5px solid var(--line);display:block}
+.shot figcaption{font-size:10.5px;line-height:1.35;color:var(--fg3);margin-top:4px;text-align:center;
+  word-break:keep-all}
+.shot.now img{border-color:var(--accent)}
+.shot.now figcaption{color:var(--accent);font-weight:600}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
@@ -311,8 +319,8 @@ var METRICS = [
 /* ====================== 상태 ====================== */
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
-  picked:{}, files:{}, note:{}, stage:null, shrunk:null, sec:0,
-  multi:{names:[],files:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
+  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0,
+  multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
 function connOK(){ return !!(S.conn.db && S.conn.user && S.conn.uid && !S.conn.err); }
@@ -862,6 +870,17 @@ function draftView(){
      +'<div class="row" style="margin-top:8px;gap:8px">'
      +'<button class="btn ghost sm" data-act="pickFile" data-for="multiPhoto">폴더에서 찾기</button>'
      +'<button class="btn ghost sm" data-act="clearMulti"'+(S.multi.names.length?"":" disabled")+'>비우기</button></div>';
+    if(S.multi.urls && S.multi.urls.length){
+      h+='<div class="shots">';
+      S.multi.urls.forEach(function(u,i){
+        var mk=(S.multi.marks&&S.multi.marks[i])||"";
+        var now=(S.multi.busy && S.multi.at===i+1);
+        h+='<figure class="shot'+(now?' now':'')+'">'
+         +'<img src="'+u+'" alt="'+esc(S.multi.names[i]||"")+'">'
+         +'<figcaption>'+(mk?esc(mk):(now?'읽는 중':(i+1)+'번'))+'</figcaption></figure>';
+      });
+      h+='</div>';
+    }
     if(ready.img){
       h+='<button class="btn full" style="margin-top:10px" data-act="readMulti"'
         +((S.multi.busy||!S.multi.names.length)?" disabled":"")+'>'
@@ -1257,7 +1276,26 @@ function readBlockForm(b){
 function fileOf(id){ var e=document.getElementById(id);
   if(e&&e.files&&e.files[0]) return e.files[0];
   return (S.files&&S.files[id])||null; }
-function clearPick(){ S.picked={}; S.files={}; S.note={}; }
+function makeUrl(f){ try{ return URL.createObjectURL(f); }catch(e){ return ""; } }
+function multiReset(){
+  if(S.multi && S.multi.urls) S.multi.urls.forEach(function(u){ try{ URL.revokeObjectURL(u); }catch(e){} });
+  S.multi={names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false};
+}
+function prevUrl(id,file){
+  S.prev=S.prev||{};
+  if(S.prev[id]){ try{ URL.revokeObjectURL(S.prev[id]); }catch(e){} }
+  try{ S.prev[id]=URL.createObjectURL(file); }catch(e){ S.prev[id]=null; }
+  return S.prev[id];
+}
+function dropPrev(id){
+  if(!S.prev||!S.prev[id]) return;
+  try{ URL.revokeObjectURL(S.prev[id]); }catch(e){}
+  S.prev[id]=null;
+}
+function clearPick(){
+  if(S.prev) Object.keys(S.prev).forEach(dropPrev);
+  S.picked={}; S.files={}; S.note={}; S.prev={};
+}
 
 /* 측정 화면에 찍힌 클럽 표시를 내 가방의 클럽에 맞춘다.
    "7I" "#7" "7번" "DR" "W1" "56" "56°" "SW" "UT" "3H" 같은 표기를 받는다. */
@@ -1317,14 +1355,14 @@ function runMulti(i){
     M.busy=false;
     var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length;
     M.log.push(made ? ("세트 "+made+"개를 만들었습니다.") : "만들어진 세트가 없습니다.");
-    M.files=[]; M.names=[];
+    M.files=[];                /* 다시 읽지 않도록 비우되, 사진과 결과는 남겨 둔다 */
     render(); return;
   }
   M.at=i+1; render();
   var f=M.files[i], label=(f.name||("사진"+(i+1)));
   sample.json("측정 화면",{images:[f],modelTier:"default"})
   .then(function(v){
-    if(!v){ M.bad=true; M.log.push(label+" — 답이 비었습니다"); return next(); }
+    if(!v){ M.bad=true; M.marks[i]="답이 비었음"; M.log.push(label+" — 답이 비었습니다"); return next(); }
     var m={}, got=0;
     METRICS.forEach(function(x){
       if(v[x.k]==null||v[x.k]==="") return;
@@ -1333,10 +1371,11 @@ function runMulti(i){
       m[x.k]=val; got++;
     });
     if(v.grade) m.grade=String(v.grade).toUpperCase().slice(0,1);
-    if(!got){ M.bad=true; M.log.push(label+" — 숫자를 못 읽었습니다"); return next(); }
+    if(!got){ M.bad=true; M.marks[i]="숫자 못 읽음"; M.log.push(label+" — 숫자를 못 읽었습니다"); return next(); }
     var club=v.club?guessClub(v.club):null;
     if(!club){
       M.bad=true;
+      M.marks[i]="클럽 못 찾음";
       M.log.push(label+" — 클럽을 못 찾았습니다"+(v.club?(' (화면 표시 "'+v.club+'")'):"")+". 아래에서 직접 넣어 주세요.");
       return next();
     }
@@ -1345,11 +1384,12 @@ function runMulti(i){
     var ev=evalBlock(club,m,prev?prev.m:null);
     S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,
       good:ev.good,bad:ev.bad,deltas:ev.deltas,coaching:""});
+    M.marks[i]=club.name+(m.carry!=null?(" "+r1(m.carry)+"m"):"");
     M.log.push(label+" → "+club.name+" · 캐리 "+(m.carry!=null?r1(m.carry)+"m":"—")+sizeNote());
     next();
   })
   .catch(function(e){
-    M.bad=true; M.log.push(label+" — "+readErr(e));
+    M.bad=true; M.marks[i]="실패"; M.log.push(label+" — "+readErr(e));
     next();
   });
   function next(){ render(); setTimeout(function(){ runMulti(i+1); },400); }
@@ -1383,7 +1423,8 @@ function takeFile(id,f){
   S.picked=S.picked||{}; S.files=S.files||{};
   S.picked[id]=f.name||"붙여넣은 사진"; S.files[id]=f;
   S.msg[id==="clubPhoto"?"cphoto":"sphoto"]=null;
-  paintPick(id);
+  prevUrl(id,f);
+  render();                 /* 고른 사진을 바로 보여준다 */
 }
 function paintPick(id){
   var e=document.getElementById(id); if(!e) return;
@@ -1410,7 +1451,11 @@ function fileField(id,title,hint){
    +'<button class="btn ghost sm" data-act="pickFile" data-for="'+id+'">폴더에서 찾기</button>'
    +'<button class="btn ghost sm" data-act="pickCam" data-for="'+id+'">카메라로 찍기</button></div>'
    +'<div class="pastebox" contenteditable="true" data-paste="'+id+'" role="textbox" '
-   +'aria-label="사진 붙여넣는 칸" data-ph="여기를 꾹 눌러 → 붙여넣기"></div>';
+   +'aria-label="사진 붙여넣는 칸" data-ph="여기를 꾹 눌러 → 붙여넣기"></div>'
+   +((S.prev&&S.prev[id])
+      ? ('<img class="photoPrev" style="margin-top:10px" src="'+S.prev[id]+'" alt="고른 사진">'
+         +'<p class="tiny" style="margin-top:4px;color:var(--fg3)">이 사진을 읽습니다. 숫자가 또렷한지 확인하세요.</p>')
+      : '');
 }
 /* 파일 창이 실제로 열렸는지는 화면이 가려지는지로 본다 */
 var pickLeft=false;
@@ -1636,7 +1681,7 @@ document.addEventListener("click",function(ev){
     return;
   }
 
-  if(a==="clearMulti"){ S.multi={names:[],files:[],busy:false,at:0,log:[],bad:false}; render(); return; }
+  if(a==="clearMulti"){ multiReset(); render(); return; }
   if(a==="readMulti"){
     if(S.multi.busy || !S.multi.files.length) return;
     S.multi.busy=true; S.multi.at=0; S.multi.log=[]; S.multi.bad=false; render();
@@ -1833,10 +1878,13 @@ document.addEventListener("change",function(ev){
   var t=ev.target;
   if(t && t.type==="file" && String(t.id||"").indexOf("multiPhoto")===0){
     var fl=t.files||[];
-    S.multi.files=[]; S.multi.names=[]; S.multi.log=[]; S.multi.bad=false;
+    multiReset();
     for(var mi=0;mi<fl.length;mi++){
       if(fl[mi].type && !/^image\//.test(fl[mi].type)) continue;
-      S.multi.files.push(fl[mi]); S.multi.names.push(fl[mi].name||("사진"+(mi+1)));
+      S.multi.files.push(fl[mi]);
+      S.multi.names.push(fl[mi].name||("사진"+(mi+1)));
+      S.multi.urls.push(makeUrl(fl[mi]));
+      S.multi.marks.push("");
     }
     render(); return;
   }
@@ -1885,10 +1933,13 @@ document.addEventListener("drop",function(ev){
   var id=z.getAttribute("data-pick");
   var dt=ev.dataTransfer, fs=(dt&&dt.files)||[];
   if(id.indexOf("multiPhoto")===0){
-    S.multi.files=[]; S.multi.names=[]; S.multi.log=[]; S.multi.bad=false;
+    multiReset();
     for(var di=0;di<fs.length;di++){
       if(fs[di].type && !/^image\//.test(fs[di].type)) continue;
-      S.multi.files.push(fs[di]); S.multi.names.push(fs[di].name||("사진"+(di+1)));
+      S.multi.files.push(fs[di]);
+      S.multi.names.push(fs[di].name||("사진"+(di+1)));
+      S.multi.urls.push(makeUrl(fs[di]));
+      S.multi.marks.push("");
     }
     render(); return;
   }
