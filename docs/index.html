@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<base target="_top">
+<title>스윙 로그</title>
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gothic+A1:wght@500;700;800&family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* 레이아웃: 폰 우선 단일 컬럼 + 하단 탭바. 측정 숫자는 모노 탭뉴머럴, 제목은 고딕A1 */
+:root{
+  --bg:#F7F6F3; --surface:#FFFFFF; --surface2:#EFEDE7; --line:#DEDAD1;
+  --fg:#1C1A17; --fg2:#6B655C; --fg3:#9A938A;
+  --accent:#BF4F19; --accentSoft:#F7E3D8;
+  --ok:#1C7A58; --okSoft:#DAEFE6;
+  --warn:#9C6600; --warnSoft:#F6E9C9;
+  --bad:#AC241D; --badSoft:#F7DDDB;
+  --shadow:0 1px 2px rgba(28,26,23,.05),0 10px 26px rgba(28,26,23,.05);
+  --fDisp:'Gothic A1','Noto Sans KR',system-ui,sans-serif;
+  --fBody:'Noto Sans KR',system-ui,-apple-system,sans-serif;
+  --fData:'IBM Plex Mono',ui-monospace,SFMono-Regular,monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141311; --surface:#1D1B18; --surface2:#262320; --line:#35312C;
+  --fg:#F2EFE9; --fg2:#A8A199; --fg3:#776F67;
+  --accent:#FF8B4F; --accentSoft:#3B2317;
+  --ok:#53C195; --okSoft:#143027;
+  --warn:#E0A63A; --warnSoft:#352911;
+  --bad:#F08078; --badSoft:#3B1E1C;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 26px rgba(0,0,0,.3);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#141311; --surface:#1D1B18; --surface2:#262320; --line:#35312C;
+  --fg:#F2EFE9; --fg2:#A8A199; --fg3:#776F67;
+  --accent:#FF8B4F; --accentSoft:#3B2317;
+  --ok:#53C195; --okSoft:#143027;
+  --warn:#E0A63A; --warnSoft:#352911;
+  --bad:#F08078; --badSoft:#3B1E1C;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 26px rgba(0,0,0,.3);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--fBody);line-height:1.6;-webkit-text-size-adjust:100%}
+h1,h2,h3,h4{font-family:var(--fDisp);font-weight:800;letter-spacing:-.02em;margin:0;text-wrap:balance;line-height:1.25}
+p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
+/* ---- 뼈대 ---- */
+#app{max-width:720px;margin:0 auto;padding:0 16px 104px}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:40;background:var(--bg);
+  display:flex;align-items:center;gap:10px;padding:14px 0 10px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.mark{width:30px;height:30px;border-radius:9px;background:var(--accent);flex:none;position:relative}
+.mark::after{content:"";position:absolute;inset:0;border-radius:9px;
+  background:radial-gradient(circle at 50% 38%,rgba(255,255,255,.95) 0 3px,transparent 3.5px),
+             linear-gradient(transparent 0 62%,rgba(255,255,255,.55) 62% 64%,transparent 64%)}
+.brand{font-family:var(--fDisp);font-weight:800;font-size:17px;letter-spacing:-.03em;flex:1;min-width:0}
+.brand small{display:block;font-family:var(--fBody);font-weight:400;font-size:11px;color:var(--fg3);letter-spacing:0}
+
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--surface);
+  border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));
+  display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:2px}
+nav.tabs button{background:none;border:0;padding:7px 2px 6px;border-radius:10px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--fg3);font-size:10.5px;font-weight:500}
+nav.tabs button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button[aria-current="true"]{color:var(--accent)}
+
+/* ---- 공통 부품 ---- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.stack{display:flex;flex-direction:column;gap:14px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.eyebrow{font-family:var(--fDisp);font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--fg3)}
+.muted{color:var(--fg2);font-size:13px}
+.tiny{color:var(--fg3);font-size:12px}
+.sec-title{font-size:19px;margin-bottom:2px}
+hr.sep{border:0;border-top:1px solid var(--line);margin:14px 0}
+
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:9px 14px;
+  font-weight:600;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+.btn:hover{border-color:var(--fg3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--fg2);padding:7px 9px}
+.btn.ghost:hover{background:var(--surface2)}
+.btn.sm{padding:6px 11px;font-size:13px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.full{width:100%;justify-content:center}
+
+label.f{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600;color:var(--fg2);min-width:0}
+/* 제목 자리에 놓이는 날짜 — 눌러서 바로 고친다 */
+input.dateTitle{width:auto;min-width:0;max-width:100%;flex:0 1 auto;white-space:nowrap;
+  background:transparent;border:0;border-bottom:1.5px dashed var(--line);border-radius:0;
+  padding:0 2px 2px;font-family:var(--fDisp);font-size:20px;font-weight:700;letter-spacing:-.01em;
+  color:var(--fg);cursor:pointer;-webkit-appearance:none;appearance:none}
+input.dateTitle:focus{outline:none;border-bottom-color:var(--accent)}
+input.dateTitle::-webkit-calendar-picker-indicator{opacity:.45;cursor:pointer}
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=tel],select,textarea{
+  background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:9px 10px;font-size:15px;width:100%;font-family:var(--fBody)}
+input.num,input.lr{font-family:var(--fData);font-variant-numeric:tabular-nums}
+textarea{resize:vertical;min-height:84px;line-height:1.6}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media(max-width:420px){.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:700;
+  font-family:var(--fDisp);letter-spacing:.01em;width:auto;max-width:max-content;flex:none;vertical-align:1px}
+.chip.ok{background:var(--okSoft);color:var(--ok)}
+.chip.warn{background:var(--warnSoft);color:var(--warn)}
+.chip.bad{background:var(--badSoft);color:var(--bad)}
+.chip.neutral{background:var(--surface2);color:var(--fg2)}
+.chip.acc{background:var(--accentSoft);color:var(--accent)}
+
+.grade{font-family:var(--fDisp);font-weight:800;font-size:13px;width:28px;height:28px;border-radius:8px;
+  display:inline-flex;align-items:center;justify-content:center;flex:none}
+.grade.A{background:var(--okSoft);color:var(--ok)}
+.grade.B{background:var(--accentSoft);color:var(--accent)}
+.grade.C{background:var(--warnSoft);color:var(--warn)}
+.grade.D{background:var(--badSoft);color:var(--bad)}
+.grade.X{background:var(--surface2);color:var(--fg3)}
+
+/* 측정 타일 */
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+@media(max-width:470px){.metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.metric{background:var(--surface);padding:9px 8px 10px;min-width:0}
+.metric b{display:block;font-family:var(--fData);font-weight:600;font-size:16px;font-variant-numeric:tabular-nums;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric span{display:block;font-size:10.5px;color:var(--fg3);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.metric.good b{color:var(--ok)}
+.metric.off b{color:var(--bad)}
+.metric .d{font-size:10.5px;font-family:var(--fData);font-weight:600}
+.d.up{color:var(--ok)} .d.dn{color:var(--bad)} .d.flat{color:var(--fg3)}
+
+/* 체크리스트 */
+.check{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.check:last-child{border-bottom:0}
+.check input{appearance:none;width:21px;height:21px;border:2px solid var(--line);border-radius:7px;flex:none;margin-top:2px;cursor:pointer;position:relative;background:var(--bg)}
+.check input:checked{background:var(--ok);border-color:var(--ok)}
+.check input:checked::after{content:"";position:absolute;left:6px;top:2px;width:5px;height:10px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(42deg)}
+.check .ct{min-width:0;flex:1}
+.check .ct b{display:block;font-size:14.5px;font-weight:600}
+.check .ct span{display:block;font-size:12.5px;color:var(--fg2)}
+.check input:checked + .ct b{color:var(--fg2);text-decoration:line-through;text-decoration-color:var(--fg3)}
+
+/* 진행 단계 */
+.steps{display:flex;gap:6px;margin-bottom:14px}
+.steps div{height:4px;flex:1;border-radius:2px;background:var(--line)}
+.steps div.on{background:var(--accent)}
+.steps div.done{background:var(--ok)}
+
+.listrow{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.listrow:last-child{border-bottom:0}
+.listrow .bd{flex:1;min-width:0}
+.listrow .bd b{display:block;font-size:15px;font-weight:700;font-family:var(--fDisp);letter-spacing:-.01em}
+.listrow .bd span{display:block;font-size:12.5px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.listrow .rt{text-align:right;flex:none;font-family:var(--fData);font-variant-numeric:tabular-nums}
+.listrow .rt b{font-size:15px;font-weight:600;display:block}
+.listrow .rt span{font-size:11px;color:var(--fg3)}
+
+.ai{background:var(--accentSoft);border-radius:12px;padding:13px 14px;font-size:14px;line-height:1.72;white-space:pre-wrap}
+.ai .hd{font-family:var(--fDisp);font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:6px}
+.note{background:var(--surface2);border-radius:12px;padding:13px 14px;font-size:14px;line-height:1.7;white-space:pre-wrap}
+.banner{border-radius:12px;padding:11px 13px;font-size:13.5px;line-height:1.6;background:var(--surface2);color:var(--fg2)}
+.banner.warn{background:var(--warnSoft);color:var(--warn)}
+.banner.bad{background:var(--badSoft);color:var(--bad)}
+.banner.ok{background:var(--okSoft);color:var(--ok)}
+
+.empty{text-align:center;padding:30px 16px;color:var(--fg2)}
+.empty h3{font-size:17px;margin-bottom:6px;color:var(--fg)}
+.empty p{font-size:13.5px}
+
+.sheet{position:fixed;inset:0;z-index:60;background:rgba(20,19,17,.45);display:flex;align-items:flex-end;justify-content:center}
+.sheet .inner{background:var(--bg);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
+  padding:18px 16px calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet .hdl{width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 14px}
+
+table.gap{width:100%;border-collapse:collapse;font-family:var(--fData);font-variant-numeric:tabular-nums;font-size:13px}
+table.gap th{font-family:var(--fBody);font-size:11px;color:var(--fg3);text-align:right;font-weight:600;padding:5px 6px;border-bottom:1px solid var(--line)}
+table.gap th:first-child,table.gap td:first-child{text-align:left;font-family:var(--fBody);font-weight:600}
+table.gap td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--line)}
+table.gap tr:last-child td{border-bottom:0}
+td.flagbad{color:var(--bad);font-weight:600}
+td.flagok{color:var(--ok)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+.spark{display:block;width:100%;height:76px}
+.thumb{width:46px;height:46px;border-radius:10px;object-fit:cover;background:var(--surface2);flex:none}
+.filebtn{position:relative;display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:12px;
+  padding:16px 14px;cursor:pointer;background:var(--bg);width:100%;min-height:62px;transition:.12s;
+  -webkit-tap-highlight-color:transparent}
+.filebtn:hover,.filebtn:focus,.filebtn.drag{border-color:var(--accent);background:var(--accentSoft);outline:none}
+.filebtn.on{border-style:solid;border-color:var(--accent)}
+.filebtn input[type=file]{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  font-size:0;border:0;padding:0;margin:0}
+.filebtn .fb-ic{width:34px;height:34px;border-radius:10px;background:var(--accentSoft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;flex:none;line-height:1}
+.filebtn .fb-tx{min-width:0;flex:1}
+.filebtn .fb-tx b{display:block;font-size:14.5px;font-weight:600}
+.filebtn .fb-tx span{display:block;font-size:12.5px;color:var(--fg2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pastebox{margin-top:8px;min-height:46px;border:1.5px dashed var(--line);border-radius:10px;padding:13px 12px;
+  font-size:13.5px;color:var(--fg2);background:var(--surface2);-webkit-user-select:text;user-select:text;
+  overflow:hidden;white-space:nowrap}
+.pastebox:empty:before{content:attr(data-ph);color:var(--fg3)}
+.pastebox:focus{outline:none;border-color:var(--accent);background:var(--accentSoft)}
+body.locked > :not(#lockHost){display:none !important}
+.lockWrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  padding:24px 16px;background:var(--bg);overflow-y:auto;z-index:50}
+.lockCard{width:100%;max-width:340px;text-align:center}
+.lockMark{font-size:40px;line-height:1;margin-bottom:14px}
+.lockCard h2{font-size:23px;font-weight:700;letter-spacing:-.01em}
+.lockCard .f{text-align:left}
+.dots{display:flex;gap:14px;justify-content:center;margin:4px 0 26px}
+.dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--line);background:transparent;transition:.12s}
+.dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.08)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.key{height:62px;border-radius:14px;border:1px solid var(--line);background:var(--surface);
+  font-family:var(--fMono);font-size:23px;font-weight:600;color:var(--fg);cursor:pointer;
+  -webkit-tap-highlight-color:transparent;transition:.08s}
+.key:active{background:var(--accentSoft);border-color:var(--accent);transform:scale(.97)}
+.key.wide{font-size:19px}
+.photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation-duration:2s}}
+</style>
+
+<div id="app">
+  <div class="topbar">
+    <div class="mark"></div>
+    <div class="brand">스윙 로그<small id="sub">불러오는 중</small></div>
+    <a class="btn ghost sm" id="sheetLink" href="#" target="_blank" rel="noopener" title="구글 시트 열기" hidden>시트</a>
+    <button class="btn ghost sm" id="themeBtn" title="화면 밝기 전환" aria-label="화면 밝기 전환">◐</button>
+    <button class="btn ghost sm" data-act="lockNow" title="잠그기" aria-label="잠그기">잠금</button>
+  </div>
+  <main id="main"><div class="empty"><h3>준비 중</h3><p>클럽과 기록을 불러오고 있습니다.</p></div></main>
+</div>
+<nav class="tabs" id="tabs"></nav>
+<div id="sheetHost"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ====================== 상수 ====================== */
+var CAT = {driver:"드라이버",wood:"우드",hybrid:"하이브리드",iron:"아이언",wedge:"웨지",putter:"퍼터"};
+
+/* 사용자의 실측·목표 기준. 측정 10회 평균과 비교하는 잣대 */
+var TARGET = {
+  driver:{carry:[172,190],launch:[13.5,16.5],back:[2100,2900],width:[0,16],depth:[0,13],dir:3.0,label:"드라이버"},
+  hybrid:{carry:[132,146],launch:[13,17],back:[3000,4200],width:[0,15],depth:[0,13],dir:3.0,label:"하이브리드"},
+  i4:{carry:[126,136],launch:[16,19],back:[4200,5200],width:[0,14],depth:[0,11],dir:3.0,label:"4번"},
+  i5:{carry:[116,124],launch:[17,20],back:[4700,5700],width:[0,14],depth:[0,11],dir:3.0,label:"5번"},
+  i6:{carry:[107,115],launch:[18,21],back:[5100,6200],width:[0,13],depth:[0,10],dir:3.0,label:"6번"},
+  i7:{carry:[98,108],launch:[19,22],back:[5700,6900],width:[0,13],depth:[0,10],dir:3.0,label:"7번"},
+  i8:{carry:[88,98],launch:[21,24],back:[6300,7600],width:[0,12],depth:[0,9],dir:3.0,label:"8번"},
+  i9:{carry:[79,89],launch:[23,26],back:[7000,8300],width:[0,12],depth:[0,9],dir:3.0,label:"9번"},
+  pw:{carry:[70,80],launch:[25,28],back:[7800,9000],width:[0,11],depth:[0,8],dir:2.5,label:"피칭"},
+  w48:{carry:[60,70],launch:[27,31],back:[8200,9500],width:[0,10],depth:[0,8],dir:2.5,label:"48도"},
+  w52:{carry:[50,60],launch:[29,33],back:[8500,10000],width:[0,9],depth:[0,7],dir:2.5,label:"52도"},
+  w56:{carry:[40,50],launch:[31,36],back:[9000,11000],width:[0,9],depth:[0,7],dir:2.5,label:"56도"}
+};
+
+/* 클럽 종류별 기본 연습 지침 */
+var DRILL = {
+  driver:{ball:"왼발 뒤꿈치 안쪽",weight:"오른발 55%",blow:"올려치기 (어센딩)",
+    keys:["티는 헤드 윗날이 공 중심에 오는 높이","머리는 공 뒤에 남기고, 하체만 왼쪽으로","톱에서 한 박자 멈춘 뒤 왼발을 밟으며 시작","발끝·어깨 선이 타겟 라인과 평행인지 스틱으로 확인"],
+    watch:"방향각이 L로 치우치면 셋업이 왼쪽을 보고 있는 것. 클럽이 아니라 정렬 문제."},
+  wood:{ball:"왼쪽 가슴 앞",weight:"50:50",blow:"쓸어치기 (레벨)",
+    keys:["잔디를 얇게 스치는 느낌, 찍지 않기","공을 올리려 하지 말고 그대로 지나가기","스윙 크기를 80%로 줄여 중심 타격 우선"],
+    watch:"뒤땅이 나면 공이 너무 왼쪽에 있는 것."},
+  hybrid:{ball:"왼쪽 가슴 앞",weight:"50:50",blow:"아주 얕은 디센딩",
+    keys:["아이언처럼 치되 찍지 않기","손이 공보다 아주 살짝 앞","풀스윙 대신 9시~3시로 10회 먼저"],
+    watch:"높이가 안 나오면 공이 오른쪽으로 치우쳤는지 확인."},
+  iron:{ball:"번호가 커질수록 중앙 쪽으로",weight:"왼발 50~55%",blow:"내려치기 (디센딩) — 공 먼저, 잔디 나중",
+    keys:["머리는 공 중심 위, 드라이버처럼 뒤에 두지 않기","임팩트에서 손이 공보다 앞","디봇이 공 앞쪽에 생기는지 확인"],
+    watch:"발사각이 한 번호 긴 클럽보다 낮으면 얇게 맞은 것. 공 위치부터 의심."},
+  wedge:{ball:"중앙에서 공 하나 오른쪽",weight:"왼발 60%",blow:"확실한 디센딩, 바운스로 미끄러뜨리기",
+    keys:["손목 각도 유지, 퍼올리지 않기","시계 방향 기준 거리 조절 (8시·9시·10시)","같은 템포로 10발, 거리 편차부터 줄이기"],
+    watch:"뒤땅이 잦으면 체중이 오른쪽에 남은 것."},
+  putter:{ball:"왼쪽 눈 아래",weight:"50:50",blow:"어깨로 진자 운동",
+    keys:["손목 쓰지 않기","백스윙과 폴로를 같은 길이로","1m·3m·5m를 각 10개씩"],
+    watch:"짧게 남기지 말 것. 홀 30cm 지나가는 세기가 기준."}
+};
+
+var WARMUP = [
+  {t:"제자리 걷기·가볍게 움직이기",d:"2분. 심박을 먼저 올립니다",req:true},
+  {t:"어깨 회전",d:"클럽을 어깨에 걸치고 골프 자세로 좌우 10회",req:true},
+  {t:"옆구리 늘리기",d:"클럽을 머리 위로 들고 좌우로 기울이기, 각 5회",req:true},
+  {t:"햄스트링",d:"한 발 앞으로 뻗고 상체 숙이기, 좌우 15초씩",req:true},
+  {t:"고관절 열기",d:"무릎을 들어 바깥으로 원 그리기, 좌우 10회",req:false},
+  {t:"손목·전완",d:"손등·손바닥 쪽으로 당기기, 각 15초",req:false},
+  {t:"빈 스윙",d:"웨지로 50% 10회 → 70% 5회",req:true}
+];
+var COOLDOWN = [
+  {t:"가슴·어깨 열기",d:"클럽을 등 뒤로 잡고 20초 × 2회",req:true},
+  {t:"허리 비틀기",d:"앉거나 서서 좌우 각 20초",req:true},
+  {t:"햄스트링·종아리",d:"각 20초씩",req:true},
+  {t:"손목·손가락",d:"각 15초",req:false},
+  {t:"수분 보충",d:"물 한 컵",req:false}
+];
+
+var METRICS = [
+  {k:"total",n:"비거리",u:"m"},{k:"carry",n:"캐리",u:"m"},{k:"apex",n:"최고높이",u:"m"},
+  {k:"ball",n:"볼스피드",u:"m/s"},{k:"launch",n:"발사각",u:"°"},{k:"dir",n:"방향각",u:"°",lr:true},
+  {k:"side",n:"사이드스핀",u:"rpm",lr:true},{k:"back",n:"백스핀",u:"rpm"},
+  {k:"depth",n:"앞뒤 편차",u:"m"},{k:"width",n:"좌우 편차",u:"m"},{k:"landing",n:"안착률",u:"%"}
+];
+
+/* ====================== 상태 ====================== */
+var ready={db:false,ai:false,img:false};
+var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
+  picked:{}, files:{}, note:{}, stage:null, shrunk:null,
+  multi:{names:[],files:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
+  lock:{need:true,needUrl:false,registered:false,name:"",pin:"",err:null,busy:false,wait:0,focused:false},
+  conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
+function connOK(){ return !!(S.conn.db && S.conn.user && S.conn.uid && !S.conn.err); }
+
+function uuid(){ return "x"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
+function today(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fmtDate(s){ if(!s) return ""; var p=String(s).split("-"); return p.length<3?s:(+p[1])+"월 "+(+p[2])+"일"; }
+function num(v){ var n=parseFloat(v); return isFinite(n)?n:null; }
+function lrToNum(v){ if(v==null||v==="") return null; var s=String(v).trim().toUpperCase();
+  var neg=/^L/.test(s)||/L$/.test(s), pos=/^R/.test(s)||/R$/.test(s);
+  var n=parseFloat(s.replace(/[LR\s]/g,"")); if(!isFinite(n)) return null;
+  if(neg) return -Math.abs(n); if(pos) return Math.abs(n); return n; }
+function numToLR(n,dp){ if(n==null||!isFinite(n)) return "—"; var a=Math.abs(n).toFixed(dp==null?1:dp);
+  if(Math.abs(n)<0.05) return a; return (n<0?"L":"R")+a; }
+function r1(n){ return n==null?"—":(Math.round(n*10)/10); }
+
+/* ====================== 저장소 (구글 시트) ====================== */
+/* 깃허브 페이지에서 앱스 스크립트 서버로 보낸다.
+   Content-Type 을 text/plain 으로 두면 브라우저가 미리 묻는 절차(preflight)를 건너뛴다.
+   앱스 스크립트는 그 절차에 답할 수 없어서, 이렇게 해야 통한다. */
+function apiUrl(){
+  try{
+    var u=localStorage.getItem("swinglog.api");
+    if(u) return u;
+  }catch(e){}
+  return (window.SWINGLOG_API||"");
+}
+function saveApiUrl(u){ try{ localStorage.setItem("swinglog.api",u); }catch(e){} }
+
+function call(name){
+  var args=[].slice.call(arguments,1);
+  var url=apiUrl();
+  if(!url) return Promise.reject({message:"서버 주소가 아직 없습니다.",needUrl:true});
+  return fetch(url,{
+    method:"POST",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify({fn:name,args:args,token:getToken()})
+  }).then(function(r){
+    if(!r.ok) throw {message:"서버가 "+r.status+" 로 답했습니다."};
+    return r.text();
+  }).then(function(t){
+    var j;
+    try{ j=JSON.parse(t); }
+    catch(e){ throw {message:"서버 답을 읽지 못했습니다. 배포 주소가 /exec 로 끝나는지, 접근 권한이 '모든 사용자'인지 확인하세요."}; }
+    if(j.ok) return j.value;
+    if(j.locked){
+      saveToken("");
+      S.lock.need=true; S.lock.pin=""; S.lock.err="다시 넣어 주세요."; render();
+    }
+    throw {message:j.error||"요청이 처리되지 않았습니다."};
+  });
+}
+function errMsg(e){
+  if(!e) return "알 수 없는 오류입니다.";
+  var m=String(e.message||e);
+  if(/Authoriz|권한/i.test(m)) return "권한이 없습니다. 웹앱 주소를 다시 열어 접근을 허용해 주세요.";
+  if(/exceeded|quota|한도/i.test(m)) return "구글 사용 한도에 걸렸습니다. 잠시 뒤 다시 시도하세요.";
+  return m.slice(0,200);
+}
+function applyCfg(cfg){
+  if(!cfg) return;
+  Object.keys(cfg).forEach(function(k){
+    var c=cfg[k]; if(!c) return;
+    var t=TARGET[k]||{};
+    function pair(a){ return (a&&a[0]!=null&&a[1]!=null)?[a[0],a[1]]:null; }
+    if(pair(c.carry))  t.carry=pair(c.carry);
+    if(pair(c.launch)) t.launch=pair(c.launch);
+    if(pair(c.back))   t.back=pair(c.back);
+    if(c.width&&c.width[1]!=null) t.width=[0,c.width[1]];
+    if(c.depth&&c.depth[1]!=null) t.depth=[0,c.depth[1]];
+    if(c.dir!=null) t.dir=c.dir;
+    if(c.label) t.label=c.label;
+    TARGET[k]=t;
+  });
+}
+function loadAll(){
+  return call("apiLoad").then(function(d){
+    function byDate(a,b){ return String(b.date||"").localeCompare(String(a.date||"")); }
+    S.clubs=(d.clubs||[]).sort(function(a,b){ return (a.order||0)-(b.order||0); });
+    S.sessions=(d.sessions||[]).sort(byDate);
+    S.rounds=(d.rounds||[]).sort(byDate);
+    applyCfg(d.cfg);
+    ready.ai=!!d.hasAI; ready.img=!!d.hasAI;
+    S.sheetUrl=d.sheetUrl||"";
+    S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null;
+    S.loaded=true; if(S.loadTimer) clearTimeout(S.loadTimer); setTimeout(render,0);
+  }).catch(function(e){
+    S.conn.tried=true; S.conn.err=errMsg(e); S.loaded=true;
+    if(S.loadTimer) clearTimeout(S.loadTimer); render();
+  });
+}
+function put(name,obj,quiet){
+  if(!obj.id) obj.id=uuid();
+  var fn = name==="clubs" ? "apiSaveClub" : name==="sessions" ? "apiSaveSession" : "apiSaveRound";
+  return call(fn,obj).then(function(id){
+    if(id) obj.id=id;
+    var arr=S[name],hit=false;
+    for(var i=0;i<arr.length;i++) if(arr[i].id===obj.id){ arr[i]=obj; hit=true; break; }
+    if(!hit) arr.unshift(obj);
+    if(name==="clubs") arr.sort(function(a,b){return (a.order||0)-(b.order||0);});
+    else arr.sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
+    if(!quiet) render();
+  }).catch(function(e){ flash("시트에 저장하지 못했습니다. "+errMsg(e)); });
+}
+function del(name,id){
+  var fn = name==="clubs" ? "apiDeleteClub" : name==="sessions" ? "apiDeleteSession" : "apiDeleteRound";
+  return call(fn,id).then(function(){
+    S[name]=S[name].filter(function(x){return x.id!==id;}); render();
+  }).catch(function(e){ flash("삭제하지 못했습니다. "+errMsg(e)); });
+}
+function flash(t){ S.msg.flash=t; render(); setTimeout(function(){ if(S.msg.flash===t){ S.msg.flash=null; render(); } },4200); }
+
+/* ====================== 평가 로직 ====================== */
+function tkey(c){
+  if(!c) return null;
+  if(c.tkey && TARGET[c.tkey]) return c.tkey;
+  if(c.cat==="driver") return "driver";
+  if(c.cat==="hybrid"||c.cat==="wood") return "hybrid";
+  if(c.cat==="iron"){ var m=String(c.name||"").match(/(\d)/); if(m){ var k="i"+m[1]; if(TARGET[k]) return k; }
+    if(/P|피칭/i.test(c.name||"")) return "pw"; }
+  if(c.cat==="wedge"){ var l=num(c.loft); if(l){ if(l<=49) return "w48"; if(l<=54) return "w52"; return "w56"; } }
+  return null;
+}
+function inRange(v,r){ return v!=null && r && v>=r[0] && v<=r[1]; }
+
+/* 10회 평균 1세트를 기준 및 직전 기록과 대조 */
+function evalBlock(club,m,prev){
+  var T = TARGET[tkey(club)] || null;
+  var good=[],bad=[],deltas={};
+  if(prev) METRICS.forEach(function(x){
+    if(m[x.k]!=null && prev[x.k]!=null) deltas[x.k]=Math.round((m[x.k]-prev[x.k])*10)/10;
+  });
+  if(T){
+    [["carry","캐리","m"],["launch","발사각","°"],["back","백스핀","rpm"]].forEach(function(p){
+      var v=m[p[0]], r=T[p[0]]; if(v==null||!r) return;
+      if(inRange(v,r)) good.push(p[1]+" "+r1(v)+p[2]+" (기준 "+r[0]+"~"+r[1]+")");
+      else bad.push(p[1]+" "+r1(v)+p[2]+" — 기준 "+r[0]+"~"+r[1]+"에서 "+(v<r[0]?"낮음":"높음"));
+    });
+    [["width","좌우 편차","m"],["depth","앞뒤 편차","m"]].forEach(function(p){
+      var v=m[p[0]], r=T[p[0]]; if(v==null||!r) return;
+      if(v<=r[1]) good.push(p[1]+" "+r1(v)+p[2]+" (기준 "+r[1]+" 이하)");
+      else bad.push(p[1]+" "+r1(v)+p[2]+" — 기준 "+r[1]+p[2]+"보다 "+r1(v-r[1])+p[2]+" 넓음");
+    });
+    if(m.dir!=null){
+      if(Math.abs(m.dir)<=T.dir) good.push("방향각 "+numToLR(m.dir)+"° (기준 ±"+T.dir+"° 이내)");
+      else bad.push("방향각 "+numToLR(m.dir)+"° — "+(m.dir<0?"왼":"오른")+"쪽으로 출발. 셋업 정렬 점검");
+    }
+  }
+  if(m.side!=null && Math.abs(m.side)>600) bad.push("사이드스핀 "+numToLR(m.side,0)+"rpm — 좌우 회전이 큼");
+  return {good:good,bad:bad,deltas:deltas,hasT:!!T};
+}
+function metricState(club,k,v){
+  var T=TARGET[tkey(club)]; if(!T||v==null) return "";
+  if(k==="carry"||k==="launch"||k==="back") return T[k] ? (inRange(v,T[k])?"good":"off") : "";
+  if(k==="width"||k==="depth") return T[k] ? (v<=T[k][1]?"good":"off") : "";
+  if(k==="dir") return Math.abs(v)<=T.dir ? "good":"off";
+  return "";
+}
+function lastBlockFor(clubId,beforeSessionId){
+  for(var i=0;i<S.sessions.length;i++){
+    var s=S.sessions[i]; if(beforeSessionId && s.id===beforeSessionId) continue;
+    var bs=s.blocks||[];
+    for(var j=bs.length-1;j>=0;j--) if(bs[j].clubId===clubId && bs[j].m) return {m:bs[j].m,date:s.date};
+  }
+  return null;
+}
+function clubBest(clubId){
+  var best=null;
+  S.sessions.forEach(function(s){ (s.blocks||[]).forEach(function(b){
+    if(b.clubId===clubId && b.m && b.m.carry!=null && (!best||b.m.carry>best.carry)) best={carry:b.m.carry,date:s.date};
+  });});
+  return best;
+}
+function clubSeries(clubId,k){
+  var out=[];
+  S.sessions.slice().reverse().forEach(function(s){ (s.blocks||[]).forEach(function(b){
+    if(b.clubId===clubId && b.m && b.m[k]!=null) out.push({v:b.m[k],date:s.date});
+  });});
+  return out;
+}
+
+/* 가방 전체 — 로프트/거리 간격 */
+function bagGaps(){
+  var rows=S.clubs.filter(function(c){ return c.cat!=="putter"; }).map(function(c){
+    var b=clubBest(c.id), t=TARGET[tkey(c)];
+    return {c:c,loft:num(c.loft),carry:b?b.carry:(t?Math.round((t.carry[0]+t.carry[1])/2):null),measured:!!b};
+  }).filter(function(r){ return r.carry!=null; }).sort(function(a,b){ return b.carry-a.carry; });
+  for(var i=0;i<rows.length;i++){
+    rows[i].dCarry = i===0?null:Math.round((rows[i-1].carry-rows[i].carry)*10)/10;
+    rows[i].dLoft = (i===0||rows[i].loft==null||rows[i-1].loft==null)?null:Math.round((rows[i].loft-rows[i-1].loft)*10)/10;
+  }
+  return rows;
+}
+
+/* ====================== AI ====================== */
+function ask(key,prompt,opts){
+  if(!sample){ S.msg[key]="AI 코칭을 쓸 수 없는 화면입니다."; render(); return Promise.reject(); }
+  S.busy[key]=true; S.msg[key]=null; render();
+  return sample(prompt,opts||{}).then(function(r){ S.busy[key]=false; render(); return r.text; })
+    .catch(function(e){ S.busy[key]=false;
+      var c=e&&e.code;
+      S.msg[key]= c==="not_granted"||c==="sampling_disabled" ? "AI 사용이 허용되지 않았습니다."
+        : c==="rate_limited" ? "요청이 몰렸습니다. 잠시 뒤 다시 눌러 주세요."
+        : c==="refused" ? "이 내용은 분석하지 못했습니다. 입력을 조금 바꿔 보세요."
+        : "분석에 실패했습니다. 다시 눌러 주세요.";
+      render(); throw e; });
+}
+function askJson(key,prompt,opts){
+  if(!sample){ S.msg[key]="AI를 쓸 수 없는 화면입니다."; render(); return Promise.reject(); }
+  S.busy[key]=true; S.msg[key]=null; render();
+  return sample.json(prompt,opts||{}).then(function(v){ S.busy[key]=false; render(); return v; })
+    .catch(function(e){ S.busy[key]=false;
+      S.msg[key]= (e&&e.code==="invalid_json") ? "사진에서 숫자를 읽지 못했습니다. 화면이 잘 보이게 다시 찍거나 직접 입력하세요."
+        : (e&&e.code==="not_granted") ? "AI 사용이 허용되지 않았습니다." : "읽어내지 못했습니다. 직접 입력해 주세요.";
+      render(); throw e; });
+}
+function profileText(){
+  var d=S.clubs.filter(function(c){return c.cat==="driver";})[0];
+  return "사용자: 50대 남성 아마추어, 스코어 90대 중반. 드라이버 볼스피드 약 55 m/s, 실측 캐리 180m. "
+    + "현재 과제 두 가지: (1) 드라이버 방향각이 계속 왼쪽(L3~5도) — 셋업 정렬 문제, (2) 5번 아이언이 4번보다 발사각이 낮고 110m에 그침 — 공 위치 문제. "
+    + (d?("드라이버: "+(d.brand||"")+" "+(d.model||"")+" "+(d.loft||"")+"도, "+(d.shaft||"")+" "+(d.flex||"")+". "):"")
+    + "답은 한국어로, 사과하거나 자격을 따지는 표현 없이, 숫자 근거를 들어 구체적으로.";
+}
+
+/* ====================== 렌더 ====================== */
+var TABS=[
+  {k:"home",n:"홈",d:"M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5"},
+  {k:"clubs",n:"내 클럽",d:"M8 3v12M8 15a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M8 6l8 3-8 3"},
+  {k:"practice",n:"연습",d:"M4 20 20 4M14 4h6v6M9.5 14.5 4 20"},
+  {k:"rounds",n:"라운드",d:"M4 4v16M4 5h12l-2.5 3.5L16 12H4"},
+  {k:"growth",n:"성장",d:"M3 19h18M6 15l4-5 3.5 3L19 6"}
+];
+function renderTabs(){
+  document.getElementById("tabs").innerHTML = TABS.map(function(t){
+    return '<button data-tab="'+t.k+'" aria-current="'+(S.tab===t.k)+'"><svg viewBox="0 0 24 24"><path d="'+t.d+'"/></svg>'+t.n+'</button>';
+  }).join("");
+}
+function render(){
+  if(S.lock && S.lock.need){ renderLock(); return; }
+  var lw=document.getElementById("lockHost"); if(lw) lw.innerHTML="";
+  document.body.classList.remove("locked");
+  renderTabs();
+  var sub=document.getElementById("sub");
+  sub.textContent = !S.loaded ? "불러오는 중"
+    : !connOK() ? "구글 시트에 연결되지 않음"
+    : (S.clubs.length+"개 클럽 · 연습 "+S.sessions.length+"회 · 라운드 "+S.rounds.length+"회");
+  var h = "";
+  if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
+  h += connCard();
+  h += ({home:viewHome,clubs:viewClubs,practice:viewPractice,rounds:viewRounds,growth:viewGrowth}[S.tab]||viewHome)();
+  document.getElementById("main").innerHTML = h;
+  var sl=document.getElementById("sheetLink");
+  if(sl){ if(S.sheetUrl){ sl.href=S.sheetUrl; sl.hidden=false; } else sl.hidden=true; }
+  document.getElementById("sheetHost").innerHTML = S.sheet ? sheetHTML() : "";
+  drawSparks();
+}
+
+/* ---------- 잠금 화면 ---------- */
+function renderLock(){
+  document.body.classList.add("locked");
+  var L=S.lock, host=document.getElementById("lockHost");
+  if(!host){
+    host=document.createElement("div"); host.id="lockHost";
+    document.body.appendChild(host);
+  }
+  var h='<div class="lockWrap"><div class="lockCard">';
+  h+='<div class="lockMark">⛳</div>';
+
+  if(L.needUrl){
+    h+='<h2>서버 주소 넣기</h2>'
+     +'<p class="muted" style="margin:8px 0 18px">앱스 스크립트에서 배포할 때 나온 주소를 한 번만 넣으면 됩니다. '
+     +'<b>/exec</b> 로 끝나는 주소입니다.</p>'
+     +'<label class="f">웹 앱 주소<input type="url" id="lk_url" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off"></label>'
+     +'<button class="btn primary full" style="margin-top:14px" data-act="saveUrl">저장하고 연결</button>';
+    if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
+    h+='<p class="tiny" style="margin-top:14px;color:var(--fg3)">이 기기에만 저장됩니다. 다른 기기에서는 한 번 더 넣어야 합니다.</p>';
+  } else if(!L.registered){
+    h+='<h2>처음 오셨습니다</h2>'
+     +'<p class="muted" style="margin:8px 0 18px">이름과 숫자 네 자리를 정해 주세요. 다음부터는 네 자리만 넣으면 됩니다.</p>'
+     +'<label class="f">이름<input type="text" id="lk_name" value="'+esc(L.name||"")+'" placeholder="예) 홍길동" autocomplete="off"></label>'
+     +'<label class="f" style="margin-top:10px">숫자 네 자리<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="lk_p1" placeholder="0000" autocomplete="off"></label>'
+     +'<label class="f" style="margin-top:10px">한 번 더<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="lk_p2" placeholder="0000" autocomplete="off"></label>'
+     +'<button class="btn primary full" style="margin-top:14px" data-act="doRegister"'+(L.busy?" disabled":"")+'>'
+     +(L.busy?'<span class="spin"></span> 등록하는 중':'등록하고 시작')+'</button>';
+    if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
+    h+='<p class="tiny" style="margin-top:14px;color:var(--fg3)">넣으신 번호 자체는 어디에도 남지 않습니다. '
+     +'알아볼 수 없는 형태로 바꾼 값만 보관하고, 다음에 넣는 번호를 같은 방식으로 바꿔 맞춰 봅니다. '
+     +'그래서 저장된 값을 들여다봐도 번호를 알아낼 수 없습니다.</p>';
+  } else {
+    h+='<h2>'+esc(L.name||"스윙 로그")+'</h2>'
+     +'<p class="muted" style="margin:6px 0 20px">숫자 네 자리를 넣어 주세요.</p>'
+     +'<div class="dots">';
+    for(var i=0;i<4;i++) h+='<span class="dot'+((L.pin||"").length>i?" on":"")+'"></span>';
+    h+='</div>';
+    h+='<div class="pad">';
+    ["1","2","3","4","5","6","7","8","9","","0","←"].forEach(function(k){
+      if(k==="") { h+='<span></span>'; return; }
+      h+='<button class="key'+(k==="←"?" wide":"")+'" data-act="pin" data-k="'+k+'"'+(L.busy?" disabled":"")+'>'+k+'</button>';
+    });
+    h+='</div>';
+    if(L.busy) h+='<p class="muted" style="margin-top:14px"><span class="spin"></span> 확인하는 중</p>';
+    if(L.err) h+='<div class="banner bad" style="margin-top:14px">'+esc(L.err)+'</div>';
+    if(L.wait>0) h+='<p class="tiny" style="margin-top:10px;color:var(--fg3)">'+L.wait+'초 뒤에 다시 넣을 수 있습니다.</p>';
+    h+='<p class="tiny" style="margin-top:16px;color:var(--fg3)">잊으셨으면 스크립트 편집기에서 <b>resetLock</b> 함수를 실행하세요. 기록은 그대로 남습니다.</p>';
+  }
+  h+='</div></div>';
+  host.innerHTML=h;
+  var f=document.getElementById("lk_name")||document.getElementById("lk_p1");
+  if(f && !L.focused){ L.focused=true; try{ f.focus(); }catch(e){} }
+}
+
+/* ---------- 홈 ---------- */
+function viewHome(){
+  if(!S.loaded) return '<div class="empty"><h3>불러오는 중</h3><p>잠시만 기다려 주세요.</p></div>';
+  var h="";
+  var last=S.sessions[0], lastR=S.rounds[0];
+  var drv=S.clubs.filter(function(c){return c.cat==="driver"&&!c.spare;})[0];
+
+  h+='<div class="stack">';
+
+  /* 오늘 할 일 */
+  h+='<div class="card"><div class="eyebrow">오늘 할 일</div>';
+  h+='<h2 class="sec-title" style="margin-top:4px">연습 시작하기</h2>';
+  h+='<p class="muted" style="margin-top:4px">준비운동 체크 → 클럽별 10회 기록 → 느낀점 → 마무리 운동 순서로 진행합니다.</p>';
+  h+='<div class="row" style="margin-top:12px"><button class="btn primary" data-act="newSession">연습 시작</button>';
+  h+='<button class="btn" data-act="newRound">라운드 점수 입력</button></div></div>';
+
+  /* 지금의 과제 */
+  var tasks=[];
+  if(drv){
+    var lb=lastBlockFor(drv.id);
+    if(lb&&lb.m.dir!=null&&Math.abs(lb.m.dir)>3) tasks.push({t:"드라이버 정렬",d:"방향각 "+numToLR(lb.m.dir)+"° — 발끝·어깨 선을 스틱으로 확인",s:"bad"});
+    if(lb&&lb.m.width!=null&&lb.m.width>16) tasks.push({t:"드라이버 좌우 편차",d:r1(lb.m.width)+"m — 목표 15m 이하",s:"warn"});
+  }
+  var i5=S.clubs.filter(function(c){return tkey(c)==="i5";})[0];
+  if(i5){ var b5=lastBlockFor(i5.id);
+    if(!b5) tasks.push({t:"5번 아이언 측정",d:"아직 기록이 없습니다. 10회 평균부터",s:"warn"});
+    else if(b5.m.carry!=null&&b5.m.carry<116) tasks.push({t:"5번 아이언 공 위치",d:"캐리 "+r1(b5.m.carry)+"m — 목표 116~124m. 4번보다 공 하나 오른쪽",s:"bad"});
+  }
+  if(tasks.length){
+    h+='<div class="card"><div class="eyebrow">지금의 과제</div><div style="margin-top:6px">';
+    tasks.forEach(function(t){
+      h+='<div class="listrow" style="cursor:default"><span class="chip '+t.s+'">'+(t.s==="bad"?"급함":"주의")+'</span>'
+       +'<div class="bd"><b>'+esc(t.t)+'</b><span style="white-space:normal">'+esc(t.d)+'</span></div></div>';
+    });
+    h+='</div></div>';
+  }
+
+  /* 최근 연습 */
+  if(last){
+    h+='<div class="card"><div class="spread"><div class="eyebrow">최근 연습</div><span class="tiny">'+esc(fmtDate(last.date))+'</span></div>';
+    var bl=(last.blocks||[]);
+    if(!bl.length) h+='<p class="muted" style="margin-top:8px">기록된 클럽이 없습니다.</p>';
+    bl.slice(0,3).forEach(function(b){
+      var c=S.clubs.filter(function(x){return x.id===b.clubId;})[0];
+      h+='<div class="listrow" data-act="openSession" data-id="'+esc(last.id)+'">'
+       +'<span class="grade '+(b.m&&b.m.grade?esc(b.m.grade):"X")+'">'+esc(b.m&&b.m.grade||"—")+'</span>'
+       +'<div class="bd"><b>'+esc(b.clubName||(c?c.name:"클럽"))+'</b><span>'+(b.m&&b.m.dir!=null?("방향각 "+numToLR(b.m.dir)+"° · "):"")+(b.m&&b.m.width!=null?("좌우 "+r1(b.m.width)+"m"):"")+'</span></div>'
+       +'<div class="rt"><b>'+(b.m&&b.m.carry!=null?r1(b.m.carry):"—")+'</b><span>캐리 m</span></div></div>';
+    });
+    if(bl.length>3) h+='<p class="tiny" style="margin-top:8px">외 '+(bl.length-3)+'개 클럽</p>';
+    if(last.feeling) h+='<div class="note" style="margin-top:12px"><b style="font-size:12px;color:var(--fg3)">느낀점</b>\n'+esc(last.feeling)+'</div>';
+    h+='<button class="btn sm full" style="margin-top:12px" data-act="openSession" data-id="'+esc(last.id)+'">자세히 보기</button></div>';
+  } else {
+    h+= connOK()
+      ? '<div class="card empty"><h3>아직 연습 기록이 없습니다</h3><p>연습 시작을 누르면 준비운동부터 안내합니다.</p></div>'
+      : '<div class="card empty"><h3>연습 기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
+  }
+
+  /* 최근 라운드 */
+  if(lastR){
+    h+='<div class="card"><div class="spread"><div class="eyebrow">최근 라운드</div><span class="tiny">'+esc(fmtDate(lastR.date))+' · '+(lastR.type==="field"?"필드":"스크린")+'</span></div>';
+    h+='<div class="metrics" style="margin-top:10px">'
+      +mTile("스코어",lastR.score,"")+mTile("퍼팅",lastR.putts,"")+mTile("페어웨이",lastR.fw,"/14")+mTile("그린적중",lastR.gir,"/18")+'</div>';
+    if(lastR.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">분석</div>'+esc(lastR.analysis)+'</div>';
+    h+='</div>';
+  }
+
+  h+='</div>';
+  return h;
+}
+function mTile(n,v,suf){ return '<div class="metric"><b>'+(v==null||v===""?"—":esc(String(v))+esc(suf||""))+'</b><span>'+esc(n)+'</span></div>'; }
+
+/* ---------- 연결 상태 ---------- */
+function connCard(){
+  if(!S.conn.tried || connOK()) return "";
+  var c=S.conn, why;
+  why = c.err || "구글 시트에 닿지 못했습니다.";
+
+  var h='<div class="card" style="margin-bottom:14px;border-color:var(--bad)">';
+  h+='<div class="eyebrow" style="color:var(--bad)">기록을 불러오지 못했습니다</div>';
+  h+='<p class="muted" style="margin:6px 0 10px;color:var(--fg)">'+esc(why)+'</p>';
+  h+='<p class="tiny" style="margin-bottom:10px">시트에 저장된 기록이 지워진 것은 아닙니다. 연결되면 그대로 나타납니다.</p>';
+  h+='<div class="metrics">'
+   +'<div class="metric" style="grid-column:span 2"><b style="font-size:13px;font-family:var(--fBody);color:'+(c.db?"var(--ok)":"var(--bad)")+'">'+(c.db?"연결됨":"끊김")+'</b><span>구글 시트</span></div>'
+   +'<div class="metric"><b style="font-size:13px;font-family:var(--fBody);color:'+(ready.ai?"var(--ok)":"var(--fg3)")+'">'+(ready.ai?"준비됨":"불가")+'</b><span>AI 코칭</span></div>'
+   +'<div class="metric"><b style="font-size:13px;font-family:var(--fBody);color:'+(ready.img?"var(--ok)":"var(--fg3)")+'">'+(ready.img?"가능":"불가")+'</b><span>사진 판독</span></div></div>';
+  h+='<button class="btn primary full" style="margin-top:12px" data-act="reconnect"'+(S.conn.retrying?" disabled":"")+'>'
+   +(S.conn.retrying?'<span class="spin"></span> 다시 연결하는 중':'다시 연결')+'</button>';
+  h+='<p class="tiny" style="margin-top:10px">계속 안 되면 웹앱 주소를 새로 열어 구글 계정 접근을 허용했는지 확인하세요.</p>';
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 내 클럽 ---------- */
+function viewClubs(){
+  var h='<div class="stack">';
+  h+='<div class="spread"><div><h2 class="sec-title">내 클럽</h2><p class="tiny">사진을 올리면 모델과 스펙을 읽어 채워 넣습니다</p></div>'
+   +'<button class="btn primary sm" data-act="addClub">클럽 추가</button></div>';
+
+  if(!S.clubs.length){
+    h+= connOK()
+      ? '<div class="card empty"><h3>등록된 클럽이 없습니다</h3><p>클럽 추가를 눌러 사진을 올리거나 직접 입력하세요.</p></div>'
+      : '<div class="card empty"><h3>클럽 목록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
+  } else {
+    var order=["driver","wood","hybrid","iron","wedge","putter"];
+    order.forEach(function(cat){
+      var list=S.clubs.filter(function(c){return c.cat===cat;});
+      if(!list.length) return;
+      h+='<div class="card"><div class="eyebrow">'+CAT[cat]+'</div><div style="margin-top:4px">';
+      list.forEach(function(c){
+        var b=clubBest(c.id), t=TARGET[tkey(c)];
+        var issue=(c.issues&&c.issues.length)?c.issues.length:0;
+        h+='<div class="listrow" data-act="openClub" data-id="'+esc(c.id)+'">';
+        h+= c.photo ? '<img class="thumb" src="'+esc(c.photo)+'" alt="">' : '<span class="grade X">'+esc((c.name||"?").slice(0,2))+'</span>';
+        h+='<div class="bd"><b>'+esc(c.name)+(c.spare?' <span class="chip neutral">예비</span>':'')+'</b>'
+          +'<span>'+esc([c.brand,c.model,(c.loft?c.loft+"°":""),c.flex].filter(Boolean).join(" · "))+'</span></div>';
+        h+='<div class="rt"><b>'+(b?r1(b.carry):(t?("~"+Math.round((t.carry[0]+t.carry[1])/2)):"—"))+'</b><span>'+(b?"실측 m":"기준 m")+'</span></div>';
+        h+='</div>';
+        if(issue) h+='<div style="padding:0 0 10px 58px;margin-top:-6px"><span class="chip warn">점검 '+issue+'건</span></div>';
+      });
+      h+='</div></div>';
+    });
+
+    /* 가방 간격 */
+    var g=bagGaps();
+    if(g.length>1){
+      h+='<div class="card"><div class="eyebrow">가방 간격</div>';
+      h+='<p class="muted" style="margin:6px 0 10px">거리 간격이 8m보다 좁으면 둘 중 하나는 역할이 겹칩니다. 로프트 간격은 3~4도가 적정입니다.</p>';
+      h+='<div class="scroll-x"><table class="gap"><thead><tr><th>클럽</th><th>로프트</th><th>캐리</th><th>거리차</th><th>로프트차</th></tr></thead><tbody>';
+      g.forEach(function(r){
+        var badC = r.dCarry!=null && r.dCarry<8;
+        var badL = r.dLoft!=null && r.dLoft<2.5;
+        h+='<tr><td>'+esc(r.c.name)+(r.measured?"":' <span class="tiny">기준</span>')+'</td>'
+         +'<td>'+(r.loft!=null?r.loft+"°":"—")+'</td><td>'+r1(r.carry)+'</td>'
+         +'<td class="'+(badC?"flagbad":(r.dCarry!=null?"flagok":""))+'">'+(r.dCarry!=null?r.dCarry:"—")+'</td>'
+         +'<td class="'+(badL?"flagbad":"")+'">'+(r.dLoft!=null?r.dLoft+"°":"—")+'</td></tr>';
+      });
+      h+='</tbody></table></div>';
+      var tight=g.filter(function(r){return r.dCarry!=null&&r.dCarry<8;});
+      if(tight.length) h+='<div class="banner warn" style="margin-top:12px">'+tight.map(function(r){return r.c.name;}).join(", ")+' 구간의 거리 간격이 8m 미만입니다.</div>';
+      h+='<button class="btn sm full" style="margin-top:12px" data-act="bagReview">'+(S.busy.bag?'<span class="spin"></span> 분석 중':'가방 전체 진단')+'</button>';
+      if(S.msg.bag) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.bag)+'</div>';
+      if(S.bagText) h+='<div class="ai" style="margin-top:12px"><div class="hd">가방 진단</div>'+esc(S.bagText)+'</div>';
+      h+='</div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 연습 ---------- */
+function viewPractice(){
+  if(S.draft) return draftView();
+  var h='<div class="stack">';
+  h+='<div class="spread"><div><h2 class="sec-title">연습 기록</h2><p class="tiny">준비운동과 마무리 운동까지 한 세트입니다</p></div>'
+   +'<button class="btn primary sm" data-act="newSession">연습 시작</button></div>';
+  if(!S.sessions.length){
+    h+= connOK()
+      ? '<div class="card empty"><h3>기록이 없습니다</h3><p>연습 시작을 누르면 준비운동 체크부터 안내합니다.</p></div>'
+      : '<div class="card empty"><h3>기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
+  } else {
+    h+='<div class="card">';
+    S.sessions.forEach(function(s){
+      var bl=(s.blocks||[]).length;
+      var wOk=(s.warmup||[]).length>=countReq(WARMUP), cOk=(s.cooldown||[]).length>=countReq(COOLDOWN);
+      h+='<div class="listrow" data-act="openSession" data-id="'+esc(s.id)+'">'
+       +'<div class="bd"><b>'+esc(fmtDate(s.date))+'</b><span>'+bl+'개 클럽 · '
+       +(wOk?'준비운동 ✓':'<span style="color:var(--bad)">준비운동 미완</span>')+' · '
+       +(cOk?'마무리 ✓':'<span style="color:var(--bad)">마무리 미완</span>')+'</span></div>'
+       +'<div class="rt"><b>'+bl+'</b><span>세트</span></div></div>';
+    });
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
+function countReq(list){ return list.filter(function(x){return x.req;}).length; }
+
+function newDraft(){
+  return {id:uuid(),date:today(),step:0,warmup:[],cooldown:[],blocks:[],feeling:"",coaching:"",
+    cur:{clubId:"",m:{}},editing:false};
+}
+function draftView(){
+  var d=S.draft, h='<div class="stack">';
+  h+='<div class="spread" style="align-items:center;gap:10px">'
+   +'<input type="date" id="dr_date" class="dateTitle" value="'+esc(d.date)+'" max="'+esc(today())+'" aria-label="연습한 날">'
+   +'<button class="btn ghost sm" style="flex:none" data-act="cancelDraft">나가기</button></div>';
+  if(S.msg.date) h+='<div class="banner bad">'+esc(S.msg.date)+'</div>';
+
+  h+='<div class="steps">'+[0,1,2,3].map(function(i){
+      return '<div class="'+(i<d.step?"done":(i===d.step?"on":""))+'"></div>'; }).join("")+'</div>';
+
+  if(d.step===0){
+    var reqN=countReq(WARMUP), doneN=WARMUP.filter(function(x,i){return x.req&&d.warmup.indexOf(i)>=0;}).length;
+    h+='<div class="card"><div class="eyebrow">1단계 · 준비운동</div>'
+     +'<h3 style="font-size:17px;margin:4px 0 2px">몸을 먼저 열어야 숫자가 나옵니다</h3>'
+     +'<p class="muted" style="margin-bottom:6px">필수 '+reqN+'개를 모두 체크해야 다음으로 넘어갑니다. 약 8분.</p>';
+    WARMUP.forEach(function(x,i){
+      h+='<label class="check"><input type="checkbox" data-act="toggleWarm" data-i="'+i+'"'+(d.warmup.indexOf(i)>=0?" checked":"")+'>'
+       +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
+    });
+    h+='<button class="btn primary full" style="margin-top:14px" data-act="step" data-s="1"'+(doneN<reqN?" disabled":"")+'>'
+     +(doneN<reqN?('필수 '+(reqN-doneN)+'개 남음'):'클럽 기록 시작')+'</button></div>';
+  }
+
+  if(d.step===1){
+    h+='<div class="card"><div class="eyebrow">2단계 · 클럽별 10회</div>'
+     +'<h3 style="font-size:17px;margin:4px 0 2px">한 클럽씩, 10회 평균을 남깁니다</h3>'
+     +'<p class="muted">측정 화면 사진을 올리면 숫자를 읽어 채웁니다.</p>';
+    if(d.blocks.length){
+      h+='<div style="margin-top:8px">';
+      d.blocks.forEach(function(b,i){
+        h+='<div class="listrow" style="cursor:default"><span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
+         +'<div class="bd"><b>'+esc(b.clubName)+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")+' · 방향각 '+numToLR(b.m.dir)+'°</span></div>'
+         +'<button class="btn ghost sm" data-act="rmBlock" data-i="'+i+'">삭제</button></div>';
+      });
+      h+='</div>';
+    }
+    /* 사진 여러 장 → 세트 여러 개 */
+    h+='<div class="card" style="margin-top:12px;background:var(--surface2)">'
+     +'<div class="eyebrow">사진 여러 장 한꺼번에</div>'
+     +'<p class="muted" style="margin:6px 0">클럽별 결과 화면을 여러 장 고르면 한 장에 한 세트씩 만듭니다. 클럽은 사진에서 잡습니다.</p>'
+     +'<div class="filebtn'+(S.multi.names.length?' on':'')+'" data-pick="multiPhoto" data-title="사진 여러 장 고르기" data-hint="클럽마다 한 장씩">'
+     +'<input type="file" multiple accept="'+PICK_ACCEPT+'" id="multiPhoto" aria-label="사진 여러 장 고르기">'
+     +'<span class="fb-ic">'+(S.multi.names.length?'✓':'+')+'</span>'
+     +'<span class="fb-tx"><b>'+(S.multi.names.length?esc(S.multi.names.length+'장 선택됨'):'사진 여러 장 고르기')+'</b>'
+     +'<span>'+esc(S.multi.names.length?S.multi.names.join(", "):'클럽마다 한 장씩')+'</span></span></div>'
+     +'<input type="file" multiple id="multiPhoto_file" style="display:none" aria-hidden="true">'
+     +'<div class="row" style="margin-top:8px;gap:8px">'
+     +'<button class="btn ghost sm" data-act="pickFile" data-for="multiPhoto">폴더에서 찾기</button>'
+     +'<button class="btn ghost sm" data-act="clearMulti"'+(S.multi.names.length?"":" disabled")+'>비우기</button></div>';
+    if(ready.img){
+      h+='<button class="btn full" style="margin-top:10px" data-act="readMulti"'
+        +((S.multi.busy||!S.multi.names.length)?" disabled":"")+'>'
+        +(S.multi.busy
+           ? ('<span class="spin"></span> '+esc(S.multi.at+'/'+S.multi.names.length+'장째 읽는 중'))
+           : (S.multi.names.length?('사진 '+S.multi.names.length+'장 읽어서 세트 만들기'):'사진을 먼저 고르세요'))
+        +'</button>';
+    } else { h+=keyForm(); }
+    if(S.multi.log.length){
+      h+='<div class="banner'+(S.multi.bad?' warn':' ok')+'" style="margin-top:10px">'+S.multi.log.map(esc).join('<br>')+'</div>';
+    }
+    h+='</div>';
+
+    h+='<button class="btn full" style="margin-top:12px" data-act="addBlock">사진 없이 한 세트 직접 넣기</button>';
+    h+='<button class="btn primary full" style="margin-top:8px" data-act="step" data-s="2"'+(d.blocks.length?"":" disabled")+'>'
+      +(d.blocks.length?'느낀점 쓰기':'클럽을 하나 이상 기록하세요')+'</button></div>';
+  }
+
+  if(d.step===2){
+    h+='<div class="card"><div class="eyebrow">3단계 · 느낀점</div>'
+     +'<h3 style="font-size:17px;margin:4px 0 2px">오늘 몸으로 느낀 것을 적으세요</h3>'
+     +'<p class="muted" style="margin-bottom:10px">잘된 감각, 안 된 동작, 떠오른 생각. 문장이 아니어도 됩니다.</p>'
+     +'<textarea id="feelBox" placeholder="예) 톱에서 멈추니 공이 가운데로 모였다. 5번은 여전히 얇게 맞는 느낌.">'+esc(d.feeling)+'</textarea>';
+    h+='<button class="btn full" style="margin-top:10px" data-act="coachFeel">'+(S.busy.feel?'<span class="spin"></span> 코칭 받는 중':'느낀점으로 코칭 받기')+'</button>';
+    if(S.msg.feel) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.feel)+'</div>';
+    if(d.coaching) h+='<div class="ai" style="margin-top:12px"><div class="hd">코칭</div>'+esc(d.coaching)+'</div>';
+    h+='<button class="btn primary full" style="margin-top:12px" data-act="step" data-s="3">마무리 운동으로</button></div>';
+  }
+
+  if(d.step===3){
+    var reqC=countReq(COOLDOWN), doneC=COOLDOWN.filter(function(x,i){return x.req&&d.cooldown.indexOf(i)>=0;}).length;
+    h+='<div class="card"><div class="eyebrow">4단계 · 마무리 운동</div>'
+     +'<h3 style="font-size:17px;margin:4px 0 2px">여기까지가 한 번의 연습입니다</h3>'
+     +'<p class="muted" style="margin-bottom:6px">필수 '+reqC+'개를 체크하면 저장됩니다. 약 5분.</p>';
+    COOLDOWN.forEach(function(x,i){
+      h+='<label class="check"><input type="checkbox" data-act="toggleCool" data-i="'+i+'"'+(d.cooldown.indexOf(i)>=0?" checked":"")+'>'
+       +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
+    });
+    h+='<button class="btn primary full" style="margin-top:14px" data-act="saveSession"'+(doneC<reqC?" disabled":"")+'>'
+     +(doneC<reqC?('필수 '+(reqC-doneC)+'개 남음'):'연습 저장')+'</button></div>';
+  }
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 라운드 ---------- */
+function viewRounds(){
+  var h='<div class="stack">';
+  h+='<div class="spread"><div><h2 class="sec-title">라운드</h2><p class="tiny">스크린·필드 점수에서 약한 곳을 찾습니다</p></div>'
+   +'<button class="btn primary sm" data-act="newRound">점수 입력</button></div>';
+  if(!S.rounds.length){
+    h+= connOK()
+      ? '<div class="card empty"><h3>라운드 기록이 없습니다</h3><p>점수와 퍼팅 수만 넣어도 분석이 나옵니다.</p></div>'
+      : '<div class="card empty"><h3>라운드 기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
+  } else {
+    S.rounds.forEach(function(r){
+      h+='<div class="card"><div class="spread"><div><b style="font-family:var(--fDisp);font-size:16px">'+esc(fmtDate(r.date))+'</b>'
+       +' <span class="chip neutral">'+(r.type==="field"?"필드":"스크린")+'</span>'
+       +(r.course?'<div class="tiny">'+esc(r.course)+'</div>':'')+'</div>'
+       +'<button class="btn ghost sm" data-act="delRound" data-id="'+esc(r.id)+'">삭제</button></div>';
+      h+='<div class="metrics" style="margin-top:10px">'
+       +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/14")
+       +mTile("그린적중",r.gir,"/18")+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
+       +mTile("파온 미스",r.gir!=null?(18-r.gir):null,"")+mTile("핸디",r.score!=null&&r.par?(r.score-r.par):null,"")+'</div>';
+      if(r.note) h+='<div class="note" style="margin-top:10px">'+esc(r.note)+'</div>';
+      h+='<button class="btn sm full" style="margin-top:10px" data-act="analyzeRound" data-id="'+esc(r.id)+'">'
+       +(S.busy["rd"+r.id]?'<span class="spin"></span> 분석 중':(r.analysis?'다시 분석':'약점 분석'))+'</button>';
+      if(S.msg["rd"+r.id]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg["rd"+r.id])+'</div>';
+      if(r.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">약점 분석</div>'+esc(r.analysis)+'</div>';
+      h+='</div>';
+    });
+  }
+  h+='</div>';
+  return h;
+}
+
+/* ---------- 성장 ---------- */
+function viewGrowth(){
+  var h='<div class="stack"><h2 class="sec-title">성장</h2>';
+  var tracked=S.clubs.filter(function(c){ return clubSeries(c.id,"carry").length>=1; });
+  if(!tracked.length){
+    h+='<div class="card empty"><h3>그래프를 그릴 기록이 없습니다</h3><p>클럽별로 두 번 이상 측정하면 추이가 보입니다.</p></div>';
+  } else {
+    tracked.forEach(function(c){
+      var sc=clubSeries(c.id,"carry"), sw=clubSeries(c.id,"width"), sd=clubSeries(c.id,"dir");
+      var t=TARGET[tkey(c)];
+      h+='<div class="card"><div class="spread"><b style="font-family:var(--fDisp);font-size:16px">'+esc(c.name)+'</b>'
+       +'<span class="tiny">'+sc.length+'회 측정</span></div>';
+      h+='<canvas class="spark" data-series="'+esc(JSON.stringify(sc.map(function(x){return x.v;})))+'" '
+       +'data-lo="'+(t?t.carry[0]:"")+'" data-hi="'+(t?t.carry[1]:"")+'"></canvas>';
+      var first=sc[0].v, lastv=sc[sc.length-1].v, dv=Math.round((lastv-first)*10)/10;
+      h+='<div class="metrics" style="margin-top:8px">'
+       +'<div class="metric"><b>'+r1(lastv)+'</b><span>최근 캐리 m</span></div>'
+       +'<div class="metric"><b class="'+(dv>0?"":"")+'">'+(dv>0?"+":"")+dv+'</b><span>처음 대비</span></div>'
+       +'<div class="metric"><b>'+(sw.length?r1(sw[sw.length-1].v):"—")+'</b><span>좌우 편차 m</span></div>'
+       +'<div class="metric"><b>'+(sd.length?numToLR(sd[sd.length-1].v):"—")+'</b><span>방향각 °</span></div></div>';
+      if(t) h+='<p class="tiny" style="margin-top:8px">기준 캐리 '+t.carry[0]+'~'+t.carry[1]+'m · 좌우 편차 '+t.width[1]+'m 이하 · 방향각 ±'+t.dir+'° 이내</p>';
+      h+='</div>';
+    });
+  }
+  /* 라운드 추이 */
+  if(S.rounds.length>1){
+    var rs=S.rounds.slice().reverse().filter(function(r){return r.score!=null;});
+    if(rs.length>1){
+      h+='<div class="card"><div class="spread"><b style="font-family:var(--fDisp);font-size:16px">스코어</b><span class="tiny">'+rs.length+'라운드</span></div>'
+       +'<canvas class="spark" data-series="'+esc(JSON.stringify(rs.map(function(r){return r.score;})))+'" data-invert="1"></canvas>'
+       +'<p class="tiny" style="margin-top:6px">아래로 내려갈수록 좋은 기록입니다.</p></div>';
+    }
+  }
+  h+='</div>';
+  return h;
+}
+function drawSparks(){
+  var cs=document.querySelectorAll("canvas.spark");
+  for(var i=0;i<cs.length;i++){
+    (function(cv){
+      var data; try{ data=JSON.parse(cv.getAttribute("data-series")||"[]"); }catch(e){ data=[]; }
+      if(!data.length) return;
+      var dpr=window.devicePixelRatio||1, w=cv.clientWidth||300, hh=76;
+      cv.width=w*dpr; cv.height=hh*dpr;
+      var x=cv.getContext("2d"); x.scale(dpr,dpr);
+      var cs2=getComputedStyle(document.documentElement);
+      var acc=cs2.getPropertyValue("--accent").trim()||"#BF4F19";
+      var line=cs2.getPropertyValue("--line").trim()||"#ddd";
+      var ok=cs2.getPropertyValue("--ok").trim()||"#1C7A58";
+      var lo=parseFloat(cv.getAttribute("data-lo")), hi=parseFloat(cv.getAttribute("data-hi"));
+      var vals=data.slice(); if(isFinite(lo)) vals.push(lo); if(isFinite(hi)) vals.push(hi);
+      var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+      if(mx-mn<1){ mx=mn+1; }
+      var pad=(mx-mn)*0.18; mn-=pad; mx+=pad;
+      var P=10, W=w-P*2, H=hh-P*2;
+      function px(i){ return P + (data.length===1? W/2 : W*i/(data.length-1)); }
+      function py(v){ return P + H*(1-(v-mn)/(mx-mn)); }
+      if(isFinite(lo)&&isFinite(hi)){
+        x.fillStyle=ok; x.globalAlpha=.12;
+        x.fillRect(P,py(hi),W,Math.max(1,py(lo)-py(hi))); x.globalAlpha=1;
+      }
+      x.strokeStyle=line; x.lineWidth=1; x.beginPath(); x.moveTo(P,hh-P); x.lineTo(w-P,hh-P); x.stroke();
+      x.strokeStyle=acc; x.lineWidth=2.2; x.lineJoin="round"; x.beginPath();
+      data.forEach(function(v,i){ i?x.lineTo(px(i),py(v)):x.moveTo(px(i),py(v)); }); x.stroke();
+      data.forEach(function(v,i){
+        var lastI=i===data.length-1;
+        x.beginPath(); x.arc(px(i),py(v),lastI?4.2:2.6,0,6.3);
+        x.fillStyle=acc; x.fill();
+        if(lastI){ x.fillStyle=cs2.getPropertyValue("--surface").trim()||"#fff";
+          x.beginPath(); x.arc(px(i),py(v),1.8,0,6.3); x.fill(); }
+      });
+    })(cs[i]);
+  }
+}
+
+/* ====================== 시트(모달) ====================== */
+function sheetHTML(){
+  var s=S.sheet, h='<div class="sheet" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound}[s.kind]||function(){return "";})();
+  h+='</div></div>';
+  return h;
+}
+
+/* --- 클럽 추가/수정 --- */
+function sheetClub(){
+  var c=S.sheet.data, isNew=!c.id;
+  var h='<div class="spread"><h3 style="font-size:19px">'+(isNew?"클럽 추가":esc(c.name||"클럽"))+'</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+
+  /* 사진 */
+  h+='<div class="card" style="margin-top:14px"><div class="eyebrow">사진으로 채우기</div>';
+  if(c.photo) h+='<img class="photoPrev" style="margin-top:10px" src="'+esc(c.photo)+'" alt="클럽 사진">';
+  h+='<p class="muted" style="margin:8px 0">헤드나 샤프트 라벨이 보이게 찍으면 브랜드·모델·로프트를 읽어 입력란을 채웁니다.</p>';
+  h+=fileField("clubPhoto","사진 고르기","헤드나 샤프트 라벨이 보이게");
+  if(ready.img){
+    h+='<button class="btn full" style="margin-top:10px" data-act="readClubPhoto"'+(S.busy.cphoto?" disabled":"")+'>'
+      +(S.busy.cphoto?'<span class="spin"></span> 사진 읽는 중':'사진에서 스펙 읽기')+'</button>';
+  } else { h+=keyForm(); }
+  if(S.msg.cphoto) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.cphoto)+'</div>';
+  h+='</div>';
+
+  /* 입력 */
+  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">정보</div><div class="stack" style="margin-top:10px">';
+  h+='<label class="f">이름 (가방에서 부르는 이름)<input type="text" id="cf_name" value="'+esc(c.name||"")+'" placeholder="예) 7번 아이언"></label>';
+  h+='<div class="grid2">'
+   +'<label class="f">분류<select id="cf_cat">'+Object.keys(CAT).map(function(k){
+       return '<option value="'+k+'"'+(c.cat===k?" selected":"")+'>'+CAT[k]+'</option>';}).join("")+'</select></label>'
+   +'<label class="f">로프트 (도)<input type="number" step="0.5" class="num" id="cf_loft" value="'+esc(c.loft==null?"":c.loft)+'"></label></div>';
+  h+='<div class="grid2"><label class="f">브랜드<input type="text" id="cf_brand" value="'+esc(c.brand||"")+'"></label>'
+   +'<label class="f">모델<input type="text" id="cf_model" value="'+esc(c.model||"")+'"></label></div>';
+  h+='<div class="grid2"><label class="f">샤프트<input type="text" id="cf_shaft" value="'+esc(c.shaft||"")+'"></label>'
+   +'<label class="f">플렉스<input type="text" id="cf_flex" value="'+esc(c.flex||"")+'" placeholder="R / SR / S"></label></div>';
+  h+='<div class="grid2"><label class="f">길이 (인치)<input type="text" class="num" id="cf_len" value="'+esc(c.length||"")+'"></label>'
+   +'<label class="f">구입 시기<input type="text" id="cf_bought" value="'+esc(c.bought||"")+'" placeholder="예) 2025년 8월"></label></div>';
+  h+='<label class="f">메모 (세팅·특이사항)<textarea id="cf_note" style="min-height:62px">'+esc(c.note||"")+'</textarea></label>';
+  h+='<label class="check" style="border:0"><input type="checkbox" id="cf_spare"'+(c.spare?" checked":"")+'>'
+   +'<span class="ct"><b>예비 클럽</b><span>가방에 넣지 않고 보관 중</span></span></label>';
+  h+='</div></div>';
+
+  /* 진단 */
+  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">부족한 점 점검</div>';
+  h+='<p class="muted" style="margin:6px 0 10px">이 클럽의 스펙이 내 스윙에 맞는지, 가방 안에서 역할이 겹치지 않는지 확인합니다.</p>';
+  h+='<button class="btn full" data-act="diagClub">'+(S.busy.diag?'<span class="spin"></span> 점검 중':'이 클럽 진단')+'</button>';
+  if(S.msg.diag) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.diag)+'</div>';
+  if(c.spec) h+='<div class="note" style="margin-top:12px"><b style="font-size:12px;color:var(--fg3)">클럽 특성</b>\n'+esc(c.spec)+'</div>';
+  if(c.issues&&c.issues.length){
+    h+='<div style="margin-top:12px"><div class="eyebrow">점검할 점</div>';
+    c.issues.forEach(function(x){ h+='<div class="listrow" style="cursor:default"><span class="chip warn">확인</span>'
+      +'<div class="bd"><span style="white-space:normal;color:var(--fg)">'+esc(x)+'</span></div></div>'; });
+    h+='</div>';
+  }
+  h+='</div>';
+
+  /* 연습법 */
+  var dr=DRILL[c.cat]||DRILL.iron;
+  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">이 클럽 연습법</div>';
+  h+='<div class="metrics" style="margin-top:10px">'
+   +'<div class="metric" style="grid-column:span 2"><b style="font-size:13px;font-family:var(--fBody)">'+esc(dr.ball)+'</b><span>공 위치</span></div>'
+   +'<div class="metric" style="grid-column:span 2"><b style="font-size:13px;font-family:var(--fBody)">'+esc(dr.blow)+'</b><span>타격 방식</span></div></div>';
+  h+='<div style="margin-top:10px">';
+  dr.keys.forEach(function(k,i){ h+='<div class="listrow" style="cursor:default;padding:9px 0">'
+    +'<span class="grade X" style="font-family:var(--fData)">'+(i+1)+'</span>'
+    +'<div class="bd"><span style="white-space:normal;color:var(--fg);font-size:14px">'+esc(k)+'</span></div></div>'; });
+  h+='</div><div class="banner warn" style="margin-top:10px">'+esc(dr.watch)+'</div>';
+  h+='<button class="btn sm full" style="margin-top:12px" data-act="customDrill">'
+   +(S.busy.drill?'<span class="spin"></span> 만드는 중':'내 기록에 맞춘 연습법 받기')+'</button>';
+  if(S.msg.drill) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.drill)+'</div>';
+  if(c.drill) h+='<div class="ai" style="margin-top:12px"><div class="hd">맞춤 연습법</div>'+esc(c.drill)+'</div>';
+  h+='</div>';
+
+  h+='<div class="row" style="margin-top:14px"><button class="btn primary" style="flex:1" data-act="saveClub">저장</button>'
+   +(isNew?'':'<button class="btn" data-act="delClub" data-id="'+esc(c.id)+'">삭제</button>')+'</div>';
+  return h;
+}
+
+/* --- 10회 측정 입력 --- */
+function sheetBlock(){
+  var b=S.sheet.data;
+  var club=S.clubs.filter(function(c){return c.id===b.clubId;})[0];
+  var h='<div class="spread"><h3 style="font-size:19px">10회 평균 입력</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+
+  /* 사진이 먼저다. 클럽까지 사진에서 잡는다. */
+  h+='<div class="card" style="margin-top:14px"><div class="eyebrow">측정 화면 사진</div>'
+   +'<p class="muted" style="margin:6px 0">결과 화면을 올리면 숫자와 <b>어떤 클럽인지</b>까지 읽어 아래를 채웁니다.</p>'
+   +fileField("shotPhoto","사진 고르기","결과 화면 전체가 또렷하게");
+  if(ready.img){
+    h+='<button class="btn full" style="margin-top:10px" data-act="readShotPhoto"'+(S.busy.sphoto?" disabled":"")+'>'
+     +(S.busy.sphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")):'사진에서 읽기')+'</button>';
+    if(S.busy.sphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">사진이 크면 20~40초 걸립니다. 90초가 지나면 멈추고 알려 드립니다.</p>';
+  } else {
+    h+=keyForm();
+  }
+  if(S.msg.sphoto){
+    h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.sphoto)+'</div>';
+    if(ready.img && S.files && S.files.shotPhoto)
+      h+='<button class="btn ghost full" style="margin-top:8px" data-act="readShotPhoto">고른 사진 그대로 다시 시도</button>';
+  }
+  if(S.note&&S.note.sphoto) h+='<div class="banner ok" style="margin-top:10px">'+esc(S.note.sphoto)+'</div>';
+  h+='</div>';
+
+  h+='<label class="f" style="margin-top:12px">클럽 <span style="font-weight:400;color:var(--fg3)">사진에서 자동으로 잡습니다</span><select id="bk_club">'
+   +'<option value="">사진에서 읽거나 여기서 고르세요</option>'
+   + S.clubs.map(function(c){ return '<option value="'+esc(c.id)+'"'+(b.clubId===c.id?" selected":"")+'>'+esc(c.name)+'</option>'; }).join("")
+   +'</select></label>';
+
+  if(club){
+    var dr=DRILL[club.cat]||DRILL.iron, T=TARGET[tkey(club)];
+    h+='<div class="card" style="margin-top:12px"><div class="eyebrow">치기 전 확인</div>'
+     +'<div class="metrics" style="margin-top:8px">'
+     +'<div class="metric" style="grid-column:span 2"><b style="font-size:13px;font-family:var(--fBody)">'+esc(dr.ball)+'</b><span>공 위치</span></div>'
+     +'<div class="metric" style="grid-column:span 2"><b style="font-size:13px;font-family:var(--fBody)">'+esc(dr.blow)+'</b><span>타격</span></div></div>';
+    h+='<p class="muted" style="margin-top:9px">'+esc(dr.keys[0])+'</p>';
+    if(T) h+='<p class="tiny" style="margin-top:6px">오늘의 기준 — 캐리 '+T.carry[0]+'~'+T.carry[1]+'m · 발사각 '+T.launch[0]+'~'+T.launch[1]+'° · 백스핀 '+T.back[0]+'~'+T.back[1]+' · 좌우 편차 '+T.width[1]+'m 이하</p>';
+    h+='</div>';
+  }
+
+  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">10회 평균</div><div class="grid3" style="margin-top:10px">';
+  METRICS.forEach(function(x){
+    var v=b.m[x.k];
+    var val = x.lr ? (v==null?"":numToLR(v,x.k==="side"?0:1)) : (v==null?"":v);
+    h+='<label class="f">'+x.n+' <span style="font-weight:400;color:var(--fg3)">'+x.u+'</span>'
+     +'<input type="'+(x.lr?"text":"number")+'" step="any" class="'+(x.lr?"lr":"num")+'" id="m_'+x.k+'" value="'+esc(val)+'"'
+     +(x.lr?' placeholder="L4.0"':'')+'></label>';
+  });
+  h+='<label class="f">등급<select id="m_grade">'+["","A","B","C","D"].map(function(g){
+      return '<option value="'+g+'"'+(b.m.grade===g?" selected":"")+'>'+(g||"—")+'</option>';}).join("")+'</select></label>';
+  h+='</div>';
+  h+='<p class="tiny" style="margin-top:8px">방향각·사이드스핀은 L4.0 또는 R282처럼 측정기 표기 그대로 적으면 됩니다.</p>';
+  h+='</div>';
+
+  h+='<button class="btn primary full" style="margin-top:14px" data-act="saveBlock"'+(b.clubId?"":" disabled")+'>'
+   +(b.clubId?'기록하고 분석':'클럽을 먼저 선택하세요')+'</button>';
+  return h;
+}
+
+/* --- 연습 상세 --- */
+function sheetSession(){
+  var s=S.sessions.filter(function(x){return x.id===S.sheet.id;})[0];
+  if(!s) return '<p>기록을 찾지 못했습니다.</p>';
+  var h='<div class="spread"><h3 style="font-size:19px">'+esc(fmtDate(s.date))+' 연습</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+
+  var wOk=(s.warmup||[]).length>=countReq(WARMUP), cOk=(s.cooldown||[]).length>=countReq(COOLDOWN);
+  h+='<div class="row" style="margin-top:12px">'
+   +'<span class="chip '+(wOk?"ok":"bad")+'">준비운동 '+(wOk?"완료":"미완")+'</span>'
+   +'<span class="chip '+(cOk?"ok":"bad")+'">마무리 '+(cOk?"완료":"미완")+'</span>'
+   +'<span class="chip neutral">'+((s.blocks||[]).length)+'개 클럽</span></div>';
+
+  (s.blocks||[]).forEach(function(b,bi){
+    var club=S.clubs.filter(function(c){return c.id===b.clubId;})[0];
+    h+='<div class="card" style="margin-top:12px"><div class="spread">'
+     +'<div class="row" style="gap:8px"><span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
+     +'<b style="font-family:var(--fDisp);font-size:16px">'+esc(b.clubName)+'</b></div></div>';
+    h+='<div class="metrics" style="margin-top:10px">';
+    METRICS.forEach(function(x){
+      var v=b.m[x.k]; if(v==null) return;
+      var st=metricState(club,x.k,v);
+      var d=b.deltas&&b.deltas[x.k];
+      h+='<div class="metric '+st+'"><b>'+(x.lr?numToLR(v,x.k==="side"?0:1):r1(v))+'</b>'
+       +'<span>'+x.n+' '+x.u+'</span>'
+       +(d!=null&&d!==0?'<span class="d '+(d>0?"up":"dn")+'">'+(d>0?"+":"")+d+'</span>':'')+'</div>';
+    });
+    h+='</div>';
+    if(b.good&&b.good.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--ok)">기준 안</div>';
+      b.good.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
+    if(b.bad&&b.bad.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--bad)">부족한 점</div>';
+      b.bad.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
+    h+='<button class="btn sm full" style="margin-top:12px" data-act="coachBlock" data-si="'+esc(s.id)+'" data-bi="'+bi+'">'
+     +(S.busy["cb"+s.id+bi]?'<span class="spin"></span> 코칭 중':(b.coaching?'다시 코칭':'이 클럽 코칭 받기'))+'</button>';
+    if(S.msg["cb"+s.id+bi]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg["cb"+s.id+bi])+'</div>';
+    if(b.coaching) h+='<div class="ai" style="margin-top:12px"><div class="hd">코칭</div>'+esc(b.coaching)+'</div>';
+    h+='</div>';
+  });
+
+  if(s.feeling){
+    h+='<div class="card" style="margin-top:12px"><div class="eyebrow">느낀점</div>'
+     +'<div class="note" style="margin-top:8px">'+esc(s.feeling)+'</div>';
+    if(s.coaching) h+='<div class="ai" style="margin-top:10px"><div class="hd">코칭</div>'+esc(s.coaching)+'</div>';
+    h+='</div>';
+  }
+  h+='<button class="btn full" style="margin-top:14px" data-act="delSession" data-id="'+esc(s.id)+'">이 연습 기록 삭제</button>';
+  return h;
+}
+
+/* --- 라운드 입력 --- */
+function sheetRound(){
+  var r=S.sheet.data;
+  var h='<div class="spread"><h3 style="font-size:19px">라운드 점수</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+  h+='<div class="stack" style="margin-top:14px">';
+  h+='<div class="grid2"><label class="f">날짜<input type="date" id="rf_date" value="'+esc(r.date||today())+'"></label>'
+   +'<label class="f">종류<select id="rf_type"><option value="screen"'+(r.type!=="field"?" selected":"")+'>스크린</option>'
+   +'<option value="field"'+(r.type==="field"?" selected":"")+'>필드</option></select></label></div>';
+  h+='<label class="f">골프장 / 코스<input type="text" id="rf_course" value="'+esc(r.course||"")+'"></label>';
+  h+='<div class="grid3">'
+   +'<label class="f">스코어<input type="number" class="num" id="rf_score" value="'+esc(r.score==null?"":r.score)+'"></label>'
+   +'<label class="f">파<input type="number" class="num" id="rf_par" value="'+esc(r.par==null?72:r.par)+'"></label>'
+   +'<label class="f">퍼팅 수<input type="number" class="num" id="rf_putts" value="'+esc(r.putts==null?"":r.putts)+'"></label>'
+   +'<label class="f">페어웨이 (/14)<input type="number" class="num" id="rf_fw" value="'+esc(r.fw==null?"":r.fw)+'"></label>'
+   +'<label class="f">그린 적중 (/18)<input type="number" class="num" id="rf_gir" value="'+esc(r.gir==null?"":r.gir)+'"></label>'
+   +'<label class="f">OB<input type="number" class="num" id="rf_ob" value="'+esc(r.ob==null?"":r.ob)+'"></label>'
+   +'<label class="f">벌타<input type="number" class="num" id="rf_pen" value="'+esc(r.penalty==null?"":r.penalty)+'"></label>'
+   +'<label class="f">더블 이상<input type="number" class="num" id="rf_dbl" value="'+esc(r.dbl==null?"":r.dbl)+'"></label>'
+   +'<label class="f">파 이상<input type="number" class="num" id="rf_par_or_better" value="'+esc(r.parOrBetter==null?"":r.parOrBetter)+'"></label>'
+   +'</div>';
+  h+='<label class="f">기억나는 장면 (실수한 홀, 잘된 샷)<textarea id="rf_note" style="min-height:70px">'+esc(r.note||"")+'</textarea></label>';
+  h+='</div>';
+  h+='<button class="btn primary full" style="margin-top:14px" data-act="saveRound">저장하고 분석</button>';
+  return h;
+}
+
+/* ====================== 동작 ====================== */
+function readClubForm(c){
+  function g(id){ var e=document.getElementById(id); return e?e.value.trim():""; }
+  c.name=g("cf_name")||c.name||"이름 없는 클럽";
+  c.cat=g("cf_cat")||"iron"; c.loft=num(g("cf_loft"));
+  c.brand=g("cf_brand"); c.model=g("cf_model"); c.shaft=g("cf_shaft"); c.flex=g("cf_flex");
+  c.length=g("cf_len"); c.bought=g("cf_bought"); c.note=g("cf_note");
+  var sp=document.getElementById("cf_spare"); c.spare=sp?sp.checked:false;
+  return c;
+}
+function readBlockForm(b){
+  var sel=document.getElementById("bk_club"); if(sel) b.clubId=sel.value;
+  METRICS.forEach(function(x){
+    var e=document.getElementById("m_"+x.k); if(!e) return;
+    var v=e.value.trim();
+    b.m[x.k] = v==="" ? null : (x.lr ? lrToNum(v) : num(v));
+  });
+  var g=document.getElementById("m_grade"); if(g) b.m.grade=g.value||null;
+  return b;
+}
+function fileOf(id){ var e=document.getElementById(id);
+  if(e&&e.files&&e.files[0]) return e.files[0];
+  return (S.files&&S.files[id])||null; }
+function clearPick(){ S.picked={}; S.files={}; S.note={}; }
+
+/* 측정 화면에 찍힌 클럽 표시를 내 가방의 클럽에 맞춘다.
+   "7I" "#7" "7번" "DR" "W1" "56" "56°" "SW" "UT" "3H" 같은 표기를 받는다. */
+function guessClub(raw){
+  var t=String(raw||"").toUpperCase().replace(/\s+/g,"");
+  if(!t) return null;
+  function find(pred){ for(var i=0;i<S.clubs.length;i++){ if(pred(S.clubs[i])) return S.clubs[i]; } return null; }
+  function byId(id){ return find(function(c){ return c.id===id; }); }
+
+  /* 드라이버 */
+  if(/^(DR|D|W1|1W|드라이버|DRIVER)$/.test(t)){
+    return byId("drv") || find(function(c){ return c.cat==="driver" && !c.spare; }) || find(function(c){ return c.cat==="driver"; });
+  }
+  /* 퍼터 */
+  if(/^(PT|PUTTER|퍼터)$/.test(t)) return find(function(c){ return c.cat==="putter"; });
+  /* 웨지 — 로프트 숫자 또는 기호 */
+  var lw=/(\d{2})\s*°?/.exec(t);
+  if(/^(PW|P|피칭)/.test(t)) return byId("pw") || find(function(c){ return /피칭|PW/i.test(c.name||""); });
+  if(/^(AW|GW|A|G|갭)/.test(t)) return byId("w48") || find(function(c){ return c.cat==="wedge" && c.loft===48; });
+  if(/^(SW|S|샌드)/.test(t)) return byId("w56") || find(function(c){ return c.cat==="wedge" && c.loft===56; });
+  if(/^(LW|L|로브)/.test(t)) return find(function(c){ return c.cat==="wedge" && c.loft>=58; });
+  if(lw){
+    var L=parseInt(lw[1],10);
+    if(L>=44 && L<=64){
+      var exact=find(function(c){ return c.cat==="wedge" && num(c.loft)===L; });
+      if(exact) return exact;
+      var near=null, gap=99;
+      S.clubs.forEach(function(c){ if(c.cat!=="wedge"||c.loft==null) return;
+        var g=Math.abs(num(c.loft)-L); if(g<gap){ gap=g; near=c; } });
+      if(near && gap<=1) return near;
+    }
+  }
+  /* 하이브리드·유틸리티 — "3번 하이브리드"처럼 숫자가 앞에 붙으므로 아이언보다 먼저 본다 */
+  if(/하이브리드|HYBRID|유틸|^\d?\s*UT$|^UT\d?$|^\d?H$|^H\d?$/.test(t)){
+    return byId("hy3") || find(function(c){ return c.cat==="hybrid"; });
+  }
+  /* 우드 — "3번 우드" */
+  if(/우드|WOOD|^\d\s*W$|^W\s*\d$/.test(t) && !/^W1$|^1W$/.test(t)){
+    return find(function(c){ return c.cat==="wood"; });
+  }
+  if(/퍼터|PUTTER/.test(t)) return find(function(c){ return c.cat==="putter"; });
+  if(/드라이버|DRIVER/.test(t)) return byId("drv") || find(function(c){ return c.cat==="driver" && !c.spare; });
+  /* 아이언 — 4I, #7, 7번, I7 */
+  var ir=/(\d)\s*(I|IRON|번|아이언)|^#?(\d)$|^I\s*(\d)$/.exec(t);
+  if(ir){
+    var n=parseInt(ir[1]||ir[3]||ir[4],10);
+    if(n>=3 && n<=9) return byId("i"+n) || find(function(c){ return c.cat==="iron" && new RegExp("^"+n+"번").test(c.name||""); });
+  }
+  /* 이름이 그대로 적힌 경우 */
+  return find(function(c){ return String(c.name||"").toUpperCase().replace(/\s+/g,"")===t; });
+}
+
+/* 사진을 한 장씩 차례로 읽는다. 한꺼번에 보내면 구글 쪽에서 막힌다. */
+function runMulti(i){
+  var M=S.multi;
+  if(i>=M.files.length){
+    M.busy=false;
+    var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length;
+    M.log.push(made ? ("세트 "+made+"개를 만들었습니다.") : "만들어진 세트가 없습니다.");
+    M.files=[]; M.names=[];
+    render(); return;
+  }
+  M.at=i+1; render();
+  var f=M.files[i], label=(f.name||("사진"+(i+1)));
+  sample.json("측정 화면",{images:[f],modelTier:"default"})
+  .then(function(v){
+    if(!v){ M.bad=true; M.log.push(label+" — 답이 비었습니다"); return next(); }
+    var m={}, got=0;
+    METRICS.forEach(function(x){
+      if(v[x.k]==null||v[x.k]==="") return;
+      var val=x.lr?lrToNum(v[x.k]):num(v[x.k]);
+      if(val==null||isNaN(val)) return;
+      m[x.k]=val; got++;
+    });
+    if(v.grade) m.grade=String(v.grade).toUpperCase().slice(0,1);
+    if(!got){ M.bad=true; M.log.push(label+" — 숫자를 못 읽었습니다"); return next(); }
+    var club=v.club?guessClub(v.club):null;
+    if(!club){
+      M.bad=true;
+      M.log.push(label+" — 클럽을 못 찾았습니다"+(v.club?(' (화면 표시 "'+v.club+'")'):"")+". 아래에서 직접 넣어 주세요.");
+      return next();
+    }
+    var shots=num(v.shots); if(!(shots>0)) shots=10;
+    var prev=lastBlockFor(club.id);
+    var ev=evalBlock(club,m,prev?prev.m:null);
+    S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,
+      good:ev.good,bad:ev.bad,deltas:ev.deltas,coaching:""});
+    M.log.push(label+" → "+club.name+" · 캐리 "+(m.carry!=null?r1(m.carry)+"m":"—"));
+    next();
+  })
+  .catch(function(e){
+    M.bad=true; M.log.push(label+" — "+readErr(e));
+    next();
+  });
+  function next(){ render(); setTimeout(function(){ runMulti(i+1); },400); }
+}
+
+/* 키가 없을 때 그 자리에서 바로 넣게 한다. 편집기를 열 필요가 없다. */
+function keyForm(){
+  var h='<div class="banner warn" style="margin-top:10px">사진 판독에는 구글 제미나이 키가 필요합니다. '
+   +'<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:inherit;font-weight:600">aistudio.google.com/apikey</a> '
+   +'에서 <b>Create API key</b>를 눌러 받은 키를 아래에 붙여넣으세요. 무료 사용량으로 충분합니다.</div>';
+  h+='<label class="f" style="margin-top:10px">제미나이 키'
+   +'<input type="password" id="aikey" placeholder="AIza… 로 시작하는 키" autocomplete="off"></label>';
+  h+='<button class="btn full" style="margin-top:8px" data-act="saveKey"'+(S.busy.key?" disabled":"")+'>'
+   +(S.busy.key?'<span class="spin"></span> 확인하는 중':'키 저장하고 켜기')+'</button>';
+  if(S.msg.key) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.key)+'</div>';
+  return h;
+}
+
+/* 서버에서 올라온 실패 이유를 그대로 보여준다. 숨기면 고칠 수가 없다. */
+function readErr(e){
+  var m=(e&&(e.message||e.msg))||"";
+  if(e&&e.code==="timeout") return m;
+  if(e&&e.code==="invalid_json") return "사진에서 숫자를 찾지 못했습니다. 화면 전체가 또렷하게 나오도록 다시 찍어 주세요.";
+  if(/AI 키가 아직 없습니다/.test(m)) return "AI 키가 아직 없습니다. 스크립트 편집기에서 setGeminiKey 로 키를 저장한 뒤 다시 눌러 주세요.";
+  if(/요청이 몰렸/.test(m)) return m;
+  if(m) return m;
+  return "읽어내지 못했습니다. 아래 칸에 직접 넣어 주세요.";
+}
+function takeFile(id,f){
+  if(!f) return;
+  S.picked=S.picked||{}; S.files=S.files||{};
+  S.picked[id]=f.name||"붙여넣은 사진"; S.files[id]=f;
+  S.msg[id==="clubPhoto"?"cphoto":"sphoto"]=null;
+  paintPick(id);
+}
+function paintPick(id){
+  var e=document.getElementById(id); if(!e) return;
+  var card=e.parentNode, nm=S.picked&&S.picked[id];
+  if(!card||!card.classList||!card.classList.contains("filebtn")) return;
+  card.classList.toggle("on",!!nm);
+  var ic=card.querySelector(".fb-ic"), tx=card.querySelector(".fb-tx");
+  if(ic) ic.textContent=nm?"✓":"+";
+  if(tx){ var bb=tx.querySelector("b"), ss=tx.querySelector("span");
+    if(bb) bb.textContent=nm?"사진 선택됨":(card.getAttribute("data-title")||"사진 고르기");
+    if(ss) ss.textContent=nm?nm:(card.getAttribute("data-hint")||""); }
+}
+/* 선택창이 카메라가 아니라 폴더로 열리게 한다. image/* 는 폰에서 앨범을 먼저 띄운다. */
+var PICK_ACCEPT=".jpg,.jpeg,.png,.webp,.heic,.heif,.gif,image/jpeg,image/png,image/webp,image/gif";
+function fileField(id,title,hint){
+  var f=S.picked&&S.picked[id];
+  return '<div class="filebtn'+(f?' on':'')+'" data-pick="'+id+'" data-title="'+esc(title)+'" data-hint="'+esc(hint)+'">'
+   +'<input type="file" accept="'+PICK_ACCEPT+'" id="'+id+'" aria-label="'+esc(title)+'">'
+   +'<span class="fb-ic">'+(f?'✓':'+')+'</span>'
+   +'<span class="fb-tx"><b>'+esc(f?'사진 선택됨':title)+'</b><span>'+esc(f||hint)+'</span></span></div>'
+   +'<input type="file" accept="image/*" capture="environment" id="'+id+'_cam" style="display:none" aria-hidden="true">'
+   +'<input type="file" id="'+id+'_file" style="display:none" aria-hidden="true">'
+   +'<div class="row" style="margin-top:8px;gap:8px">'
+   +'<button class="btn ghost sm" data-act="pickFile" data-for="'+id+'">폴더에서 찾기</button>'
+   +'<button class="btn ghost sm" data-act="pickCam" data-for="'+id+'">카메라로 찍기</button></div>'
+   +'<div class="pastebox" contenteditable="true" data-paste="'+id+'" role="textbox" '
+   +'aria-label="사진 붙여넣는 칸" data-ph="여기를 꾹 눌러 → 붙여넣기"></div>';
+}
+/* 파일 창이 실제로 열렸는지는 화면이 가려지는지로 본다 */
+var pickLeft=false;
+window.addEventListener("blur",function(){ pickLeft=true; });
+document.addEventListener("visibilitychange",function(){ if(document.hidden) pickLeft=true; });
+function pickBlockedMsg(){
+  return "파일 창이 열리지 않았습니다. 사진을 복사해 아래 칸에 붙여넣거나, 아래 칸에 끌어다 놓아 주세요.";
+}
+function toDataURL(file,cb){ var r=new FileReader(); r.onload=function(){ cb(r.result); }; r.onerror=function(){ cb(null); }; r.readAsDataURL(file); }
+
+function metricSummary(m){
+  return METRICS.filter(function(x){return m[x.k]!=null;})
+    .map(function(x){ return x.n+" "+(x.lr?numToLR(m[x.k],x.k==="side"?0:1):m[x.k])+x.u; }).join(", ")
+    + (m.grade?(", 등급 "+m.grade):"");
+}
+
+document.addEventListener("click",function(ev){
+  if(!ev.target||!ev.target.closest) return;
+  var pk=ev.target.closest("[data-pick]");
+  if(pk){
+    if(ev.target.tagName==="INPUT") return;
+    var pe=document.getElementById(pk.getAttribute("data-pick"));
+    if(pe){ try{ pe.click(); }catch(e){} }
+    return;
+  }
+  var el=ev.target.closest("[data-act],[data-tab]");
+  if(!el) return;
+  var tab=el.getAttribute("data-tab");
+  if(tab){ S.tab=tab; S.sheet=null; render(); window.scrollTo(0,0); return; }
+  var a=el.getAttribute("data-act");
+
+  if(a==="reconnect"){ reconnect(); return; }
+  if(a==="pickFile"||a==="pickCam"){
+    var bid=el.getAttribute("data-for");
+    var ie=document.getElementById(a==="pickCam"?(bid+"_cam"):(bid+"_file"));
+    if(!ie) ie=document.getElementById(bid);
+    var mk=(bid==="clubPhoto"?"cphoto":"sphoto");
+    pickLeft=false;
+    try{ ie.click(); }
+    catch(e){ S.msg[mk]=pickBlockedMsg(); render(); return; }
+    setTimeout(function(){
+      if(pickLeft) return;
+      if(S.files&&S.files[bid]) return;
+      S.msg[mk]=pickBlockedMsg(); render();
+    },1600);
+    return;
+  }
+  if(a==="closeSheetBg"){ if(ev.target.closest(".inner")) return; S.sheet=null; render(); return; }
+  if(a==="closeSheet"){ S.sheet=null; render(); return; }
+
+  /* --- 탐색 --- */
+  if(a==="openClub"){ var c=S.clubs.filter(function(x){return x.id===el.getAttribute("data-id");})[0];
+    if(c){ S.sheet={kind:"club",data:JSON.parse(JSON.stringify(c))}; S.msg.diag=null; S.msg.drill=null; render(); } return; }
+  if(a==="addClub"){ S.sheet={kind:"club",data:{cat:"iron"}}; S.msg.diag=null; render(); return; }
+  if(a==="openSession"){ S.sheet={kind:"session",id:el.getAttribute("data-id")}; render(); return; }
+  if(a==="newRound"){ S.tab="rounds"; S.sheet={kind:"round",data:{date:today(),type:"screen",par:72}}; render(); return; }
+
+  /* --- 클럽 --- */
+  if(a==="saveClub"){
+    var c2=readClubForm(S.sheet.data);
+    if(!c2.order) c2.order=(S.clubs.length+1)*10;
+    put("clubs",c2).then(function(){ S.sheet=null; render(); });
+    return;
+  }
+  if(a==="delClub"){ del("clubs",el.getAttribute("data-id")).then(function(){ S.sheet=null; render(); }); return; }
+
+  if(a==="readClubPhoto"){
+    var f=fileOf("clubPhoto");
+    if(!f){ S.msg.cphoto="사진을 먼저 선택하세요."; render(); return; }
+    readClubForm(S.sheet.data);
+    S.busy.cphoto=true; S.msg.cphoto=null; render();
+    sample.json("골프 클럽 사진입니다. 보이는 각인과 라벨만 근거로 아래 JSON 하나만 답하세요. 읽을 수 없는 항목은 null로 두세요. 추측하지 마세요.\n"
+      +'{"name":"가방에서 부를 이름(예: 7번 아이언, 드라이버)","cat":"driver|wood|hybrid|iron|wedge|putter","brand":"브랜드","model":"모델명","loft":숫자 또는 null,"shaft":"샤프트 이름","flex":"R|SR|S|X 등","length":"인치 또는 null","note":"각인·세팅 등 눈에 보이는 특이사항"}',
+      {images:[f],modelTier:"default"})
+    .then(function(v){
+      S.busy.cphoto=false;
+      var d=S.sheet&&S.sheet.data; if(!d||!v){ render(); return; }
+      ["name","cat","brand","model","shaft","flex","length","note"].forEach(function(k){ if(v[k]) d[k]=String(v[k]); });
+      if(v.loft!=null) d.loft=num(v.loft);
+      toDataURL(f,function(u){ if(u&&u.length<700000&&S.sheet) S.sheet.data.photo=u; render(); });
+      render();
+    }).catch(function(e){ S.busy.cphoto=false;
+      S.msg.cphoto = readErr(e); render(); });
+    return;
+  }
+
+  if(a==="diagClub"){
+    var c3=readClubForm(S.sheet.data);
+    var gaps=bagGaps().map(function(r){ return r.c.name+" "+(r.loft!=null?r.loft+"도 ":"")+r1(r.carry)+"m"; }).join(" / ");
+    var bb=clubBest(c3.id);
+    var p=profileText()+"\n\n아래 클럽 하나를 점검합니다.\n"
+      +"클럽: "+[c3.name,c3.brand,c3.model,(c3.loft?c3.loft+"도":""),c3.shaft,c3.flex,c3.length?c3.length+"인치":"",c3.note].filter(Boolean).join(" / ")
+      +"\n실측 캐리: "+(bb?bb.carry+"m":"아직 없음")
+      +"\n가방 전체(긴 것부터): "+gaps
+      +"\n\n두 부분으로 답하세요. 머리말 없이 바로 시작합니다.\n"
+      +"[특성] 이 클럽이 어떤 성격인지 3~4문장.\n"
+      +"[점검] 부족하거나 확인이 필요한 점을 '- '로 시작하는 짧은 항목 2~4개. 각 항목은 한 문장. 문제가 없으면 '- 현재 구성에서 문제 없음' 한 줄만.";
+    ask("diag",p,{modelTier:"default"}).then(function(t){
+      var d=S.sheet&&S.sheet.data; if(!d) return;
+      var mSpec=t.split(/\[점검\]/)[0].replace(/\[특성\]/,"").trim();
+      var rest=t.split(/\[점검\]/)[1]||"";
+      d.spec=mSpec;
+      d.issues=rest.split("\n").map(function(x){return x.replace(/^[-•\s]+/,"").trim();}).filter(function(x){return x.length>3;});
+      render();
+    }).catch(function(){});
+    return;
+  }
+
+  if(a==="customDrill"){
+    var c4=readClubForm(S.sheet.data);
+    var hist=clubSeries(c4.id,"carry");
+    var lb=lastBlockFor(c4.id);
+    var T=TARGET[tkey(c4)];
+    var p2=profileText()+"\n\n클럽: "+[c4.name,c4.brand,c4.model,(c4.loft?c4.loft+"도":""),c4.shaft,c4.flex].filter(Boolean).join(" / ")
+      +"\n최근 10회 평균: "+(lb?metricSummary(lb.m):"측정 기록 없음")
+      +(T?("\n이 클럽의 목표: 캐리 "+T.carry[0]+"~"+T.carry[1]+"m, 발사각 "+T.launch[0]+"~"+T.launch[1]+"도, 백스핀 "+T.back[0]+"~"+T.back[1]+", 좌우 편차 "+T.width[1]+"m 이하, 방향각 ±"+T.dir+"도 이내"):"")
+      +"\n측정 횟수: "+hist.length+"회"
+      +"\n\n이 클럽만을 위한 50발 연습 계획을 주세요. 10발 단위 4~5단계로 나누고, 각 단계마다 '무엇을 바꾸는지' 한 가지만 지정하세요. "
+      +"마지막에 성공 판정 기준을 숫자로 제시하세요. 전체 350자 이내, 머리말 없이 바로 시작.";
+    ask("drill",p2,{modelTier:"default"}).then(function(t){
+      if(S.sheet&&S.sheet.data){ S.sheet.data.drill=t; render(); }
+    }).catch(function(){});
+    return;
+  }
+
+  if(a==="bagReview"){
+    var rows=bagGaps().map(function(r){ return r.c.name+" "+(r.loft!=null?r.loft+"도 ":"")+r1(r.carry)+"m"+(r.measured?"(실측)":"(기준값)")+(r.dCarry!=null?" 간격 "+r.dCarry+"m":""); }).join("\n");
+    var p3=profileText()+"\n\n가방 구성(긴 것부터):\n"+rows
+      +"\n\n이 구성에서 (1) 역할이 겹쳐 뺄 수 있는 클럽, (2) 비어 있는 거리 구간, (3) 지금 당장 바꿀 필요가 없는 이유를 각각 짚어 주세요. "
+      +"장비 구입 권유보다 지금 가진 것으로 해결하는 쪽을 우선하세요. 400자 이내, 머리말 없이.";
+    ask("bag",p3,{modelTier:"default"}).then(function(t){ S.bagText=t; render(); }).catch(function(){});
+    return;
+  }
+
+  /* --- 연습 세션 --- */
+  if(a==="newSession"){ S.tab="practice"; S.draft=newDraft(); render(); window.scrollTo(0,0); return; }
+  if(a==="cancelDraft"){ S.draft=null; render(); return; }
+  if(a==="step"){
+    var s=+el.getAttribute("data-s");
+    if(s===3){ var fb=document.getElementById("feelBox"); if(fb) S.draft.feeling=fb.value; }
+    S.draft.step=s; render(); window.scrollTo(0,0); return;
+  }
+  if(a==="toggleWarm"||a==="toggleCool"){
+    var key=a==="toggleWarm"?"warmup":"cooldown", i=+el.getAttribute("data-i");
+    var arr=S.draft[key], at=arr.indexOf(i);
+    if(at>=0) arr.splice(at,1); else arr.push(i);
+    render(); return;
+  }
+  if(a==="addBlock"){ S.sheet={kind:"block",data:{clubId:"",m:{}}}; S.msg.sphoto=null; render(); return; }
+  if(a==="rmBlock"){ S.draft.blocks.splice(+el.getAttribute("data-i"),1); render(); return; }
+
+  /* ----- 잠금 ----- */
+  if(a==="pin"){
+    var L=S.lock; if(L.busy) return;
+    var k=el.getAttribute("data-k");
+    if(k==="←"){ L.pin=(L.pin||"").slice(0,-1); L.err=null; render(); return; }
+    if((L.pin||"").length>=4) return;
+    L.pin=(L.pin||"")+k; L.err=null;
+    if(L.pin.length===4) submitPin(); else render();
+    return;
+  }
+  if(a==="saveUrl"){
+    var ue=document.getElementById("lk_url"), uv=(ue?ue.value:"").trim();
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(uv)){
+      S.lock.err="주소 형식이 다릅니다. /exec 로 끝나는 웹앱 주소를 넣어 주세요."; render(); return;
+    }
+    saveApiUrl(uv);
+    S.lock.needUrl=false; S.lock.err=null; render();
+    gate();
+    return;
+  }
+  if(a==="doRegister"){
+    var L2=S.lock, nm=(document.getElementById("lk_name")||{}).value||"";
+    var p1=(document.getElementById("lk_p1")||{}).value||"";
+    var p2=(document.getElementById("lk_p2")||{}).value||"";
+    L2.name=nm.trim();
+    if(!L2.name){ L2.err="이름을 넣어 주세요."; render(); return; }
+    if(!/^[0-9]{4}$/.test(p1)){ L2.err="숫자 네 자리로 넣어 주세요."; render(); return; }
+    if(p1!==p2){ L2.err="두 번 넣은 번호가 다릅니다."; render(); return; }
+    L2.busy=true; L2.err=null; render();
+    call("apiRegister",L2.name,p1).then(function(r){
+      L2.busy=false; L2.need=false; L2.registered=true; L2.name=r.name; L2.pin="";
+      saveToken(r.token); render(); boot();
+    }).catch(function(e){ L2.busy=false; L2.err=(e&&e.message)||"등록하지 못했습니다."; render(); });
+    return;
+  }
+  if(a==="lockNow"){
+    var tk=getToken();
+    S.lock.need=true; S.lock.pin=""; S.lock.err=null; S.lock.focused=false;
+    saveToken(""); render();
+    if(tk) call("apiLock",tk).catch(function(){});
+    return;
+  }
+
+  if(a==="clearMulti"){ S.multi={names:[],files:[],busy:false,at:0,log:[],bad:false}; render(); return; }
+  if(a==="readMulti"){
+    if(S.multi.busy || !S.multi.files.length) return;
+    S.multi.busy=true; S.multi.at=0; S.multi.log=[]; S.multi.bad=false; render();
+    runMulti(0);
+    return;
+  }
+
+  if(a==="saveKey"){
+    var ke=document.getElementById("aikey"), kv=ke?ke.value.trim():"";
+    if(!kv){ S.msg.key="키를 붙여넣어 주세요."; render(); return; }
+    S.busy.key=true; S.msg.key=null; render();
+    call("apiSetKey",kv).then(function(r){
+      S.busy.key=false; S.msg.key=null;
+      ready.ai=true; ready.img=true;
+      S.note.sphoto="사진 판독을 켰습니다"+(r&&r.model?(" — "+r.model):"")+". 이제 사진을 올리고 읽기를 누르세요.";
+      render();
+    }).catch(function(e){
+      S.busy.key=false;
+      S.msg.key=(e&&e.message)||"키를 저장하지 못했습니다.";
+      render();
+    });
+    return;
+  }
+
+  if(a==="readShotPhoto"){
+    var sf=fileOf("shotPhoto");
+    if(!sf){ S.msg.sphoto="사진을 먼저 고르세요."; render(); return; }
+    readBlockForm(S.sheet.data);
+    S.busy.sphoto=true; S.msg.sphoto=null; S.note.sphoto=null; S.shrunk=null;
+    S.stage="사진 줄이는 중"; render();
+    setTimeout(function(){ if(S.busy.sphoto){ S.stage="보내는 중"; render();
+      setTimeout(function(){ if(S.busy.sphoto){ S.stage="읽는 중"; render(); } },2500); } },900);
+    sample.json("측정 화면",{images:[sf],modelTier:"default"})
+    .then(function(v){
+      S.busy.sphoto=false; S.stage=null;
+      var b=S.sheet&&S.sheet.data; if(!b||!v){ S.msg.sphoto="답이 비어 있습니다. 다시 한 번 눌러 주세요."; render(); return; }
+      var got=0;
+      METRICS.forEach(function(x){
+        if(v[x.k]==null||v[x.k]==="") return;
+        var val = x.lr ? lrToNum(v[x.k]) : num(v[x.k]);
+        if(val==null||isNaN(val)) return;
+        b.m[x.k]=val; got++;
+      });
+      if(v.grade) b.m.grade=String(v.grade).toUpperCase().slice(0,1);
+      if(v.shots!=null){ var sn=num(v.shots); if(sn>0) b.shots=sn; }
+
+      /* 사진에 찍힌 클럽으로 자동 선택 */
+      var hit=null;
+      if(v.club){ hit=guessClub(v.club); if(hit) b.clubId=hit.id; }
+
+      if(!got){
+        S.msg.sphoto="숫자를 하나도 못 읽었습니다. 화면 전체가 들어가게, 글자가 또렷하게 다시 찍어 주세요.";
+      } else {
+        S.msg.sphoto=null;
+        S.note.sphoto = "사진에서 "+got+"개 항목을 읽었습니다."
+          + (hit ? (" 클럽은 "+hit.name+"으로 잡았습니다.")
+                 : (v.club ? (" 화면의 클럽 표시 \""+v.club+"\"는 가방에서 못 찾아 직접 골라 주세요.")
+                           : " 클럽 표시가 안 보여 직접 골라 주세요."));
+      }
+      render();
+    }).catch(function(e){ S.busy.sphoto=false; S.stage=null;
+      S.msg.sphoto = readErr(e);
+      render(); });
+    return;
+  }
+
+  if(a==="saveBlock"){
+    var b2=readBlockForm(S.sheet.data);
+    var club2=S.clubs.filter(function(x){return x.id===b2.clubId;})[0];
+    if(!club2){ flash("클럽을 선택하세요."); return; }
+    var prev=lastBlockFor(b2.clubId);
+    var ev2=evalBlock(club2,b2.m,prev?prev.m:null);
+    S.draft.blocks.push({clubId:b2.clubId,clubName:club2.name,m:b2.m,good:ev2.good,bad:ev2.bad,deltas:ev2.deltas,coaching:""});
+    S.sheet=null; render(); return;
+  }
+
+  if(a==="coachFeel"){
+    var fb2=document.getElementById("feelBox"); if(fb2) S.draft.feeling=fb2.value;
+    if(!S.draft.feeling.trim()){ S.msg.feel="느낀점을 먼저 적어 주세요."; render(); return; }
+    var blocksTxt=S.draft.blocks.map(function(b){
+      return b.clubName+": "+metricSummary(b.m)+(b.bad.length?(" / 기준 밖: "+b.bad.join("; ")):" / 전 항목 기준 안");
+    }).join("\n");
+    var p4=profileText()+"\n\n오늘 연습 기록:\n"+(blocksTxt||"측정 없음")
+      +"\n\n본인이 적은 느낀점:\n"+S.draft.feeling
+      +"\n\n느낀점과 측정 숫자가 일치하는지 먼저 확인하고, 다음 연습에서 바꿀 것 한 가지만 지정하세요. "
+      +"느낌이 숫자와 다르면 그 점을 분명히 말하세요. 350자 이내, 머리말 없이 바로 시작.";
+    ask("feel",p4,{modelTier:"default",cache:false}).then(function(t){ S.draft.coaching=t; render(); }).catch(function(){});
+    return;
+  }
+
+  if(a==="saveSession"){
+    var d2=S.draft;
+    var rec={id:d2.id,date:d2.date,warmup:d2.warmup,cooldown:d2.cooldown,blocks:d2.blocks,
+      feeling:d2.feeling,coaching:d2.coaching,createdAt:new Date().toISOString()};
+    put("sessions",rec).then(function(){ S.draft=null; S.tab="practice"; render(); window.scrollTo(0,0); });
+    return;
+  }
+  if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; render(); }); return; }
+
+  if(a==="coachBlock"){
+    var si=el.getAttribute("data-si"), bi=+el.getAttribute("data-bi");
+    var ses=S.sessions.filter(function(x){return x.id===si;})[0]; if(!ses) return;
+    var blk=ses.blocks[bi]; var cl=S.clubs.filter(function(x){return x.id===blk.clubId;})[0];
+    var T2=TARGET[tkey(cl)];
+    var prev2=lastBlockFor(blk.clubId,si);
+    var p5=profileText()+"\n\n클럽: "+blk.clubName+(cl?(" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")"):"")
+      +"\n이번 10회 평균: "+metricSummary(blk.m)
+      +(prev2?("\n직전 기록("+fmtDate(prev2.date)+"): "+metricSummary(prev2.m)):"\n직전 기록 없음")
+      +(T2?("\n목표: 캐리 "+T2.carry[0]+"~"+T2.carry[1]+"m, 발사각 "+T2.launch[0]+"~"+T2.launch[1]+"도, 백스핀 "+T2.back[0]+"~"+T2.back[1]+", 좌우 편차 "+T2.width[1]+"m 이하, 방향각 ±"+T2.dir+"도 이내"):"")
+      +"\n\n세 줄로 답하세요. 각 줄은 '향상:', '부족:', '다음:'으로 시작합니다. "
+      +"'다음:'에는 다음 10발에서 바꿀 동작 한 가지만 적고, 성공 판정 숫자를 함께 쓰세요. 전체 300자 이내.";
+    ask("cb"+si+bi,p5,{modelTier:"default"}).then(function(t){
+      blk.coaching=t;
+      var body={}; for(var k in ses) if(k!=="id") body[k]=ses[k];
+      put("sessions",ses,true).then(render);
+    }).catch(function(){});
+    return;
+  }
+
+  /* --- 라운드 --- */
+  if(a==="saveRound"){
+    function g2(id){ var e=document.getElementById(id); return e?e.value.trim():""; }
+    var r2=S.sheet.data;
+    r2.date=g2("rf_date")||today(); r2.type=g2("rf_type"); r2.course=g2("rf_course");
+    r2.score=num(g2("rf_score")); r2.par=num(g2("rf_par")); r2.putts=num(g2("rf_putts"));
+    r2.fw=num(g2("rf_fw")); r2.gir=num(g2("rf_gir")); r2.ob=num(g2("rf_ob"));
+    r2.penalty=num(g2("rf_pen")); r2.dbl=num(g2("rf_dbl")); r2.parOrBetter=num(g2("rf_par_or_better"));
+    r2.note=g2("rf_note");
+    put("rounds",r2).then(function(){
+      S.sheet=null; render();
+      var btn=document.querySelector('[data-act="analyzeRound"][data-id="'+r2.id+'"]');
+      if(btn) btn.click();
+    });
+    return;
+  }
+  if(a==="delRound"){ del("rounds",el.getAttribute("data-id")); return; }
+  if(a==="analyzeRound"){
+    var rid=el.getAttribute("data-id");
+    var rr=S.rounds.filter(function(x){return x.id===rid;})[0]; if(!rr) return;
+    var drv2=S.clubs.filter(function(c){return c.cat==="driver"&&!c.spare;})[0];
+    var lbd=drv2?lastBlockFor(drv2.id):null;
+    var p6=profileText()+"\n\n라운드 기록\n"
+      +"날짜 "+rr.date+" / "+(rr.type==="field"?"필드":"스크린")+(rr.course?(" / "+rr.course):"")+"\n"
+      +"스코어 "+rr.score+" (파 "+rr.par+", "+(rr.score-rr.par>0?"+":"")+(rr.score-rr.par)+")\n"
+      +[["퍼팅",rr.putts],["페어웨이 안착",rr.fw!=null?rr.fw+"/14":null],["그린 적중",rr.gir!=null?rr.gir+"/18":null],
+        ["OB",rr.ob],["벌타",rr.penalty],["더블 이상",rr.dbl],["파 이상",rr.parOrBetter]]
+        .filter(function(x){return x[1]!=null&&x[1]!=="";}).map(function(x){return x[0]+" "+x[1];}).join(" / ")
+      +(rr.note?("\n본인 메모: "+rr.note):"")
+      +(lbd?("\n최근 드라이버 연습 10회 평균: "+metricSummary(lbd.m)):"")
+      +"\n\n이 스코어에서 타수를 가장 많이 잃은 영역을 숫자로 짚어 주세요. "
+      +"퍼팅·그린 적중·페어웨이·벌타 중 어디서 몇 타를 잃었는지 추정하고, 다음 연습에서 손댈 곳 한 군데만 지정하세요. "
+      +"장비 교체는 답에 넣지 마세요. 400자 이내, 머리말 없이 바로 시작.";
+    ask("rd"+rid,p6,{modelTier:"default"}).then(function(t){
+      rr.analysis=t; put("rounds",rr,true).then(render);
+    }).catch(function(){});
+    return;
+  }
+},false);
+
+/* 잠금 화면에서 엔터·숫자 키도 받는다 */
+document.addEventListener("keydown",function(ev){
+  var L=S.lock; if(!L||!L.need||L.busy) return;
+  if(!L.registered){
+    if(ev.key==="Enter"){
+      ev.preventDefault();
+      var btn=document.querySelector('[data-act="doRegister"]'); if(btn) btn.click();
+    }
+    return;
+  }
+  if(/^[0-9]$/.test(ev.key)){
+    ev.preventDefault();
+    if((L.pin||"").length>=4) return;
+    L.pin=(L.pin||"")+ev.key; L.err=null;
+    if(L.pin.length===4) submitPin(); else render();
+    return;
+  }
+  if(ev.key==="Backspace"){ ev.preventDefault(); L.pin=(L.pin||"").slice(0,-1); L.err=null; render(); }
+},false);
+
+/* 입력값 보존 — 시트 안에서 입력 중 리렌더되면 값이 날아가지 않도록 */
+document.addEventListener("input",function(ev){
+  var t=ev.target;
+  if(!S.sheet) return;
+  if(S.sheet.kind==="club" && t.id && t.id.indexOf("cf_")===0) readClubForm(S.sheet.data);
+  if(S.sheet.kind==="block" && t.id && (t.id.indexOf("m_")===0||t.id==="bk_club")) readBlockForm(S.sheet.data);
+},true);
+document.addEventListener("change",function(ev){
+  var t=ev.target;
+  if(t && t.type==="file" && String(t.id||"").indexOf("multiPhoto")===0){
+    var fl=t.files||[];
+    S.multi.files=[]; S.multi.names=[]; S.multi.log=[]; S.multi.bad=false;
+    for(var mi=0;mi<fl.length;mi++){
+      if(fl[mi].type && !/^image\//.test(fl[mi].type)) continue;
+      S.multi.files.push(fl[mi]); S.multi.names.push(fl[mi].name||("사진"+(mi+1)));
+    }
+    render(); return;
+  }
+  if(t && t.type==="file"){
+    var bid=String(t.id||"").replace(/_(cam|file)$/,"");
+    var f=t.files&&t.files[0];
+    if(f && f.type && !/^image\//.test(f.type)){
+      S.msg[bid==="clubPhoto"?"cphoto":"sphoto"]="사진 파일(JPG·PNG)만 됩니다.";
+      render(); return;
+    }
+    if(f) takeFile(bid,f);
+    else { S.picked=S.picked||{}; S.files=S.files||{};
+           S.picked[bid]=null; S.files[bid]=null; paintPick(bid); }
+    return;
+  }
+  if(t.id==="dr_date" && S.draft){
+    var dv=t.value;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(dv)){ S.msg.date="날짜를 골라 주세요."; render(); return; }
+    if(dv>today()){ S.msg.date="앞으로 올 날짜는 넣을 수 없습니다."; t.value=S.draft.date; render(); return; }
+    S.draft.date=dv; S.msg.date=null; render(); return;
+  }
+  if(t.id==="bk_club" && S.sheet && S.sheet.kind==="block"){ readBlockForm(S.sheet.data); render(); }
+},false);
+
+/* 사진 칸에 끌어다 놓기 */
+["dragenter","dragover"].forEach(function(n){
+  document.addEventListener(n,function(ev){
+    var z=ev.target&&ev.target.closest&&ev.target.closest("[data-pick]");
+    if(!z) return;
+    ev.preventDefault(); ev.stopPropagation(); z.classList.add("drag");
+  },false);
+});
+document.addEventListener("dragleave",function(ev){
+  var z=ev.target&&ev.target.closest&&ev.target.closest("[data-pick]");
+  if(z) z.classList.remove("drag");
+},false);
+document.addEventListener("drop",function(ev){
+  var z=ev.target&&ev.target.closest&&ev.target.closest("[data-pick]");
+  if(!z) return;
+  ev.preventDefault(); ev.stopPropagation(); z.classList.remove("drag");
+  var id=z.getAttribute("data-pick");
+  var dt=ev.dataTransfer, fs=(dt&&dt.files)||[];
+  if(id.indexOf("multiPhoto")===0){
+    S.multi.files=[]; S.multi.names=[]; S.multi.log=[]; S.multi.bad=false;
+    for(var di=0;di<fs.length;di++){
+      if(fs[di].type && !/^image\//.test(fs[di].type)) continue;
+      S.multi.files.push(fs[di]); S.multi.names.push(fs[di].name||("사진"+(di+1)));
+    }
+    render(); return;
+  }
+  var f=fs[0];
+  if(f && /^image\//.test(f.type)) takeFile(id,f);
+  else { S.msg[id==="clubPhoto"?"cphoto":"sphoto"]="사진 파일만 됩니다."; render(); }
+},false);
+
+/* 붙여넣기 */
+document.addEventListener("paste",function(ev){
+  if(!S.sheet) return;
+  var box=ev.target&&ev.target.closest&&ev.target.closest("[data-paste]");
+  var id = box ? box.getAttribute("data-paste")
+         : (S.sheet.kind==="club" ? "clubPhoto" : (S.sheet.kind==="block" ? "shotPhoto" : null));
+  if(!id || !document.getElementById(id)) return;
+  var items=(ev.clipboardData&&ev.clipboardData.items)||null;
+  var files=(ev.clipboardData&&ev.clipboardData.files)||null;
+  var got=null;
+  if(files&&files.length&&/^image\//.test(files[0].type)) got=files[0];
+  if(!got&&items) for(var i=0;i<items.length;i++){
+    if(items[i].kind==="file"){
+      var f2=items[i].getAsFile();
+      if(f2 && /^image\//.test(f2.type)){ got=f2; break; }
+    }
+  }
+  ev.preventDefault();
+  if(box) box.textContent="";
+  if(got) takeFile(id,got);
+  else { S.msg[id==="clubPhoto"?"cphoto":"sphoto"]="붙여넣은 것에 사진이 없습니다. 사진을 먼저 복사해 주세요."; render(); }
+},false);
+
+/* 테마 토글 */
+document.getElementById("themeBtn").addEventListener("click",function(){
+  var root=document.documentElement, cur=root.getAttribute("data-theme");
+  var dark = cur ? cur==="dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  root.setAttribute("data-theme", dark?"light":"dark");
+  try{ localStorage.setItem("swinglog.theme", dark?"light":"dark"); }catch(e){}
+  drawSparks();
+});
+try{ var th=localStorage.getItem("swinglog.theme"); if(th) document.documentElement.setAttribute("data-theme",th); }catch(e){}
+window.addEventListener("resize",function(){ drawSparks(); });
+
+/* ====================== 기동 ====================== */
+/* 폰 사진은 3~6MB다. 그대로 보내면 올리는 데만 한참 걸린다.
+   글자를 읽는 데는 긴 변 1600px이면 충분하므로 보내기 전에 줄인다. */
+var MAX_PX=1600, JPEG_Q=0.82;
+function toDataURLp(file){
+  return new Promise(function(res,rej){
+    function plain(){
+      var r=new FileReader();
+      r.onload=function(){ res(r.result); };
+      r.onerror=function(){ rej({message:"사진을 읽지 못했습니다."}); };
+      r.readAsDataURL(file);
+    }
+    var url;
+    try{ url=URL.createObjectURL(file); }catch(e){ plain(); return; }
+    var img=new Image();
+    img.onload=function(){
+      try{
+        var w=img.naturalWidth||img.width, h=img.naturalHeight||img.height;
+        if(!w||!h){ URL.revokeObjectURL(url); plain(); return; }
+        var k=Math.min(1, MAX_PX/Math.max(w,h));
+        var cw=Math.max(1,Math.round(w*k)), ch=Math.max(1,Math.round(h*k));
+        var cv=document.createElement("canvas"); cv.width=cw; cv.height=ch;
+        var cx=cv.getContext("2d");
+        cx.fillStyle="#fff"; cx.fillRect(0,0,cw,ch);
+        cx.drawImage(img,0,0,cw,ch);
+        var out=cv.toDataURL("image/jpeg",JPEG_Q);
+        URL.revokeObjectURL(url);
+        if(!out || out.length<2000){ plain(); return; }
+        S.shrunk={from:file.size||0,to:Math.round(out.length*0.75),w:cw,h:ch};
+        res(out);
+      }catch(e){ try{URL.revokeObjectURL(url);}catch(e2){} plain(); }
+    };
+    img.onerror=function(){ try{URL.revokeObjectURL(url);}catch(e){} plain(); };
+    img.src=url;
+  });
+}
+
+/* 서버가 끝내 답하지 않으면 영원히 돌지 않도록 끊는다. */
+function withTimeout(pr,ms,msg){
+  return new Promise(function(res,rej){
+    var done=false;
+    var t=setTimeout(function(){ if(!done){ done=true; rej({code:"timeout",message:msg}); } },ms);
+    pr.then(function(v){ if(!done){ done=true; clearTimeout(t); res(v); } },
+            function(e){ if(!done){ done=true; clearTimeout(t); rej(e); } });
+  });
+}
+/* 아래 sample 은 아티팩트판과 같은 모양을 유지하기 위한 껍데기다.
+   실제 호출은 전부 앱스 스크립트 서버를 거쳐 제미나이로 간다. */
+var sample = function(prompt,opts){
+  return call("apiAsk",prompt).then(function(t){ return {text:t,truncated:false}; });
+};
+sample.json = function(prompt,opts){
+  var f = opts && opts.images && opts.images[0];
+  if(!f) return call("apiAsk",prompt).then(function(t){
+    try{ return JSON.parse(t); }catch(e){ throw {code:"invalid_json",message:t}; }
+  });
+  return toDataURLp(f).then(function(u){
+    var fn = /클럽/.test(prompt) ? "apiReadClub" : "apiReadShot";
+    return withTimeout(call(fn,u), 90000,
+      "90초를 기다렸는데 답이 오지 않았습니다. 구글 쪽이 밀리는 중일 수 있습니다. 다시 시도하거나 아래 칸에 직접 넣어 주세요.");
+  });
+};
+sample.limits = function(){ return Promise.resolve({images: ready.img?{maxCount:1}:undefined}); };
+
+function getToken(){ try{ return localStorage.getItem("swinglog.tk")||""; }catch(e){ return ""; } }
+function saveToken(t){ try{ if(t) localStorage.setItem("swinglog.tk",t); else localStorage.removeItem("swinglog.tk"); }catch(e){} }
+
+function submitPin(){
+  var L=S.lock; L.busy=true; L.err=null; render();
+  call("apiUnlock",L.pin).then(function(r){
+    L.busy=false; L.need=false; L.pin=""; L.name=r.name;
+    saveToken(r.token); render(); boot();
+  }).catch(function(e){
+    L.busy=false; L.pin=""; L.err=(e&&e.message)||"맞지 않습니다.";
+    var m=/(\d+)초/.exec(L.err); L.wait=m?parseInt(m[1],10):0;
+    render();
+    if(L.wait>0) tickWait();
+  });
+}
+function tickWait(){
+  if(S.lock.wait<=0) return;
+  setTimeout(function(){
+    S.lock.wait--; if(S.lock.wait<=0){ S.lock.err=null; }
+    if(S.lock.need) render();
+    tickWait();
+  },1000);
+}
+
+/* 화면을 그리기 전에 잠금 상태부터 묻는다. */
+function gate(){
+  if(!apiUrl()){ S.lock.need=true; S.lock.needUrl=true; render(); return Promise.resolve(); }
+  return call("apiAuthState",getToken()).then(function(st){
+    S.lock.registered=!!st.registered;
+    S.lock.name=st.name||"";
+    S.lock.wait=st.waitSec||0;
+    S.lock.need=!st.unlocked;
+    render();
+    if(S.lock.wait>0) tickWait();
+    if(!S.lock.need) boot();
+  }).catch(function(e){
+    /* 잠금 상태를 못 물었으면 열어주지 않는다 */
+    S.lock.need=true; S.lock.err=(e&&e.message)||"서버에 연결하지 못했습니다.";
+    render();
+  });
+}
+
+function boot(){
+  S.conn.tried=true;
+  /* 잠금을 푼 뒤부터 센다. 페이지가 열린 시각부터 재면 잠금 화면에 머문 시간까지 포함돼
+     한 번 지나가 버리고, 그 뒤로는 영영 아무 말도 하지 않게 된다. */
+  if(S.loadTimer) clearTimeout(S.loadTimer);
+  S.loadTimer=setTimeout(function(){
+    if(S.loaded) return;
+    S.conn.tried=true;
+    if(!S.conn.err) S.conn.err="시트가 20초 동안 답하지 않았습니다. 다시 연결을 눌러 주세요.";
+    S.loaded=true; render();
+  },20000);
+  return loadAll();
+}
+function reconnect(){
+  S.conn.retrying=true; S.conn.err=null; render();
+  boot().then(function(){ S.conn.retrying=false; render(); })
+        .catch(function(){ S.conn.retrying=false; render(); });
+}
+render();
+gate();
+})();
+</script>
+</body>
+</html>
