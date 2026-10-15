@@ -1140,7 +1140,7 @@ function sheetBlock(){
   if(ready.img){
     h+='<button class="btn full" style="margin-top:10px" data-act="readShotPhoto"'+(S.busy.sphoto?" disabled":"")+'>'
      +(S.busy.sphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' '+(S.sec||0)+'초'):'사진에서 읽기')+'</button>';
-    if(S.busy.sphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">보통 10~30초입니다. 초가 올라가면 돌고 있는 중입니다.</p>';
+    if(S.busy.sphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">보통 5~15초입니다. 초가 올라가면 돌고 있는 중입니다.</p>';
   } else {
     h+=keyForm();
   }
@@ -2045,7 +2045,7 @@ window.addEventListener("resize",function(){ drawSparks(); });
    그대로 보내면 올리는 데만 한참 걸려 시간이 다 간다.
    숫자를 읽는 데는 긴 변 1280px이면 충분하므로 보내기 전에 줄인다.
    큰 사진에서 한 가지 방법이 실패하는 일이 잦아 세 가지를 차례로 시도한다. */
-var MAX_PX=1280, JPEG_Q=0.72, MAX_BYTES=1200000;
+var MAX_PX=1000, JPEG_Q=0.70, MAX_BYTES=450000;
 
 function canvasToUrl(src,w,h,maxPx,q){
   var k=Math.min(1, maxPx/Math.max(w,h));

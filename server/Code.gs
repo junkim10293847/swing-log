@@ -893,7 +893,7 @@ function listModels_(key) {
     var mv = /([0-9]+)\.([0-9]+)/.exec(n);
     if (mv) v += (parseInt(mv[1], 10) * 100 + parseInt(mv[2], 10)) * 10;
     if (/flash/.test(n)) v += 40;        /* 빠르고 싸다 */
-    if (/lite/.test(n)) v -= 25;
+    if (/lite/.test(n)) v += 15;         /* 숫자 읽기에는 충분하고 더 빠르다 */
     if (/pro/.test(n)) v += 10;
     if (/preview|exp/.test(n)) v -= 15;  /* 실험판은 뒤로 */
     if (/latest/.test(n)) v += 5;
@@ -935,16 +935,29 @@ function model_(refresh) {
   return models_(refresh)[0];
 }
 
-function callModel_(name, parts, key) {
+/**
+ * 속도를 좌우하는 건 세 가지다.
+ *  - 생각하는 시간: 요즘 모델은 답하기 전에 속으로 생각한다. 숫자 읽기에는 필요 없으니 끈다.
+ *  - 뱉는 양: JSON 으로 못 박고 길이를 줄이면 생성이 짧게 끝난다.
+ *  - 보내는 양: 사진을 작게 줄이는 건 화면 쪽에서 한다.
+ */
+function callModel_(name, parts, key, heavy) {
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + name +
             ':generateContent?key=' + encodeURIComponent(key);
+  var cfg = { temperature: 0, maxOutputTokens: heavy ? 700 : 2048 };
+  if (heavy) cfg.responseMimeType = 'application/json';
+
+  /* 이 모델이 '생각 끄기'를 받아주지 않는다고 확인됐으면 빼고 보낸다 */
+  var noThink = PropertiesService.getScriptProperties().getProperty('NOTHINK_' + name);
+  if (!noThink) cfg.thinkingConfig = { thinkingBudget: 0 };
+
   return UrlFetchApp.fetch(url, {
     method: 'post',
     contentType: 'application/json',
     muteHttpExceptions: true,
     payload: JSON.stringify({
       contents: [{ role: 'user', parts: parts }],
-      generationConfig: { temperature: 0, maxOutputTokens: 2048 }
+      generationConfig: cfg
     })
   });
 }
@@ -998,7 +1011,7 @@ function gemini_(parts) {
   for (var i = 0; i < list.length && i < maxModels; i++) {
     var name = list[i];
     for (var tryNo = 0; tryNo < maxTries; tryNo++) {
-      var res = callModel_(name, parts, key);
+      var res = callModel_(name, parts, key, heavy);
       var code = res.getResponseCode();
       var body = res.getContentText();
 
@@ -1018,6 +1031,25 @@ function gemini_(parts) {
 
       var msg = errMsg_(body);
       lastMsg = code + ' ' + msg;
+
+      /* 이 모델이 '생각 끄기'나 JSON 지정을 모르면, 그 설정만 빼고 같은 모델로 즉시 한 번 더 */
+      if (code === 400 && /thinking|thinkingConfig|responseMimeType|Unknown name|not supported/i.test(msg)) {
+        if (!props.getProperty('NOTHINK_' + name)) {
+          props.setProperty('NOTHINK_' + name, '1');
+          res = callModel_(name, parts, key, false);
+          code = res.getResponseCode();
+          body = res.getContentText();
+          if (code === 200) {
+            var j2 = JSON.parse(body);
+            var c2 = j2.candidates && j2.candidates[0];
+            var t2 = c2 && c2.content && c2.content.parts &&
+                     c2.content.parts.map(function (p) { return p.text || ''; }).join('');
+            if (t2) { props.setProperty('GEMINI_MODEL_OK', name); return t2.trim(); }
+          }
+          msg = errMsg_(body);
+          lastMsg = code + ' ' + msg;
+        }
+      }
 
       /* 혼잡·일시 오류 */
       if (code === 429 || code === 500 || code === 503) {
@@ -1115,30 +1147,13 @@ function apiReadShot(dataUrl) {
   if (!m) throw new Error('사진을 읽을 수 없는 형식입니다.');
   var kb = Math.round(String(dataUrl).length * 0.75 / 1024);
   var prompt =
-    '골프 연습장 스윙 측정기(골프존·카카오VX 등)의 결과 화면을 찍은 사진이다.\n' +
-    '화면에 적힌 글자와 숫자만 근거로 읽어라. 보이지 않는 항목은 null 로 둔다. 어림짐작하지 마라.\n' +
-    '여러 발의 평균을 보여주는 화면이면 평균값을 읽는다. 표가 있으면 평균 행을 읽는다.\n' +
-    '\n' +
-    '읽을 항목과 화면에서 흔히 쓰는 이름:\n' +
-    '- club : 어떤 클럽인지. 화면에 적힌 대로 (예 "7I", "#7", "7번", "DR", "W1", "56", "56°", "SW", "UT", "3H")\n' +
-    '- shots : 친 발수 (예 "10회", "15 shots")\n' +
-    '- total : 비거리 / 총거리 / Total (m)\n' +
-    '- carry : 캐리 / 캐리거리 / Carry (m)\n' +
-    '- apex : 최고높이 / 최고점 / Apex (m)\n' +
-    '- ball : 볼스피드 / 볼 스피드 / Ball Speed (m/s)\n' +
-    '- launch : 발사각 / 런치각 / Launch (도)\n' +
-    '- dir : 방향각 / 출발각 / Direction. L 또는 R 과 숫자를 붙여 그대로 (예 "L4.0", "R1.2")\n' +
-    '- side : 사이드스핀 / Side Spin. L·R 을 붙여 그대로 (예 "L282", "R415")\n' +
-    '- back : 백스핀 / Back Spin (rpm)\n' +
-    '- depth : 앞뒤 편차 / 앞뒤 차이 (m)\n' +
-    '- width : 좌우 편차 / 좌우 차이 (m)\n' +
-    '- landing : 안착률 (%의 숫자만)\n' +
-    '- grade : 등급 (A·B·C·D 중 하나)\n' +
-    '\n' +
-    '거리 단위가 야드(yd)로 적혀 있으면 미터로 바꿔 넣고 unit 에 "yd" 를 넣어라. 미터면 unit 은 "m".\n' +
-    '아래 JSON 하나만 출력하라. 설명 문장, 코드 울타리 모두 쓰지 마라.\n' +
-    '{"club":null,"shots":null,"total":null,"carry":null,"apex":null,"ball":null,"launch":null,' +
-    '"dir":null,"side":null,"back":null,"depth":null,"width":null,"landing":null,"grade":null,"unit":"m"}';
+    '골프 연습장 스윙 측정기 결과 화면이다. 화면에 적힌 값만 읽어라. 없으면 null. 추정 금지.\n' +
+    'club=화면에 적힌 클럽 표기 그대로(예 "7I","#7","3번 하이브리드","DR","PW(46~48°)")\n' +
+    'shots=친 발수, total=비거리 m, carry=캐리 m, apex=최고높이 m, ball=볼스피드 m/s,\n' +
+    'launch=발사각 도, dir=방향각(L/R 붙여서 "L4.0"), side=사이드스핀(L/R 붙여서 "L282"),\n' +
+    'back=백스핀 rpm, depth=앞뒤 편차 m, width=좌우 편차 m, landing=안착률 숫자, grade=등급 A~D\n' +
+    '야드 표기면 미터로 바꾸고 unit="yd", 아니면 "m".\n' +
+    'JSON 하나만 출력. 설명 금지.';
   var txt = gemini_([
     { text: prompt },
     { inline_data: { mime_type: m[1], data: m[2] } }
