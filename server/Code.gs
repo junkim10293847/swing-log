@@ -32,7 +32,7 @@ var OWNER = '사용자id';
 [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { HEAD[n].push(OWNER); });
 
 SH.user = '사용자';
-HEAD[SH.user] = ['id','아이디','솔트','해시','이름','가입일'];
+HEAD[SH.user] = ['id','이름','솔트','해시','표시이름','가입일'];
 
 /* 이번 요청을 보낸 사람. doPost 가 토큰을 풀어 채운다. */
 var CUR_UID = '';
@@ -129,7 +129,7 @@ function doPost(e) {
 }
 
 /* ───────────────────────── 계정 ─────────────────────────
- * 주소를 아는 사람은 누구나 아이디와 비밀번호를 만들어 자기 기록을 쌓는다.
+ * 주소를 아는 사람은 누구나 이름과 비밀번호를 정해 자기 기록을 쌓는다. 이름이 곧 로그인 이름이다.
  * 비밀번호는 저장하지 않는다. 사람마다 다른 소금을 섞어 2천 번 해시한 값만 남는다.
  * 기록의 모든 줄에는 주인이 적혀 있고, 서버가 그 줄만 돌려준다.
  */
@@ -154,6 +154,7 @@ function rand_(n) {
 
 function normId_(v) { return String(v || '').trim().toLowerCase(); }
 
+/** 이름이 곧 로그인 이름이다. 대소문자와 앞뒤 공백은 무시하고 찾는다. */
 function findUser_(loginId) {
   var want = normId_(loginId);
   if (!want) return null;
@@ -187,7 +188,7 @@ function userById_(uid) {
   return null;
 }
 
-/* ── 맞춰보기 제한 ── 아이디마다 따로 센다 ── */
+/* ── 맞춰보기 제한 ── 이름마다 따로 센다 ── */
 function waitLeft_(loginId) {
   var k = 'FAIL_UNTIL_' + normId_(loginId);
   var until = Number(PropertiesService.getScriptProperties().getProperty(k) || 0);
@@ -237,51 +238,48 @@ function apiAuthState(token) {
   if (!uid) return { unlocked: false, name: '' };
   var u = userById_(uid);
   if (!u) return { unlocked: false, name: '' };
-  return { unlocked: true, name: u['이름'] || u['아이디'] || '', loginId: u['아이디'] || '' };
+  var nm = u['이름'] || '';
+  return { unlocked: true, name: nm, loginId: nm };
 }
 
-function apiSignup(loginId, pw, name) {
-  loginId = String(loginId || '').trim();
-  name = String(name || '').trim();
-  if (!/^[A-Za-z0-9._-]{3,20}$/.test(loginId)) {
-    throw new Error('아이디는 영문·숫자 3~20자로 만들어 주세요. (.  _  - 도 됩니다)');
-  }
+function apiSignup(name, pw) {
+  name = String(name || '').trim().replace(/\s+/g, ' ');
+  if (name.length < 2 || name.length > 20) throw new Error('이름은 2~20자로 넣어 주세요.');
   if (String(pw || '').length < 4) throw new Error('비밀번호는 4자 이상으로 넣어 주세요.');
-  if (!name) name = loginId;
-  if (name.length > 20) throw new Error('이름이 너무 깁니다.');
-  if (findUser_(loginId)) throw new Error('이미 쓰고 있는 아이디입니다. 다른 것으로 해주세요.');
+  if (findUser_(name)) throw new Error('이미 쓰고 있는 이름입니다. 뒤에 한 글자를 붙이거나 다른 이름으로 해주세요.');
 
   var uid = uid_('u');
   var salt = rand_(24);
   var saved = CUR_UID; CUR_UID = '';                 /* 사용자 시트에는 주인 칸이 없다 */
   writeRow_(SH.user, {
-    id: uid, '아이디': loginId, '솔트': salt, '해시': pinHash_(salt, pw),
-    '이름': name, '가입일': new Date()
+    id: uid, '이름': name, '솔트': salt, '해시': pinHash_(salt, pw),
+    '표시이름': name, '가입일': new Date()
   });
   CUR_UID = saved;
 
   claimLegacy_(uid);                                  /* 맨 처음 가입한 사람이 기존 기록을 가져간다 */
   CUR_UID = uid;
   seedCfg_(uid);                                      /* 기준값을 이 사람 몫으로 깔아준다 */
-  clearFail_(loginId);
-  return { ok: true, name: name, loginId: loginId, token: newToken_(uid) };
+  clearFail_(name);
+  return { ok: true, name: name, loginId: name, token: newToken_(uid) };
 }
 
-function apiLogin(loginId, pw) {
-  var left = waitLeft_(loginId);
+function apiLogin(name, pw) {
+  name = String(name || '').trim().replace(/\s+/g, ' ');
+  var left = waitLeft_(name);
   if (left > 0) throw new Error(left + '초 뒤에 다시 넣어 주세요.');
-  var u = findUser_(loginId);
+  var u = findUser_(name);
   if (u && pinHash_(u['솔트'], pw) === u['해시']) {
-    clearFail_(loginId);
-    return { ok: true, name: u['이름'] || u['아이디'], loginId: u['아이디'], token: newToken_(u.id) };
+    clearFail_(name);
+    return { ok: true, name: u['이름'], loginId: u['이름'], token: newToken_(u.id) };
   }
-  var wait = noteFail_(loginId);
+  var wait = noteFail_(name);
   if (wait) {
     var txt = wait >= 3600 ? '1시간' : (wait >= 60 ? (Math.round(wait / 60) + '분') : (wait + '초'));
     throw new Error('여러 번 틀렸습니다. ' + txt + ' 뒤에 다시 넣어 주세요.');
   }
-  /* 아이디가 없는 것인지 비밀번호가 틀린 것인지 구분해 주지 않는다 */
-  throw new Error('아이디나 비밀번호가 맞지 않습니다.');
+  /* 이름이 없는 것인지 비밀번호가 틀린 것인지 구분해 주지 않는다 */
+  throw new Error('이름이나 비밀번호가 맞지 않습니다.');
 }
 
 function apiChangePin(oldPw, newPw) {
@@ -292,8 +290,8 @@ function apiChangePin(oldPw, newPw) {
   var salt = rand_(24);
   var saved = CUR_UID; CUR_UID = '';
   writeRow_(SH.user, {
-    id: u.id, '아이디': u['아이디'], '솔트': salt, '해시': pinHash_(salt, newPw),
-    '이름': u['이름'], '가입일': u['가입일']
+    id: u.id, '이름': u['이름'], '솔트': salt, '해시': pinHash_(salt, newPw),
+    '표시이름': u['표시이름'] || u['이름'], '가입일': u['가입일']
   });
   CUR_UID = saved;
   return { ok: true };
@@ -320,21 +318,21 @@ function seedCfg_(uid) {
 
 /**
  * 비밀번호를 잊은 사람을 위해. 스크립트 편집기에서 직접 실행해야만 된다.
- * 아이디를 넣고 실행하면 임시 비밀번호를 만들어 실행 기록에 찍는다.
+ * 이름을 넣고 실행하면 임시 비밀번호를 만들어 실행 기록에 찍는다.
  */
 function resetPassword() {
-  var loginId = '여기에_아이디';
-  if (loginId.indexOf('여기에') >= 0) throw new Error('이 함수 안의 loginId 를 실제 아이디로 바꾼 뒤 실행하세요.');
-  var u = findUser_(loginId);
-  if (!u) throw new Error('그런 아이디가 없습니다.');
+  var who = '여기에_이름';
+  if (who.indexOf('여기에') >= 0) throw new Error('이 함수 안의 who 를 실제 이름으로 바꾼 뒤 실행하세요.');
+  var u = findUser_(who);
+  if (!u) throw new Error('그런 이름이 없습니다.');
   var tmp = String(Math.floor(100000 + Math.random() * 900000));
   var salt = rand_(24);
   CUR_UID = '';
   writeRow_(SH.user, {
-    id: u.id, '아이디': u['아이디'], '솔트': salt, '해시': pinHash_(salt, tmp),
-    '이름': u['이름'], '가입일': u['가입일']
+    id: u.id, '이름': u['이름'], '솔트': salt, '해시': pinHash_(salt, tmp),
+    '표시이름': u['표시이름'] || u['이름'], '가입일': u['가입일']
   });
-  clearFail_(loginId);
+  clearFail_(who);
   Logger.log('임시 비밀번호: ' + tmp + ' — 로그인한 뒤 바로 바꾸세요.');
   return '임시 비밀번호: ' + tmp;
 }
