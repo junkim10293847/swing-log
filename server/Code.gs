@@ -946,15 +946,18 @@ function gemini_(parts) {
   var busy = [];      /* 혼잡으로 비킨 모델 */
   var lastMsg = '';
 
-  /* 사진이 붙은 호출은 한 번이 무겁다. 모델을 많이 돌면 사용자가 하염없이 기다린다. */
+  /* 사진이 붙은 호출은 한 번이 무겁다. 한 번에 20~40초가 걸리는데
+     모델을 바꿔가며 네 번 두드리면 사용자는 2분을 기다리다 끊긴다.
+     그래서 사진이 붙으면 딱 한 번만 시도하고, 안 되면 바로 이유를 돌려준다. */
   var heavy = false;
   for (var pi = 0; pi < parts.length; pi++) if (parts[pi] && parts[pi].inline_data) heavy = true;
-  var maxModels = heavy ? 2 : 4;
-  var napMs = heavy ? 1200 : 1800;
+  var maxModels = heavy ? 1 : 4;
+  var maxTries  = heavy ? 1 : 2;
+  var napMs = 1800;
 
   for (var i = 0; i < list.length && i < maxModels; i++) {
     var name = list[i];
-    for (var tryNo = 0; tryNo < 2; tryNo++) {
+    for (var tryNo = 0; tryNo < maxTries; tryNo++) {
       var res = callModel_(name, parts, key);
       var code = res.getResponseCode();
       var body = res.getContentText();
@@ -1064,8 +1067,10 @@ function apiAsk(prompt) {
 
 /** 측정 화면 사진에서 숫자를 읽는다. dataUrl 은 "data:image/jpeg;base64,..." */
 function apiReadShot(dataUrl) {
+  var t0 = Date.now();
   var m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
   if (!m) throw new Error('사진을 읽을 수 없는 형식입니다.');
+  var kb = Math.round(String(dataUrl).length * 0.75 / 1024);
   var prompt =
     '골프 연습장 스윙 측정기(골프존·카카오VX 등)의 결과 화면을 찍은 사진이다.\n' +
     '화면에 적힌 글자와 숫자만 근거로 읽어라. 보이지 않는 항목은 null 로 둔다. 어림짐작하지 마라.\n' +
@@ -1095,7 +1100,35 @@ function apiReadShot(dataUrl) {
     { text: prompt },
     { inline_data: { mime_type: m[1], data: m[2] } }
   ]);
-  return pickJson_(txt);
+  var out = pickJson_(txt);
+  out._ms = Date.now() - t0;
+  out._kb = kb;
+  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '';
+  return out;
+}
+
+/**
+ * 사진 판독이 느린지 빠른지 여기서 바로 재 본다. 폰도 네트워크도 끼지 않는다.
+ * 편집기에서 실행하면 걸린 시간이 실행 기록에 찍힌다.
+ */
+function testPhotoSpeed() {
+  /* 가로 8px 세로 8px 흰 사각형 — 내용은 중요하지 않고 왕복 시간만 본다 */
+  var tiny = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAAFUlEQVR42mP8/5+hng' +
+             'EKGEeJwKhJAAAA//8DAFBLAwQUAAYACAAAACEA';
+  var t0 = Date.now();
+  var out;
+  try {
+    out = gemini_([{ text: '이 그림에 글자가 있으면 적고, 없으면 "없음" 한 단어로만 답하세요.' },
+                    { inline_data: { mime_type: 'image/png', data: tiny.split(',')[1] } }]);
+  } catch (e) {
+    out = '실패: ' + e.message;
+  }
+  var ms = Date.now() - t0;
+  var txt = '사진 한 장 왕복 ' + ms + 'ms (' + Math.round(ms / 1000) + '초)\n' +
+            '쓴 모델: ' + (PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '-') + '\n' +
+            '응답: ' + out;
+  Logger.log(txt);
+  return txt;
 }
 
 /** 클럽 사진에서 스펙을 읽는다. */
