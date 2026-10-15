@@ -216,6 +216,10 @@ body.locked > :not(#lockHost){display:none !important}
 .lockMark{font-size:40px;line-height:1;margin-bottom:14px}
 .lockCard h2{font-size:23px;font-weight:700;letter-spacing:-.01em}
 .lockCard .f{text-align:left}
+.optrow{display:flex;gap:16px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.opt{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--fg2);cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.opt input{width:17px;height:17px;accent-color:var(--accent);margin:0;cursor:pointer}
 .photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -595,14 +599,22 @@ function renderLock(){
   } else {
     h+='<h2>스윙 로그</h2>'
      +'<p class="muted" style="margin:8px 0 18px">이름과 비밀번호를 넣어 주세요.</p>'
-     +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||"")+'" placeholder="등록한 이름" autocomplete="username" autocapitalize="none"></label>'
+     +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||savedName()||"")+'" placeholder="등록한 이름" autocomplete="username" autocapitalize="none"></label>'
      +'<label class="f" style="margin-top:10px">비밀번호<input type="password" id="lk_pw" placeholder="비밀번호" autocomplete="current-password"></label>'
      +'<button class="btn primary full" style="margin-top:14px" data-act="doLogin"'+(L.busy?" disabled":"")+'>'
      +(L.busy?'<span class="spin"></span> 확인하는 중':'들어가기')+'</button>';
+    h+='<div class="optrow">'
+     +'<label class="opt"><input type="checkbox" id="lk_remember"'+(pref("remember",true)?" checked":"")+'><span>이름 기억</span></label>'
+     +'<label class="opt"><input type="checkbox" id="lk_auto"'+(pref("auto",true)?" checked":"")+'><span>자동 로그인</span></label>'
+     +'</div>';
     if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
     if(L.wait>0) h+='<p class="tiny" style="margin-top:10px;color:var(--fg3)">'+L.wait+'초 뒤에 다시 넣을 수 있습니다.</p>';
     h+='<p class="tiny" style="margin-top:16px"><a href="#" data-act="toSignup" style="color:var(--accent);font-weight:600">처음이신가요? 등록하기</a></p>'
-     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">한 번 들어오면 이 기기에서 30일 동안 기억합니다.</p>';
+     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">'
+     +(pref("auto",true)
+        ? '자동 로그인을 켜 두면 이 기기에서 30일 동안 다시 묻지 않습니다.'
+        : '자동 로그인이 꺼져 있어 브라우저를 닫으면 다시 묻습니다.')
+     +' 비밀번호는 기기에 저장되지 않습니다.</p>';
   }
   h+='</div></div>';
   host.innerHTML=h;
@@ -1589,8 +1601,8 @@ document.addEventListener("click",function(ev){
     }
     L2.busy=true; L2.err=null; render();
     call.apply(null,[fn].concat(args)).then(function(r){
-      L2.busy=false; L2.need=false; L2.err=null; L2.name=r.name;
-      saveToken(r.token); render(); boot();
+      L2.busy=false; L2.need=false; L2.err=null; L2.name=r.name; L2.id=r.loginId||id;
+      saveToken(r.token); rememberName(L2.id); render(); boot();
     }).catch(function(e){
       L2.busy=false; L2.err=(e&&e.message)||"들어가지 못했습니다.";
       var m=/(\d+)초/.exec(L2.err); L2.wait=m?parseInt(m[1],10):0;
@@ -1603,6 +1615,7 @@ document.addEventListener("click",function(ev){
   if(a==="lockNow"){
     var tk=getToken();
     S.lock.need=true; S.lock.mode="login"; S.lock.err=null; S.lock.focused=false;
+    S.lock.id=pref("remember",true)?savedName():"";
     saveToken(""); render();
     if(tk) call("apiLock",tk).catch(function(){});
     return;
@@ -1817,6 +1830,11 @@ document.addEventListener("change",function(ev){
            S.picked[bid]=null; S.files[bid]=null; paintPick(bid); }
     return;
   }
+  if(t.id==="lk_remember"||t.id==="lk_auto"){
+    setPref(t.id==="lk_remember"?"remember":"auto", !!t.checked);
+    if(t.id==="lk_remember" && !t.checked) rememberName("");
+    S.lock.focused=true; render(); return;
+  }
   if(t.id==="dr_date" && S.draft){
     var dv=t.value;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(dv)){ S.msg.date="날짜를 골라 주세요."; render(); return; }
@@ -1955,8 +1973,30 @@ sample.json = function(prompt,opts){
 };
 sample.limits = function(){ return Promise.resolve({images: ready.img?{maxCount:1}:undefined}); };
 
-function getToken(){ try{ return localStorage.getItem("swinglog.tk")||""; }catch(e){ return ""; } }
-function saveToken(t){ try{ if(t) localStorage.setItem("swinglog.tk",t); else localStorage.removeItem("swinglog.tk"); }catch(e){} }
+/* 자동 로그인이 켜져 있으면 브라우저를 닫아도 남는 곳에, 꺼져 있으면
+   탭을 닫으면 사라지는 곳에 둔다. 비밀번호는 어느 쪽에도 저장하지 않는다. */
+function pref(k,dflt){ try{ var v=localStorage.getItem("swinglog."+k); return v===null?dflt:v==="1"; }catch(e){ return dflt; } }
+function setPref(k,on){ try{ localStorage.setItem("swinglog."+k, on?"1":"0"); }catch(e){} }
+
+function getToken(){
+  try{ var a=localStorage.getItem("swinglog.tk"); if(a) return a; }catch(e){}
+  try{ var b=sessionStorage.getItem("swinglog.tk"); if(b) return b; }catch(e){}
+  return "";
+}
+function saveToken(t){
+  try{ localStorage.removeItem("swinglog.tk"); }catch(e){}
+  try{ sessionStorage.removeItem("swinglog.tk"); }catch(e){}
+  if(!t) return;
+  if(pref("auto",true)){ try{ localStorage.setItem("swinglog.tk",t); }catch(e){} }
+  else { try{ sessionStorage.setItem("swinglog.tk",t); }catch(e){} }
+}
+function savedName(){ try{ return localStorage.getItem("swinglog.name")||""; }catch(e){ return ""; } }
+function rememberName(n){
+  try{
+    if(pref("remember",true) && n) localStorage.setItem("swinglog.name",n);
+    else localStorage.removeItem("swinglog.name");
+  }catch(e){}
+}
 
 function tickWait(){
   if(S.lock.wait<=0) return;
@@ -1969,6 +2009,7 @@ function tickWait(){
 
 /* 화면을 그리기 전에 잠금 상태부터 묻는다. */
 function gate(){
+  if(!S.lock.id && pref("remember",true)) S.lock.id=savedName();
   if(!apiUrl()){ S.lock.need=true; S.lock.needUrl=true; render(); return Promise.resolve(); }
   return call("apiAuthState",getToken()).then(function(st){
     S.lock.name=st.name||"";
