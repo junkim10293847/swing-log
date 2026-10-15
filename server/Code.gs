@@ -317,6 +317,69 @@ function seedCfg_(uid) {
 }
 
 /**
+ * 시트에 이미 쌓여 있는 기록을 한 사람 것으로 몰아 준다.
+ * 아래 who 를 실제 이름으로 바꾸고 스크립트 편집기에서 실행하면 된다.
+ *
+ * 주인이 비어 있는 줄만 넘긴다. 이미 누군가의 것으로 되어 있는 줄은 건드리지 않는다.
+ * 남의 기록까지 가져오고 싶지 않을 것이므로, 그 편이 안전하다.
+ */
+function giveAllTo() {
+  var who = '여기에_이름';
+  if (who.indexOf('여기에') >= 0) throw new Error('이 함수 안의 who 를 실제 이름으로 바꾼 뒤 실행하세요.');
+  var u = findUser_(who);
+  if (!u) throw new Error('그런 이름이 없습니다. 앱에서 먼저 등록하세요.');
+
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { ensureOwnerCol_(n); });
+
+  var moved = {}, total = 0;
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (name) {
+    var sh = sheet_(name);
+    var last = sh.getLastRow();
+    moved[name] = 0;
+    if (last < 2) return;
+    var col = HEAD[name].length;
+    var vals = sh.getRange(2, col, last - 1, 1).getValues();
+    var changed = false;
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0] === '' || vals[i][0] === null) {
+        vals[i][0] = u.id; moved[name]++; total++; changed = true;
+      }
+    }
+    if (changed) sh.getRange(2, col, vals.length, 1).setValues(vals);
+  });
+
+  PropertiesService.getScriptProperties().setProperty('LEGACY_DONE', '1');
+  var txt = who + ' 님에게 ' + total + '줄을 넘겼습니다. — ' +
+    Object.keys(moved).map(function (k) { return k + ' ' + moved[k]; }).join(', ');
+  Logger.log(txt);
+  return txt;
+}
+
+/** 누가 몇 줄을 갖고 있는지 한눈에 본다. */
+function whoHasWhat() {
+  var users = {};
+  var sh = sheet_(SH.user), last = sh.getLastRow();
+  if (last >= 2) {
+    sh.getRange(2, 1, last - 1, 2).getValues().forEach(function (r) { users[r[0]] = r[1]; });
+  }
+  var out = [];
+  [SH.club, SH.shot, SH.log, SH.round].forEach(function (name) {
+    var s2 = sheet_(name), l2 = s2.getLastRow();
+    if (l2 < 2) { out.push(name + ': 비어 있음'); return; }
+    var col = HEAD[name].length;
+    var tally = {};
+    s2.getRange(2, col, l2 - 1, 1).getValues().forEach(function (r) {
+      var k = r[0] === '' || r[0] === null ? '(주인 없음)' : (users[r[0]] || r[0]);
+      tally[k] = (tally[k] || 0) + 1;
+    });
+    out.push(name + ': ' + Object.keys(tally).map(function (k) { return k + ' ' + tally[k] + '줄'; }).join(', '));
+  });
+  var txt = out.join('\n');
+  Logger.log(txt);
+  return txt;
+}
+
+/**
  * 비밀번호를 잊은 사람을 위해. 스크립트 편집기에서 직접 실행해야만 된다.
  * 이름을 넣고 실행하면 임시 비밀번호를 만들어 실행 기록에 찍는다.
  */
