@@ -823,7 +823,11 @@ function draftView(){
     var reqN=countReq(WARMUP), doneN=WARMUP.filter(function(x,i){return x.req&&d.warmup.indexOf(i)>=0;}).length;
     h+='<div class="card"><div class="eyebrow">1단계 · 준비운동</div>'
      +'<h3 style="font-size:17px;margin:4px 0 2px">몸을 먼저 열어야 숫자가 나옵니다</h3>'
-     +'<p class="muted" style="margin-bottom:6px">필수 '+reqN+'개를 모두 체크해야 다음으로 넘어갑니다. 약 8분.</p>';
+     +'<p class="muted" style="margin-bottom:6px">몸을 다 풀었으면 <b>다 했어요</b> 한 번만 누르면 됩니다. 약 8분.</p>'
+     +'<div class="row" style="margin:4px 0 10px;gap:8px">'
+     +'<button class="btn primary sm" data-act="allWarm">다 했어요</button>'
+     +'<button class="btn ghost sm" data-act="noneWarm"'+(d.warmup.length?"":" disabled")+'>전부 해제</button>'
+     +'<span class="tiny" style="color:var(--fg3);margin-left:auto">'+d.warmup.length+'/'+WARMUP.length+'</span></div>';
     WARMUP.forEach(function(x,i){
       h+='<label class="check"><input type="checkbox" data-act="toggleWarm" data-i="'+i+'"'+(d.warmup.indexOf(i)>=0?" checked":"")+'>'
        +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
@@ -891,7 +895,11 @@ function draftView(){
     var reqC=countReq(COOLDOWN), doneC=COOLDOWN.filter(function(x,i){return x.req&&d.cooldown.indexOf(i)>=0;}).length;
     h+='<div class="card"><div class="eyebrow">4단계 · 마무리 운동</div>'
      +'<h3 style="font-size:17px;margin:4px 0 2px">여기까지가 한 번의 연습입니다</h3>'
-     +'<p class="muted" style="margin-bottom:6px">필수 '+reqC+'개를 체크하면 저장됩니다. 약 5분.</p>';
+     +'<p class="muted" style="margin-bottom:6px">마무리까지 했으면 <b>다 했어요</b>를 누르고 저장하세요. 약 5분.</p>'
+     +'<div class="row" style="margin:4px 0 10px;gap:8px">'
+     +'<button class="btn primary sm" data-act="allCool">다 했어요</button>'
+     +'<button class="btn ghost sm" data-act="noneCool"'+(d.cooldown.length?"":" disabled")+'>전부 해제</button>'
+     +'<span class="tiny" style="color:var(--fg3);margin-left:auto">'+d.cooldown.length+'/'+COOLDOWN.length+'</span></div>';
     COOLDOWN.forEach(function(x,i){
       h+='<label class="check"><input type="checkbox" data-act="toggleCool" data-i="'+i+'"'+(d.cooldown.indexOf(i)>=0?" checked":"")+'>'
        +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
@@ -1569,6 +1577,13 @@ document.addEventListener("click",function(ev){
     var s=+el.getAttribute("data-s");
     if(s===3){ var fb=document.getElementById("feelBox"); if(fb) S.draft.feeling=fb.value; }
     S.draft.step=s; render(); window.scrollTo(0,0); return;
+  }
+  if(a==="allWarm"||a==="noneWarm"||a==="allCool"||a==="noneCool"){
+    var isWarm=(a==="allWarm"||a==="noneWarm");
+    var list=isWarm?WARMUP:COOLDOWN, key2=isWarm?"warmup":"cooldown";
+    var on=(a==="allWarm"||a==="allCool");
+    S.draft[key2]=on ? list.map(function(x,i){ return i; }) : [];
+    render(); return;
   }
   if(a==="toggleWarm"||a==="toggleCool"){
     var key=a==="toggleWarm"?"warmup":"cooldown", i=+el.getAttribute("data-i");
