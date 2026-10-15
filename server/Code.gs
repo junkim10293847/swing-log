@@ -27,6 +27,16 @@ HEAD[SH.log]   = ['id','날짜','준비운동','마무리운동','느낀점','�
 HEAD[SH.round] = ['id','날짜','종류','코스','스코어','파','퍼팅','페어웨이','그린적중','OB','벌타','더블이상','파이상','메모','분석'];
 HEAD[SH.cfg]   = ['클럽키','이름','캐리최소','캐리최대','발사각최소','발사각최대','백스핀최소','백스핀최대','좌우편차최대','앞뒤편차최대','방향각허용'];
 
+/* 여러 사람이 쓰므로 모든 줄에 주인을 적는다. 기존 시트에는 맨 뒤에 덧붙는다. */
+var OWNER = '사용자id';
+[SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { HEAD[n].push(OWNER); });
+
+SH.user = '사용자';
+HEAD[SH.user] = ['id','아이디','솔트','해시','이름','가입일'];
+
+/* 이번 요청을 보낸 사람. doPost 가 토큰을 풀어 채운다. */
+var CUR_UID = '';
+
 /* 기준설정 시트 초기값 — 사용자의 실측값을 바탕으로 잡은 목표 구간 */
 var CFG_DEFAULT = [
   ['driver','드라이버',172,190,13.5,16.5,2100,2900,16,13,3.0],
@@ -45,8 +55,21 @@ var CFG_DEFAULT = [
 
 /* ───────────────────────── 화면 ───────────────────────── */
 
+/* 화면은 깃허브 페이지에서 연다. 이 주소는 데이터만 주고받는 창구다. */
+var APP_URL = 'https://junkim10293847.github.io/swing-log/';
+
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
+  return HtmlService.createHtmlOutput(
+    '<!doctype html><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>스윙 로그</title>' +
+    '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:420px;margin:18vh auto;padding:0 20px;' +
+    'text-align:center;color:#2b2724;line-height:1.7">' +
+    '<h1 style="font-size:21px">스윙 로그</h1>' +
+    '<p style="color:#6b635c;font-size:14.5px">여기는 데이터 창구입니다. 앱은 아래 주소에서 엽니다.</p>' +
+    '<p style="margin-top:22px"><a href="' + APP_URL + '" ' +
+    'style="display:inline-block;background:#BF4F19;color:#fff;text-decoration:none;' +
+    'padding:13px 22px;border-radius:11px;font-weight:600">앱 열기</a></p></div>')
     .setTitle('스윙 로그')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -59,11 +82,11 @@ function doGet() {
  */
 
 /** 잠기기 전에도 부를 수 있는 것 — 등록 여부 확인, 등록, 잠금 해제뿐 */
-var OPEN_FNS = { apiAuthState: 1, apiRegister: 1, apiUnlock: 1 };
+var OPEN_FNS = { apiAuthState: 1, apiSignup: 1, apiLogin: 1 };
 
 function dispatch_(fn) {
   var map = {
-    apiAuthState: apiAuthState, apiRegister: apiRegister, apiUnlock: apiUnlock,
+    apiAuthState: apiAuthState, apiSignup: apiSignup, apiLogin: apiLogin,
     apiChangePin: apiChangePin, apiLock: apiLock,
     apiLoad: apiLoad, apiSheetUrl: apiSheetUrl,
     apiSaveClub: apiSaveClub, apiDeleteClub: apiDeleteClub,
@@ -92,8 +115,10 @@ function doPost(e) {
   var f = dispatch_(fn);
   if (!f) return json_({ ok: false, error: '알 수 없는 요청입니다: ' + fn });
 
-  if (!OPEN_FNS[fn] && !tokenOK_(token)) {
-    return json_({ ok: false, locked: true, error: '잠겨 있습니다. 네 자리를 다시 넣어 주세요.' });
+  /* 이번 요청의 주인을 먼저 정한다. 아래 모든 읽기·쓰기가 이 값에 묶인다. */
+  CUR_UID = uidOfToken_(token);
+  if (!OPEN_FNS[fn] && !CUR_UID) {
+    return json_({ ok: false, locked: true, error: '로그인이 필요합니다.' });
   }
   try {
     var v = f.apply(null, args);
@@ -103,16 +128,17 @@ function doPost(e) {
   }
 }
 
-/* ───────────────────────── 잠금 (이름 + 네 자리) ─────────────────────────
- * 네 자리는 저장하지 않는다. 임의의 소금과 함께 2천 번 해시한 값만 남긴다.
- * 맞춰 보는 시도는 서버에서 센다. 다섯 번 틀리면 기다려야 한다.
+/* ───────────────────────── 계정 ─────────────────────────
+ * 주소를 아는 사람은 누구나 아이디와 비밀번호를 만들어 자기 기록을 쌓는다.
+ * 비밀번호는 저장하지 않는다. 사람마다 다른 소금을 섞어 2천 번 해시한 값만 남는다.
+ * 기록의 모든 줄에는 주인이 적혀 있고, 서버가 그 줄만 돌려준다.
  */
 
 var PIN_ROUNDS = 2000;
 var TOKEN_DAYS = 30;
 
-function pinHash_(salt, pin) {
-  var s = salt + '|' + String(pin);
+function pinHash_(salt, pw) {
+  var s = salt + '|' + String(pw);
   for (var i = 0; i < PIN_ROUNDS; i++) {
     s = Utilities.base64Encode(
       Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s + '|' + i, Utilities.Charset.UTF_8));
@@ -126,94 +152,151 @@ function rand_(n) {
   return out.slice(0, n);
 }
 
-function okPin_(pin) { return /^[0-9]{4}$/.test(String(pin || '')); }
+function normId_(v) { return String(v || '').trim().toLowerCase(); }
 
-/** 화면을 그리기 전에 묻는다. 등록이 됐는지, 이 기기가 이미 풀려 있는지. */
-function apiAuthState(token) {
-  var p = PropertiesService.getScriptProperties();
-  var unlocked = !!(p.getProperty('PIN_HASH') && token && tokenOK_(token));
-  /* 주소가 공개돼 있으므로, 풀기 전에는 이름을 돌려주지 않는다.
-     등록 여부와 대기 시간만 알려주면 화면을 그리는 데 충분하다. */
-  return {
-    registered: !!p.getProperty('PIN_HASH'),
-    name: unlocked ? (p.getProperty('USER_NAME') || '') : '',
-    unlocked: unlocked,
-    waitSec: waitLeft_()
-  };
+function findUser_(loginId) {
+  var want = normId_(loginId);
+  if (!want) return null;
+  var sh = sheet_(SH.user);
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var head = HEAD[SH.user];
+  var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (normId_(vals[i][1]) !== want) continue;
+    var o = {};
+    for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
+    o.__row = i + 2;
+    return o;
+  }
+  return null;
 }
 
-function apiRegister(name, pin) {
-  var p = PropertiesService.getScriptProperties();
-  if (p.getProperty('PIN_HASH')) throw new Error('이미 등록된 사용자가 있습니다. 네 자리를 넣어 주세요.');
-  name = String(name || '').trim();
-  if (!name) throw new Error('이름을 넣어 주세요.');
-  if (name.length > 20) throw new Error('이름이 너무 깁니다.');
-  if (!okPin_(pin)) throw new Error('숫자 네 자리로 넣어 주세요.');
-  var salt = rand_(24);
-  p.setProperty('PIN_SALT', salt);
-  p.setProperty('PIN_HASH', pinHash_(salt, pin));
-  p.setProperty('USER_NAME', name);
-  return { ok: true, name: name, token: newToken_() };
+function userById_(uid) {
+  var sh = sheet_(SH.user);
+  var last = sh.getLastRow();
+  if (last < 2) return null;
+  var head = HEAD[SH.user];
+  var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) !== String(uid)) continue;
+    var o = {};
+    for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
+    return o;
+  }
+  return null;
 }
 
-function waitLeft_() {
-  var p = PropertiesService.getScriptProperties();
-  var until = Number(p.getProperty('PIN_WAIT_UNTIL') || 0);
+/* ── 맞춰보기 제한 ── 아이디마다 따로 센다 ── */
+function waitLeft_(loginId) {
+  var k = 'FAIL_UNTIL_' + normId_(loginId);
+  var until = Number(PropertiesService.getScriptProperties().getProperty(k) || 0);
   var left = Math.ceil((until - Date.now()) / 1000);
   return left > 0 ? left : 0;
 }
-
-function apiUnlock(pin) {
-  var p = PropertiesService.getScriptProperties();
-  var left = waitLeft_();
-  if (left > 0) throw new Error(left + '초 뒤에 다시 넣어 주세요.');
-  if (!p.getProperty('PIN_HASH')) throw new Error('아직 등록된 사용자가 없습니다.');
-  if (!okPin_(pin)) throw new Error('숫자 네 자리로 넣어 주세요.');
-
-  if (pinHash_(p.getProperty('PIN_SALT'), pin) === p.getProperty('PIN_HASH')) {
-    p.deleteProperty('PIN_FAILS');
-    p.deleteProperty('PIN_WAIT_UNTIL');
-    return { ok: true, name: p.getProperty('USER_NAME') || '', token: newToken_() };
+function noteFail_(loginId) {
+  var props = PropertiesService.getScriptProperties();
+  var id = normId_(loginId);
+  var n = Number(props.getProperty('FAIL_N_' + id) || 0) + 1;
+  props.setProperty('FAIL_N_' + id, String(n));
+  if (n >= 5) {
+    var wait = Math.min(60 * Math.pow(2, n - 5), 3600);   /* 1분에서 두 배씩, 최대 1시간 */
+    props.setProperty('FAIL_UNTIL_' + id, String(Date.now() + wait * 1000));
+    return wait;
   }
-  var fails = Number(p.getProperty('PIN_FAILS') || 0) + 1;
-  p.setProperty('PIN_FAILS', String(fails));
-  if (fails >= 5) {
-    /* 1분에서 시작해 틀릴 때마다 두 배, 최대 1시간.
-       성공해야만 초기화된다. 0000부터 차례로 넣어 보는 식은 수천 시간이 걸려 성립하지 않는다. */
-    var wait = Math.min(60 * Math.pow(2, fails - 5), 3600);
-    p.setProperty('PIN_WAIT_UNTIL', String(Date.now() + wait * 1000));
+  return 0;
+}
+function clearFail_(loginId) {
+  var props = PropertiesService.getScriptProperties();
+  var id = normId_(loginId);
+  props.deleteProperty('FAIL_N_' + id);
+  props.deleteProperty('FAIL_UNTIL_' + id);
+}
+
+/* ── 토큰 ── */
+function newToken_(uid) {
+  var t = rand_(32);
+  PropertiesService.getScriptProperties().setProperty('TK_' + t,
+    uid + '|' + (Date.now() + TOKEN_DAYS * 24 * 60 * 60 * 1000));
+  return t;
+}
+function uidOfToken_(token) {
+  if (!/^[a-z0-9]{32}$/i.test(String(token || ''))) return '';
+  var props = PropertiesService.getScriptProperties();
+  var v = props.getProperty('TK_' + token);
+  if (!v) return '';
+  var bits = String(v).split('|');
+  if (Date.now() > Number(bits[1] || 0)) { props.deleteProperty('TK_' + token); return ''; }
+  return bits[0] || '';
+}
+
+/* ── 바깥에서 부르는 것들 ── */
+
+function apiAuthState(token) {
+  var uid = uidOfToken_(token);
+  if (!uid) return { unlocked: false, name: '' };
+  var u = userById_(uid);
+  if (!u) return { unlocked: false, name: '' };
+  return { unlocked: true, name: u['이름'] || u['아이디'] || '', loginId: u['아이디'] || '' };
+}
+
+function apiSignup(loginId, pw, name) {
+  loginId = String(loginId || '').trim();
+  name = String(name || '').trim();
+  if (!/^[A-Za-z0-9._-]{3,20}$/.test(loginId)) {
+    throw new Error('아이디는 영문·숫자 3~20자로 만들어 주세요. (.  _  - 도 됩니다)');
+  }
+  if (String(pw || '').length < 4) throw new Error('비밀번호는 4자 이상으로 넣어 주세요.');
+  if (!name) name = loginId;
+  if (name.length > 20) throw new Error('이름이 너무 깁니다.');
+  if (findUser_(loginId)) throw new Error('이미 쓰고 있는 아이디입니다. 다른 것으로 해주세요.');
+
+  var uid = uid_('u');
+  var salt = rand_(24);
+  var saved = CUR_UID; CUR_UID = '';                 /* 사용자 시트에는 주인 칸이 없다 */
+  writeRow_(SH.user, {
+    id: uid, '아이디': loginId, '솔트': salt, '해시': pinHash_(salt, pw),
+    '이름': name, '가입일': new Date()
+  });
+  CUR_UID = saved;
+
+  claimLegacy_(uid);                                  /* 맨 처음 가입한 사람이 기존 기록을 가져간다 */
+  CUR_UID = uid;
+  seedCfg_(uid);                                      /* 기준값을 이 사람 몫으로 깔아준다 */
+  clearFail_(loginId);
+  return { ok: true, name: name, loginId: loginId, token: newToken_(uid) };
+}
+
+function apiLogin(loginId, pw) {
+  var left = waitLeft_(loginId);
+  if (left > 0) throw new Error(left + '초 뒤에 다시 넣어 주세요.');
+  var u = findUser_(loginId);
+  if (u && pinHash_(u['솔트'], pw) === u['해시']) {
+    clearFail_(loginId);
+    return { ok: true, name: u['이름'] || u['아이디'], loginId: u['아이디'], token: newToken_(u.id) };
+  }
+  var wait = noteFail_(loginId);
+  if (wait) {
     var txt = wait >= 3600 ? '1시간' : (wait >= 60 ? (Math.round(wait / 60) + '분') : (wait + '초'));
     throw new Error('여러 번 틀렸습니다. ' + txt + ' 뒤에 다시 넣어 주세요.');
   }
-  throw new Error('맞지 않습니다. ' + (5 - fails) + '번 더 틀리면 잠깁니다.');
+  /* 아이디가 없는 것인지 비밀번호가 틀린 것인지 구분해 주지 않는다 */
+  throw new Error('아이디나 비밀번호가 맞지 않습니다.');
 }
 
-function apiChangePin(oldPin, newPin) {
-  var p = PropertiesService.getScriptProperties();
-  if (pinHash_(p.getProperty('PIN_SALT'), oldPin) !== p.getProperty('PIN_HASH')) {
-    throw new Error('지금 쓰는 네 자리가 맞지 않습니다.');
-  }
-  if (!okPin_(newPin)) throw new Error('새 번호를 숫자 네 자리로 넣어 주세요.');
+function apiChangePin(oldPw, newPw) {
+  if (!CUR_UID) throw new Error('로그인이 필요합니다.');
+  var u = userById_(CUR_UID);
+  if (!u || pinHash_(u['솔트'], oldPw) !== u['해시']) throw new Error('지금 비밀번호가 맞지 않습니다.');
+  if (String(newPw || '').length < 4) throw new Error('새 비밀번호는 4자 이상으로 넣어 주세요.');
   var salt = rand_(24);
-  p.setProperty('PIN_SALT', salt);
-  p.setProperty('PIN_HASH', pinHash_(salt, newPin));
+  var saved = CUR_UID; CUR_UID = '';
+  writeRow_(SH.user, {
+    id: u.id, '아이디': u['아이디'], '솔트': salt, '해시': pinHash_(salt, newPw),
+    '이름': u['이름'], '가입일': u['가입일']
+  });
+  CUR_UID = saved;
   return { ok: true };
-}
-
-function newToken_() {
-  var t = rand_(32);
-  PropertiesService.getScriptProperties()
-    .setProperty('TK_' + t, String(Date.now() + TOKEN_DAYS * 24 * 60 * 60 * 1000));
-  return t;
-}
-
-function tokenOK_(token) {
-  if (!/^[a-z0-9]{32}$/i.test(String(token || ''))) return false;
-  var p = PropertiesService.getScriptProperties();
-  var until = Number(p.getProperty('TK_' + token) || 0);
-  if (!until) return false;
-  if (Date.now() > until) { p.deleteProperty('TK_' + token); return false; }
-  return true;
 }
 
 function apiLock(token) {
@@ -221,15 +304,39 @@ function apiLock(token) {
   return { ok: true };
 }
 
+/** 새 사용자에게 기준값 한 벌을 깔아 준다. */
+function seedCfg_(uid) {
+  var had = rows_(SH.cfg);
+  if (had.length) return;
+  CFG_DEFAULT.forEach(function (row) {
+    var o = {};
+    HEAD[SH.cfg].forEach(function (k, i) { if (i < row.length) o[k] = row[i]; });
+    o[OWNER] = uid;
+    sheet_(SH.cfg).appendRow(HEAD[SH.cfg].map(function (k) {
+      return o[k] === undefined || o[k] === null ? '' : o[k];
+    }));
+  });
+}
+
 /**
- * 네 자리를 잊었을 때. 스크립트 편집기에서 직접 실행해야만 풀린다.
- * 기록은 시트에 그대로 남는다. 등록만 처음으로 되돌린다.
+ * 비밀번호를 잊은 사람을 위해. 스크립트 편집기에서 직접 실행해야만 된다.
+ * 아이디를 넣고 실행하면 임시 비밀번호를 만들어 실행 기록에 찍는다.
  */
-function resetLock() {
-  var p = PropertiesService.getScriptProperties();
-  ['PIN_HASH', 'PIN_SALT', 'USER_NAME', 'PIN_FAILS', 'PIN_WAIT_UNTIL'].forEach(function (k) { p.deleteProperty(k); });
-  p.getKeys().forEach(function (k) { if (k.indexOf('TK_') === 0) p.deleteProperty(k); });
-  return '잠금을 초기화했습니다. 앱을 새로고침하면 처음 등록 화면이 나옵니다.';
+function resetPassword() {
+  var loginId = '여기에_아이디';
+  if (loginId.indexOf('여기에') >= 0) throw new Error('이 함수 안의 loginId 를 실제 아이디로 바꾼 뒤 실행하세요.');
+  var u = findUser_(loginId);
+  if (!u) throw new Error('그런 아이디가 없습니다.');
+  var tmp = String(Math.floor(100000 + Math.random() * 900000));
+  var salt = rand_(24);
+  CUR_UID = '';
+  writeRow_(SH.user, {
+    id: u.id, '아이디': u['아이디'], '솔트': salt, '해시': pinHash_(salt, tmp),
+    '이름': u['이름'], '가입일': u['가입일']
+  });
+  clearFail_(loginId);
+  Logger.log('임시 비밀번호: ' + tmp + ' — 로그인한 뒤 바로 바꾸세요.');
+  return '임시 비밀번호: ' + tmp;
 }
 
 /* ───────────────────────── 스프레드시트 ───────────────────────── */
@@ -272,21 +379,72 @@ function sheet_(name) {
 
 /** 시트를 전부 만들어 둔다. 스크립트 편집기에서 한 번 직접 실행해도 된다. */
 function setup() {
-  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { sheet_(n); });
+  [SH.user, SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { sheet_(n); });
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { ensureOwnerCol_(n); });
   var url = ss_().getUrl();
   Logger.log('스프레드시트 준비 완료: ' + url);
   return url;
 }
 
+/**
+ * 예전에 만든 시트에는 주인 칸이 없다. 한 번만 덧붙이고,
+ * 이미 들어 있던 줄은 전부 첫 번째 사용자 것으로 넘긴다.
+ */
+function ensureOwnerCol_(name) {
+  var sh = sheet_(name);
+  var head = HEAD[name];
+  var width = sh.getLastColumn();
+  var cur = width ? sh.getRange(1, 1, 1, width).getValues()[0] : [];
+  var at = -1;
+  for (var i = 0; i < cur.length; i++) if (String(cur[i]) === OWNER) at = i;
+  if (at >= 0) return;
+
+  var col = head.length;                       /* 주인 칸은 맨 뒤 */
+  sh.getRange(1, col).setValue(OWNER).setFontWeight('bold').setBackground('#efede7');
+  var last = sh.getLastRow();
+  if (last >= 2) {
+    var legacy = PropertiesService.getScriptProperties().getProperty('LEGACY_UID') || '';
+    if (legacy) {
+      var fill = [];
+      for (var r = 0; r < last - 1; r++) fill.push([legacy]);
+      sh.getRange(2, col, fill.length, 1).setValues(fill);
+    }
+  }
+}
+
+/** 주인이 없던 줄을 이 사람 것으로 넘긴다. 맨 처음 가입한 사람에게만 한 번. */
+function claimLegacy_(uid) {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('LEGACY_DONE')) return;
+  props.setProperty('LEGACY_UID', uid);
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (name) {
+    var sh = sheet_(name);
+    var last = sh.getLastRow();
+    if (last < 2) return;
+    var col = HEAD[name].length;
+    var vals = sh.getRange(2, col, last - 1, 1).getValues();
+    var changed = false;
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i][0] === '' || vals[i][0] === null) { vals[i][0] = uid; changed = true; }
+    }
+    if (changed) sh.getRange(2, col, vals.length, 1).setValues(vals);
+  });
+  props.setProperty('LEGACY_DONE', '1');
+}
+
+/** 이 사람 줄만 돌려준다. 남의 줄은 애초에 손에 들어오지 않는다. */
 function rows_(name) {
   var sh = sheet_(name);
   var last = sh.getLastRow();
   if (last < 2) return [];
   var head = HEAD[name];
   var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  var oc = head.length - 1;                    /* 주인 칸 위치 */
+  var mine = (name !== SH.user) && !!CUR_UID;
   var out = [];
   for (var i = 0; i < vals.length; i++) {
     if (vals[i][0] === '' || vals[i][0] === null) continue;
+    if (mine && String(vals[i][oc]) !== String(CUR_UID)) continue;
     var o = {};
     for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
     o.__row = i + 2;
@@ -295,18 +453,27 @@ function rows_(name) {
   return out;
 }
 
+/** 내 줄에서만 찾는다. 남의 id 를 넣어도 0 이 나온다. */
 function findRow_(name, id) {
   var sh = sheet_(name);
   var last = sh.getLastRow();
   if (last < 2) return 0;
-  var ids = sh.getRange(2, 1, last - 1, 1).getValues();
-  for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === String(id)) return i + 2;
+  var head = HEAD[name];
+  var oc = head.length;
+  var vals = sh.getRange(2, 1, last - 1, oc).getValues();
+  var mine = (name !== SH.user) && !!CUR_UID;
+  for (var i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]) !== String(id)) continue;
+    if (mine && String(vals[i][oc - 1]) !== String(CUR_UID)) continue;
+    return i + 2;
+  }
   return 0;
 }
 
 function writeRow_(name, obj) {
   var sh = sheet_(name);
   var head = HEAD[name];
+  if (name !== SH.user && CUR_UID) obj[OWNER] = CUR_UID;   /* 주인은 서버가 적는다 */
   var line = head.map(function (k) {
     var v = obj[k];
     if (v === undefined || v === null) return '';
@@ -320,7 +487,7 @@ function writeRow_(name, obj) {
 }
 
 function delRow_(name, id) {
-  var row = findRow_(name, id);
+  var row = findRow_(name, id);                /* 내 줄이 아니면 0 */
   if (row) sheet_(name).deleteRow(row);
   return true;
 }
@@ -339,6 +506,7 @@ function n_(v) {
 
 /** 화면을 처음 열 때 한 번. 전부 내려준다. */
 function apiLoad() {
+  [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { ensureOwnerCol_(n); });
   var clubs = rows_(SH.club).map(function (r) {
     return {
       id: r.id, order: n_(r['순서']) || 0, name: r['이름'], cat: r['분류'],
@@ -407,7 +575,7 @@ function apiLoad() {
   return {
     clubs: clubs, sessions: sessions, rounds: rounds, cfg: cfg,
     hasAI: !!PropertiesService.getScriptProperties().getProperty('GEMINI_KEY'),
-    userName: PropertiesService.getScriptProperties().getProperty('USER_NAME') || '',
+    userName: (function () { var u = userById_(CUR_UID); return u ? (u['이름'] || '') : ''; })(),
     sheetUrl: ss_().getUrl()
   };
 }

@@ -216,15 +216,6 @@ body.locked > :not(#lockHost){display:none !important}
 .lockMark{font-size:40px;line-height:1;margin-bottom:14px}
 .lockCard h2{font-size:23px;font-weight:700;letter-spacing:-.01em}
 .lockCard .f{text-align:left}
-.dots{display:flex;gap:14px;justify-content:center;margin:4px 0 26px}
-.dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--line);background:transparent;transition:.12s}
-.dot.on{background:var(--accent);border-color:var(--accent);transform:scale(1.08)}
-.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
-.key{height:62px;border-radius:14px;border:1px solid var(--line);background:var(--surface);
-  font-family:var(--fMono);font-size:23px;font-weight:600;color:var(--fg);cursor:pointer;
-  -webkit-tap-highlight-color:transparent;transition:.08s}
-.key:active{background:var(--accentSoft);border-color:var(--accent);transform:scale(.97)}
-.key.wide{font-size:19px}
 .photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
 .spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
@@ -237,7 +228,7 @@ body.locked > :not(#lockHost){display:none !important}
     <div class="brand">스윙 로그<small id="sub">불러오는 중</small></div>
     <a class="btn ghost sm" id="sheetLink" href="#" target="_blank" rel="noopener" title="구글 시트 열기" hidden>시트</a>
     <button class="btn ghost sm" id="themeBtn" title="화면 밝기 전환" aria-label="화면 밝기 전환">◐</button>
-    <button class="btn ghost sm" data-act="lockNow" title="잠그기" aria-label="잠그기">잠금</button>
+    <button class="btn ghost sm" data-act="lockNow" title="로그아웃" aria-label="로그아웃">나가기</button>
   </div>
   <main id="main"><div class="empty"><h3>준비 중</h3><p>클럽과 기록을 불러오고 있습니다.</p></div></main>
 </div>
@@ -318,7 +309,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, stage:null, shrunk:null,
   multi:{names:[],files:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
-  lock:{need:true,needUrl:false,registered:false,name:"",pin:"",err:null,busy:false,wait:0,focused:false},
+  lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
 function connOK(){ return !!(S.conn.db && S.conn.user && S.conn.uid && !S.conn.err); }
 
@@ -366,7 +357,7 @@ function call(name){
     if(j.ok) return j.value;
     if(j.locked){
       saveToken("");
-      S.lock.need=true; S.lock.pin=""; S.lock.err="다시 넣어 주세요."; render();
+      S.lock.need=true; S.lock.err="다시 들어와 주세요."; S.lock.focused=false; render();
     }
     throw {message:j.error||"요청이 처리되지 않았습니다."};
   });
@@ -580,53 +571,44 @@ function render(){
 function renderLock(){
   document.body.classList.add("locked");
   var L=S.lock, host=document.getElementById("lockHost");
-  if(!host){
-    host=document.createElement("div"); host.id="lockHost";
-    document.body.appendChild(host);
-  }
+  if(!host){ host=document.createElement("div"); host.id="lockHost"; document.body.appendChild(host); }
   var h='<div class="lockWrap"><div class="lockCard">';
   h+='<div class="lockMark">⛳</div>';
 
   if(L.needUrl){
     h+='<h2>서버 주소 넣기</h2>'
-     +'<p class="muted" style="margin:8px 0 18px">앱스 스크립트에서 배포할 때 나온 주소를 한 번만 넣으면 됩니다. '
-     +'<b>/exec</b> 로 끝나는 주소입니다.</p>'
+     +'<p class="muted" style="margin:8px 0 18px">앱스 스크립트에서 배포할 때 나온 <b>/exec</b> 주소를 넣어 주세요.</p>'
      +'<label class="f">웹 앱 주소<input type="url" id="lk_url" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off"></label>'
      +'<button class="btn primary full" style="margin-top:14px" data-act="saveUrl">저장하고 연결</button>';
     if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
-    h+='<p class="tiny" style="margin-top:14px;color:var(--fg3)">이 기기에만 저장됩니다. 다른 기기에서는 한 번 더 넣어야 합니다.</p>';
-  } else if(!L.registered){
-    h+='<h2>처음 오셨습니다</h2>'
-     +'<p class="muted" style="margin:8px 0 18px">이름과 숫자 네 자리를 정해 주세요. 다음부터는 네 자리만 넣으면 됩니다.</p>'
-     +'<label class="f">이름<input type="text" id="lk_name" value="'+esc(L.name||"")+'" placeholder="예) 홍길동" autocomplete="off"></label>'
-     +'<label class="f" style="margin-top:10px">숫자 네 자리<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="lk_p1" placeholder="0000" autocomplete="off"></label>'
-     +'<label class="f" style="margin-top:10px">한 번 더<input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" id="lk_p2" placeholder="0000" autocomplete="off"></label>'
-     +'<button class="btn primary full" style="margin-top:14px" data-act="doRegister"'+(L.busy?" disabled":"")+'>'
-     +(L.busy?'<span class="spin"></span> 등록하는 중':'등록하고 시작')+'</button>';
+  } else if(L.mode==="signup"){
+    h+='<h2>계정 만들기</h2>'
+     +'<p class="muted" style="margin:8px 0 18px">기록은 계정별로 따로 쌓입니다. 다른 사람 기록은 보이지 않습니다.</p>'
+     +'<label class="f">아이디<input type="text" id="lk_id" value="'+esc(L.id||"")+'" placeholder="영문·숫자 3~20자" autocomplete="username" autocapitalize="none"></label>'
+     +'<label class="f" style="margin-top:10px">비밀번호<input type="password" id="lk_pw" placeholder="4자 이상" autocomplete="new-password"></label>'
+     +'<label class="f" style="margin-top:10px">비밀번호 한 번 더<input type="password" id="lk_pw2" placeholder="4자 이상" autocomplete="new-password"></label>'
+     +'<label class="f" style="margin-top:10px">이름 <span style="font-weight:400;color:var(--fg3)">화면에 표시됩니다</span>'
+     +'<input type="text" id="lk_name" value="'+esc(L.name||"")+'" placeholder="예) 홍길동" autocomplete="name"></label>'
+     +'<button class="btn primary full" style="margin-top:14px" data-act="doSignup"'+(L.busy?" disabled":"")+'>'
+     +(L.busy?'<span class="spin"></span> 만드는 중':'만들고 시작')+'</button>';
     if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
-    h+='<p class="tiny" style="margin-top:14px;color:var(--fg3)">넣으신 번호 자체는 어디에도 남지 않습니다. '
-     +'알아볼 수 없는 형태로 바꾼 값만 보관하고, 다음에 넣는 번호를 같은 방식으로 바꿔 맞춰 봅니다. '
-     +'그래서 저장된 값을 들여다봐도 번호를 알아낼 수 없습니다.</p>';
+    h+='<p class="tiny" style="margin-top:14px"><a href="#" data-act="toLogin" style="color:var(--accent);font-weight:600">이미 계정이 있습니다</a></p>'
+     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">비밀번호는 저장되지 않습니다. 알아볼 수 없는 형태로 바꾼 값만 보관합니다.</p>';
   } else {
-    h+='<h2>'+esc(L.name||"스윙 로그")+'</h2>'
-     +'<p class="muted" style="margin:6px 0 20px">숫자 네 자리를 넣어 주세요.</p>'
-     +'<div class="dots">';
-    for(var i=0;i<4;i++) h+='<span class="dot'+((L.pin||"").length>i?" on":"")+'"></span>';
-    h+='</div>';
-    h+='<div class="pad">';
-    ["1","2","3","4","5","6","7","8","9","","0","←"].forEach(function(k){
-      if(k==="") { h+='<span></span>'; return; }
-      h+='<button class="key'+(k==="←"?" wide":"")+'" data-act="pin" data-k="'+k+'"'+(L.busy?" disabled":"")+'>'+k+'</button>';
-    });
-    h+='</div>';
-    if(L.busy) h+='<p class="muted" style="margin-top:14px"><span class="spin"></span> 확인하는 중</p>';
-    if(L.err) h+='<div class="banner bad" style="margin-top:14px">'+esc(L.err)+'</div>';
+    h+='<h2>스윙 로그</h2>'
+     +'<p class="muted" style="margin:8px 0 18px">아이디와 비밀번호를 넣어 주세요.</p>'
+     +'<label class="f">아이디<input type="text" id="lk_id" value="'+esc(L.id||"")+'" placeholder="아이디" autocomplete="username" autocapitalize="none"></label>'
+     +'<label class="f" style="margin-top:10px">비밀번호<input type="password" id="lk_pw" placeholder="비밀번호" autocomplete="current-password"></label>'
+     +'<button class="btn primary full" style="margin-top:14px" data-act="doLogin"'+(L.busy?" disabled":"")+'>'
+     +(L.busy?'<span class="spin"></span> 확인하는 중':'들어가기')+'</button>';
+    if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
     if(L.wait>0) h+='<p class="tiny" style="margin-top:10px;color:var(--fg3)">'+L.wait+'초 뒤에 다시 넣을 수 있습니다.</p>';
-    h+='<p class="tiny" style="margin-top:16px;color:var(--fg3)">잊으셨으면 스크립트 편집기에서 <b>resetLock</b> 함수를 실행하세요. 기록은 그대로 남습니다.</p>';
+    h+='<p class="tiny" style="margin-top:16px"><a href="#" data-act="toSignup" style="color:var(--accent);font-weight:600">계정 만들기</a></p>'
+     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">한 번 들어오면 이 기기에서 30일 동안 기억합니다.</p>';
   }
   h+='</div></div>';
   host.innerHTML=h;
-  var f=document.getElementById("lk_name")||document.getElementById("lk_p1");
+  var f=document.getElementById(L.needUrl?"lk_url":"lk_id");
   if(f && !L.focused){ L.focused=true; try{ f.focus(); }catch(e){} }
 }
 
@@ -731,7 +713,12 @@ function viewClubs(){
 
   if(!S.clubs.length){
     h+= connOK()
-      ? '<div class="card empty"><h3>등록된 클럽이 없습니다</h3><p>클럽 추가를 눌러 사진을 올리거나 직접 입력하세요.</p></div>'
+      ? ('<div class="card empty"><h3>등록된 클럽이 없습니다</h3>'
+         +'<p>흔한 구성 13개를 한 번에 넣고 거기서 고치는 편이 빠릅니다. '
+         +'드라이버·3번 하이브리드·4~9번 아이언·피칭·48·52·56도·퍼터입니다.</p>'
+         +'<button class="btn primary full" style="margin-top:12px" data-act="seedClubs"'+(S.busy.seed?" disabled":"")+'>'
+         +(S.busy.seed?'<span class="spin"></span> 넣는 중':'표준 13개 넣기')+'</button>'
+         +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">로프트와 브랜드는 넣은 뒤 각자 고치면 됩니다.</p></div>')
       : '<div class="card empty"><h3>클럽 목록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
   } else {
     var order=["driver","wood","hybrid","iron","wedge","putter"];
@@ -1459,7 +1446,32 @@ document.addEventListener("click",function(ev){
   /* --- 탐색 --- */
   if(a==="openClub"){ var c=S.clubs.filter(function(x){return x.id===el.getAttribute("data-id");})[0];
     if(c){ S.sheet={kind:"club",data:JSON.parse(JSON.stringify(c))}; S.msg.diag=null; S.msg.drill=null; render(); } return; }
-  if(a==="addClub"){ S.sheet={kind:"club",data:{cat:"iron"}}; S.msg.diag=null; render(); return; }
+  if(a==="addClub"){ clearPick(); S.sheet={kind:"club",data:{cat:"iron"}}; S.msg.diag=null; render(); return; }
+  if(a==="seedClubs"){
+    if(S.busy.seed) return;
+    S.busy.seed=true; render();
+    var seed=[
+      {id:"drv",order:10,name:"드라이버",cat:"driver",loft:10.5},
+      {id:"hy3",order:20,name:"3번 하이브리드",cat:"hybrid",loft:19},
+      {id:"i4", order:40,name:"4번 아이언",cat:"iron",loft:21},
+      {id:"i5", order:50,name:"5번 아이언",cat:"iron",loft:24},
+      {id:"i6", order:60,name:"6번 아이언",cat:"iron",loft:27},
+      {id:"i7", order:70,name:"7번 아이언",cat:"iron",loft:31},
+      {id:"i8", order:80,name:"8번 아이언",cat:"iron",loft:35},
+      {id:"i9", order:90,name:"9번 아이언",cat:"iron",loft:39},
+      {id:"pw", order:100,name:"피칭 웨지",cat:"wedge",loft:44},
+      {id:"w48",order:110,name:"48도 갭웨지",cat:"wedge",loft:48},
+      {id:"w52",order:120,name:"52도 웨지",cat:"wedge",loft:52},
+      {id:"w56",order:130,name:"56도 웨지",cat:"wedge",loft:56},
+      {id:"put",order:140,name:"퍼터",cat:"putter",loft:3}
+    ];
+    (function one(i){
+      if(i>=seed.length){ S.busy.seed=false; loadAll(); return; }
+      put("clubs",seed[i],true).then(function(){ one(i+1); })
+        .catch(function(){ S.busy.seed=false; flash("클럽을 넣다가 멈췄습니다. 다시 눌러 주세요."); render(); });
+    })(0);
+    return;
+  }
   if(a==="openSession"){ S.sheet={kind:"session",id:el.getAttribute("data-id")}; render(); return; }
   if(a==="newRound"){ S.tab="rounds"; S.sheet={kind:"round",data:{date:today(),type:"screen",par:72}}; render(); return; }
 
@@ -1557,44 +1569,42 @@ document.addEventListener("click",function(ev){
   if(a==="addBlock"){ S.sheet={kind:"block",data:{clubId:"",m:{}}}; S.msg.sphoto=null; render(); return; }
   if(a==="rmBlock"){ S.draft.blocks.splice(+el.getAttribute("data-i"),1); render(); return; }
 
-  /* ----- 잠금 ----- */
-  if(a==="pin"){
-    var L=S.lock; if(L.busy) return;
-    var k=el.getAttribute("data-k");
-    if(k==="←"){ L.pin=(L.pin||"").slice(0,-1); L.err=null; render(); return; }
-    if((L.pin||"").length>=4) return;
-    L.pin=(L.pin||"")+k; L.err=null;
-    if(L.pin.length===4) submitPin(); else render();
-    return;
-  }
-  if(a==="saveUrl"){
-    var ue=document.getElementById("lk_url"), uv=(ue?ue.value:"").trim();
-    if(!/^https:\/\/script\.google\.com\/macros\/s\/[^/]+\/exec$/.test(uv)){
-      S.lock.err="주소 형식이 다릅니다. /exec 로 끝나는 웹앱 주소를 넣어 주세요."; render(); return;
+  /* ----- 로그인 ----- */
+  if(a==="toSignup"){ S.lock.mode="signup"; S.lock.err=null; S.lock.focused=false; render(); return; }
+  if(a==="toLogin"){ S.lock.mode="login"; S.lock.err=null; S.lock.focused=false; render(); return; }
+
+  if(a==="doLogin"||a==="doSignup"){
+    var L2=S.lock;
+    var id=((document.getElementById("lk_id")||{}).value||"").trim();
+    var pw=(document.getElementById("lk_pw")||{}).value||"";
+    L2.id=id;
+    if(!id){ L2.err="아이디를 넣어 주세요."; render(); return; }
+    if(pw.length<4){ L2.err="비밀번호는 4자 이상입니다."; render(); return; }
+
+    var fn="apiLogin", args=[id,pw];
+    if(a==="doSignup"){
+      var pw2=(document.getElementById("lk_pw2")||{}).value||"";
+      var nm=((document.getElementById("lk_name")||{}).value||"").trim();
+      if(pw!==pw2){ L2.err="두 번 넣은 비밀번호가 다릅니다."; render(); return; }
+      L2.name=nm;
+      fn="apiSignup"; args=[id,pw,nm];
     }
-    saveApiUrl(uv);
-    S.lock.needUrl=false; S.lock.err=null; render();
-    gate();
-    return;
-  }
-  if(a==="doRegister"){
-    var L2=S.lock, nm=(document.getElementById("lk_name")||{}).value||"";
-    var p1=(document.getElementById("lk_p1")||{}).value||"";
-    var p2=(document.getElementById("lk_p2")||{}).value||"";
-    L2.name=nm.trim();
-    if(!L2.name){ L2.err="이름을 넣어 주세요."; render(); return; }
-    if(!/^[0-9]{4}$/.test(p1)){ L2.err="숫자 네 자리로 넣어 주세요."; render(); return; }
-    if(p1!==p2){ L2.err="두 번 넣은 번호가 다릅니다."; render(); return; }
     L2.busy=true; L2.err=null; render();
-    call("apiRegister",L2.name,p1).then(function(r){
-      L2.busy=false; L2.need=false; L2.registered=true; L2.name=r.name; L2.pin="";
+    call.apply(null,[fn].concat(args)).then(function(r){
+      L2.busy=false; L2.need=false; L2.err=null; L2.name=r.name;
       saveToken(r.token); render(); boot();
-    }).catch(function(e){ L2.busy=false; L2.err=(e&&e.message)||"등록하지 못했습니다."; render(); });
+    }).catch(function(e){
+      L2.busy=false; L2.err=(e&&e.message)||"들어가지 못했습니다.";
+      var m=/(\d+)초/.exec(L2.err); L2.wait=m?parseInt(m[1],10):0;
+      render();
+      if(L2.wait>0) tickWait();
+    });
     return;
   }
+
   if(a==="lockNow"){
     var tk=getToken();
-    S.lock.need=true; S.lock.pin=""; S.lock.err=null; S.lock.focused=false;
+    S.lock.need=true; S.lock.mode="login"; S.lock.err=null; S.lock.focused=false;
     saveToken(""); render();
     if(tk) call("apiLock",tk).catch(function(){});
     return;
@@ -1763,6 +1773,12 @@ document.addEventListener("click",function(ev){
 /* 잠금 화면에서 엔터·숫자 키도 받는다 */
 document.addEventListener("keydown",function(ev){
   var L=S.lock; if(!L||!L.need||L.busy) return;
+  if(ev.key==="Enter"){
+    ev.preventDefault();
+    var want = L.needUrl ? "saveUrl" : (L.mode==="signup" ? "doSignup" : "doLogin");
+    var btn=document.querySelector('[data-act="'+want+'"]'); if(btn) btn.click();
+  }
+  return;
   if(!L.registered){
     if(ev.key==="Enter"){
       ev.preventDefault();
@@ -1770,14 +1786,7 @@ document.addEventListener("keydown",function(ev){
     }
     return;
   }
-  if(/^[0-9]$/.test(ev.key)){
-    ev.preventDefault();
-    if((L.pin||"").length>=4) return;
-    L.pin=(L.pin||"")+ev.key; L.err=null;
-    if(L.pin.length===4) submitPin(); else render();
-    return;
-  }
-  if(ev.key==="Backspace"){ ev.preventDefault(); L.pin=(L.pin||"").slice(0,-1); L.err=null; render(); }
+
 },false);
 
 /* 입력값 보존 — 시트 안에서 입력 중 리렌더되면 값이 날아가지 않도록 */
@@ -1951,18 +1960,6 @@ sample.limits = function(){ return Promise.resolve({images: ready.img?{maxCount:
 function getToken(){ try{ return localStorage.getItem("swinglog.tk")||""; }catch(e){ return ""; } }
 function saveToken(t){ try{ if(t) localStorage.setItem("swinglog.tk",t); else localStorage.removeItem("swinglog.tk"); }catch(e){} }
 
-function submitPin(){
-  var L=S.lock; L.busy=true; L.err=null; render();
-  call("apiUnlock",L.pin).then(function(r){
-    L.busy=false; L.need=false; L.pin=""; L.name=r.name;
-    saveToken(r.token); render(); boot();
-  }).catch(function(e){
-    L.busy=false; L.pin=""; L.err=(e&&e.message)||"맞지 않습니다.";
-    var m=/(\d+)초/.exec(L.err); L.wait=m?parseInt(m[1],10):0;
-    render();
-    if(L.wait>0) tickWait();
-  });
-}
 function tickWait(){
   if(S.lock.wait<=0) return;
   setTimeout(function(){
@@ -1976,12 +1973,10 @@ function tickWait(){
 function gate(){
   if(!apiUrl()){ S.lock.need=true; S.lock.needUrl=true; render(); return Promise.resolve(); }
   return call("apiAuthState",getToken()).then(function(st){
-    S.lock.registered=!!st.registered;
     S.lock.name=st.name||"";
-    S.lock.wait=st.waitSec||0;
+    S.lock.id=st.loginId||S.lock.id||"";
     S.lock.need=!st.unlocked;
     render();
-    if(S.lock.wait>0) tickWait();
     if(!S.lock.need) boot();
   }).catch(function(e){
     /* 잠금 상태를 못 물었으면 열어주지 않는다 */
