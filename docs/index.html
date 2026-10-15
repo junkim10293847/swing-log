@@ -221,6 +221,11 @@ body.locked > :not(#lockHost){display:none !important}
   -webkit-tap-highlight-color:transparent}
 .opt input{width:17px;height:17px;accent-color:var(--accent);margin:0;cursor:pointer}
 .photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
+ul.plain{list-style:none;padding:0;margin:6px 0 0}
+ul.plain li{font-size:13px;line-height:1.65;padding-left:14px;position:relative;color:var(--fg2)}
+ul.plain li:before{content:"·";position:absolute;left:3px}
+ul.plain li.ok{color:var(--ok)}
+ul.plain li.bad{color:var(--bad)}
 .shots{display:flex;gap:9px;overflow-x:auto;margin-top:10px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .shot{flex:none;width:92px;margin:0}
 .shot img{width:92px;height:70px;object-fit:cover;border-radius:9px;background:var(--surface2);
@@ -313,13 +318,13 @@ var METRICS = [
   {k:"total",n:"비거리",u:"m"},{k:"carry",n:"캐리",u:"m"},{k:"apex",n:"최고높이",u:"m"},
   {k:"ball",n:"볼스피드",u:"m/s"},{k:"launch",n:"발사각",u:"°"},{k:"dir",n:"방향각",u:"°",lr:true},
   {k:"side",n:"사이드스핀",u:"rpm",lr:true},{k:"back",n:"백스핀",u:"rpm"},
-  {k:"depth",n:"앞뒤 편차",u:"m"},{k:"width",n:"좌우 편차",u:"m"},{k:"landing",n:"안착률",u:"%"}
+  {k:"depth",n:"앞뒤 편차",u:"m",low:true},{k:"width",n:"좌우 편차",u:"m",low:true},{k:"landing",n:"안착률",u:"%"}
 ];
 
 /* ====================== 상태 ====================== */
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
-  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0,
+  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -851,9 +856,14 @@ function draftView(){
     if(d.blocks.length){
       h+='<div style="margin-top:8px">';
       d.blocks.forEach(function(b,i){
-        h+='<div class="listrow" style="cursor:default"><span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
-         +'<div class="bd"><b>'+esc(b.clubName)+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")+' · 방향각 '+numToLR(b.m.dir)+'°</span></div>'
+        var open=(S.openBlock===i);
+        h+='<div class="listrow" data-act="openBlockRow" data-i="'+i+'">'
+         +'<span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
+         +'<div class="bd"><b>'+esc(b.clubName)+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")
+         +' · 방향각 '+numToLR(b.m.dir)+'°'+(b.shots?(' · '+b.shots+'회'):'')+'</span></div>'
+         +'<span class="tiny" style="color:var(--fg3);margin-right:6px">'+(open?'접기':'자세히')+'</span>'
          +'<button class="btn ghost sm" data-act="rmBlock" data-i="'+i+'">삭제</button></div>';
+        if(open) h+=blockDetail(b);
       });
       h+='</div>';
     }
@@ -1467,6 +1477,48 @@ function pickBlockedMsg(){
 }
 function toDataURL(file,cb){ var r=new FileReader(); r.onload=function(){ cb(r.result); }; r.onerror=function(){ cb(null); }; r.readAsDataURL(file); }
 
+/* 세트 한 줄을 펼쳤을 때 — 숫자 전부와 기준 대비 판정을 보여준다 */
+function blockDetail(b){
+  var h='<div class="card" style="margin:0 0 10px;background:var(--surface2)">';
+  h+='<div class="metrics">';
+  METRICS.forEach(function(x){
+    var v=b.m[x.k];
+    if(v==null) return;
+    h+='<div class="metric"><b>'+(x.lr?numToLR(v,x.k==="side"?0:1):r1(v))+'</b>'
+     +'<span>'+esc(x.n)+(x.u?(' '+esc(x.u)):'')+'</span></div>';
+  });
+  h+='</div>';
+
+  if(b.deltas && Object.keys(b.deltas).length){
+    var ds=[];
+    METRICS.forEach(function(x){
+      var dv=b.deltas[x.k];
+      if(dv==null||dv===0) return;
+      var up=dv>0;
+      var good = x.low ? !up : up;              /* 편차는 줄어야 좋다 */
+      if(x.lr) good = Math.abs(dv)<0;           /* 방향·사이드스핀은 방향만 보여준다 */
+      ds.push('<span class="chip '+(x.lr?'neutral':(good?'ok':'bad'))+'">'
+        +esc(x.n)+' '+(up?'+':'')+r1(dv)+'</span>');
+    });
+    if(ds.length) h+='<div style="margin-top:10px"><div class="eyebrow">지난번 대비</div>'
+      +'<div class="row" style="gap:6px;margin-top:6px">'+ds.join('')+'</div></div>';
+  }
+
+  if(b.good && b.good.length){
+    h+='<div style="margin-top:10px"><div class="eyebrow">기준 안</div><ul class="plain">'
+      +b.good.map(function(t){ return '<li class="ok">'+esc(t)+'</li>'; }).join('')+'</ul></div>';
+  }
+  if(b.bad && b.bad.length){
+    h+='<div style="margin-top:10px"><div class="eyebrow">기준 밖</div><ul class="plain">'
+      +b.bad.map(function(t){ return '<li class="bad">'+esc(t)+'</li>'; }).join('')+'</ul></div>';
+  }
+  if((!b.good||!b.good.length)&&(!b.bad||!b.bad.length)){
+    h+='<p class="tiny" style="margin-top:10px;color:var(--fg3)">이 클럽의 기준값이 없어 판정을 못 했습니다.</p>';
+  }
+  h+='</div>';
+  return h;
+}
+
 function metricSummary(m){
   return METRICS.filter(function(x){return m[x.k]!=null;})
     .map(function(x){ return x.n+" "+(x.lr?numToLR(m[x.k],x.k==="side"?0:1):m[x.k])+x.u; }).join(", ")
@@ -1629,6 +1681,11 @@ document.addEventListener("click",function(ev){
     var list=isWarm?WARMUP:COOLDOWN, key2=isWarm?"warmup":"cooldown";
     var on=(a==="allWarm"||a==="allCool");
     S.draft[key2]=on ? list.map(function(x,i){ return i; }) : [];
+    render(); return;
+  }
+  if(a==="openBlockRow"){
+    var bi2=+el.getAttribute("data-i");
+    S.openBlock=(S.openBlock===bi2)?null:bi2;
     render(); return;
   }
   if(a==="toggleWarm"||a==="toggleCool"){
