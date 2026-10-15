@@ -131,14 +131,15 @@ function okPin_(pin) { return /^[0-9]{4}$/.test(String(pin || '')); }
 /** 화면을 그리기 전에 묻는다. 등록이 됐는지, 이 기기가 이미 풀려 있는지. */
 function apiAuthState(token) {
   var p = PropertiesService.getScriptProperties();
-  var st = {
+  var unlocked = !!(p.getProperty('PIN_HASH') && token && tokenOK_(token));
+  /* 주소가 공개돼 있으므로, 풀기 전에는 이름을 돌려주지 않는다.
+     등록 여부와 대기 시간만 알려주면 화면을 그리는 데 충분하다. */
+  return {
     registered: !!p.getProperty('PIN_HASH'),
-    name: p.getProperty('USER_NAME') || '',
-    unlocked: false,
+    name: unlocked ? (p.getProperty('USER_NAME') || '') : '',
+    unlocked: unlocked,
     waitSec: waitLeft_()
   };
-  if (st.registered && token && tokenOK_(token)) st.unlocked = true;
-  return st;
 }
 
 function apiRegister(name, pin) {
@@ -177,10 +178,12 @@ function apiUnlock(pin) {
   var fails = Number(p.getProperty('PIN_FAILS') || 0) + 1;
   p.setProperty('PIN_FAILS', String(fails));
   if (fails >= 5) {
-    var wait = Math.min(60 * Math.pow(2, fails - 5), 600);   /* 1분부터 늘려 최대 10분 */
+    /* 1분에서 시작해 틀릴 때마다 두 배, 최대 1시간.
+       성공해야만 초기화된다. 0000부터 차례로 넣어 보는 식은 수천 시간이 걸려 성립하지 않는다. */
+    var wait = Math.min(60 * Math.pow(2, fails - 5), 3600);
     p.setProperty('PIN_WAIT_UNTIL', String(Date.now() + wait * 1000));
-    p.setProperty('PIN_FAILS', String(fails));
-    throw new Error('다섯 번 틀렸습니다. ' + Math.round(wait) + '초 뒤에 다시 넣어 주세요.');
+    var txt = wait >= 3600 ? '1시간' : (wait >= 60 ? (Math.round(wait / 60) + '분') : (wait + '초'));
+    throw new Error('여러 번 틀렸습니다. ' + txt + ' 뒤에 다시 넣어 주세요.');
   }
   throw new Error('맞지 않습니다. ' + (5 - fails) + '번 더 틀리면 잠깁니다.');
 }
