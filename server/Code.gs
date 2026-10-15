@@ -402,24 +402,48 @@ function whoHasWhat() {
 }
 
 /**
- * 비밀번호를 잊은 사람을 위해. 스크립트 편집기에서 직접 실행해야만 된다.
- * 이름을 넣고 실행하면 임시 비밀번호를 만들어 실행 기록에 찍는다.
+ * 로그인이 안 될 때 쓰는 복구 함수. 스크립트 편집기에서 직접 실행해야만 된다.
+ * 재배포는 필요 없다. 편집기에서 실행하는 함수는 저장만 하면 바로 돈다.
+ *
+ * 1) who  — 사용자 시트 B열에 적힌 이름을 그대로
+ * 2) newPw — 쓰고 싶은 비밀번호. 비워 두면 임시 숫자 6자리를 만들어 준다
  */
 function resetPassword() {
-  var who = '여기에_이름';
+  var who   = '여기에_이름';
+  var newPw = '';
+
   if (who.indexOf('여기에') >= 0) throw new Error('이 함수 안의 who 를 실제 이름으로 바꾼 뒤 실행하세요.');
   var u = findUser_(who);
-  if (!u) throw new Error('그런 이름이 없습니다.');
-  var tmp = String(Math.floor(100000 + Math.random() * 900000));
+  if (!u) {
+    throw new Error('"' + who + '" 이라는 이름이 없습니다. listUsers 를 실행해 실제 이름을 확인하세요.');
+  }
+  var pw = String(newPw || '');
+  if (!pw) pw = String(Math.floor(100000 + Math.random() * 900000));
+  if (pw.length < 4) throw new Error('비밀번호는 4자 이상이어야 합니다.');
+
   var salt = rand_(24);
   CUR_UID = '';
   writeRow_(SH.user, {
-    id: u.id, '이름': u['이름'], '솔트': salt, '해시': pinHash_(salt, tmp),
+    id: u.id, '이름': u['이름'], '솔트': salt, '해시': pinHash_(salt, pw),
     '표시이름': u['표시이름'] || u['이름'], '가입일': u['가입일']
   });
+  clearFail_(u['이름']);
   clearFail_(who);
-  Logger.log('임시 비밀번호: ' + tmp + ' — 로그인한 뒤 바로 바꾸세요.');
-  return '임시 비밀번호: ' + tmp;
+  var txt = '"' + u['이름'] + '" 의 비밀번호를 "' + pw + '" 로 바꿨습니다. 잠금 횟수도 지웠습니다.';
+  Logger.log(txt);
+  return txt;
+}
+
+/** 잠긴 것만 풀고 비밀번호는 그대로 둔다. */
+function unlockAll() {
+  var props = PropertiesService.getScriptProperties();
+  var n = 0;
+  props.getKeys().forEach(function (k) {
+    if (k.indexOf('FAIL_N_') === 0 || k.indexOf('FAIL_UNTIL_') === 0) { props.deleteProperty(k); n++; }
+  });
+  var txt = '잠금 기록 ' + n + '개를 지웠습니다. 바로 다시 시도할 수 있습니다.';
+  Logger.log(txt);
+  return txt;
 }
 
 /* ───────────────────────── 스프레드시트 ───────────────────────── */
