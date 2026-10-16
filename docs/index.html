@@ -368,7 +368,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{},
+  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -864,26 +864,7 @@ function viewHome(){
   h+='<div class="row" style="margin-top:12px"><button class="btn primary" data-act="newSession">연습 시작</button>';
   h+='<button class="btn" data-act="newRound">라운드 점수 입력</button></div></div>';
 
-  /* 지금의 과제 */
-  var tasks=[];
-  if(drv){
-    var lb=lastBlockFor(drv.id);
-    if(lb&&lb.m.dir!=null&&Math.abs(lb.m.dir)>3) tasks.push({t:"드라이버 정렬",d:"방향각 "+numToLR(lb.m.dir)+"° — 발끝·어깨 선을 스틱으로 확인",s:"bad"});
-    if(lb&&lb.m.width!=null&&lb.m.width>16) tasks.push({t:"드라이버 좌우 편차",d:r1(lb.m.width)+"m — 목표 15m 이하",s:"warn"});
-  }
-  var i5=S.clubs.filter(function(c){return tkey(c)==="i5";})[0];
-  if(i5){ var b5=lastBlockFor(i5.id);
-    if(!b5) tasks.push({t:"5번 아이언 측정",d:"아직 기록이 없습니다. 10회 평균부터",s:"warn"});
-    else if(b5.m.carry!=null&&b5.m.carry<116) tasks.push({t:"5번 아이언 공 위치",d:"캐리 "+r1(b5.m.carry)+"m — 목표 116~124m. 4번보다 공 하나 오른쪽",s:"bad"});
-  }
-  if(tasks.length){
-    h+='<div class="card"><div class="eyebrow">지금의 과제</div><div style="margin-top:6px">';
-    tasks.forEach(function(t){
-      h+='<div class="listrow" style="cursor:default"><span class="chip '+t.s+'">'+(t.s==="bad"?"급함":"주의")+'</span>'
-       +'<div class="bd"><b>'+esc(t.t)+'</b><span style="white-space:normal">'+esc(t.d)+'</span></div></div>';
-    });
-    h+='</div></div>';
-  }
+  h+=planCard();
 
   /* 최근 연습 */
   if(last){
@@ -1041,6 +1022,7 @@ function viewPractice(){
   var h='<div class="stack">';
   h+='<div class="spread"><div><h2 class="sec-title">연습 기록</h2><p class="tiny">준비운동과 마무리 운동까지 한 세트입니다</p></div>'
    +'<button class="btn primary sm" data-act="newSession">연습 시작</button></div>';
+  h+=planCard();
   if(!S.sessions.length){
     h+= connOK()
       ? '<div class="card empty"><h3>기록이 없습니다</h3><p>연습 시작을 누르면 준비운동 체크부터 안내합니다.</p></div>'
@@ -1630,6 +1612,209 @@ function clubAskCard(c){
   }
   return h+'</div>';
 }
+/* ───────── 오늘 무엇을 칠 것인가 ─────────
+   기록에서 규칙으로 뽑는다. AI 없이 즉시 나오고, 왜 그런지가 숫자로 남는다.
+   순서가 곧 우선순위다. 앞의 것이 잡히면 뒤는 보조로 내린다. */
+
+function planMin(){ try{ return +(localStorage.getItem("swinglog.min")||120); }catch(e){ return 120; } }
+function setPlanMin(v){ try{ localStorage.setItem("swinglog.min",String(v)); }catch(e){} }
+
+function daysSince(d){
+  if(!d) return null;
+  var t=Date.parse(String(d)+"T00:00:00");
+  if(isNaN(t)) return null;
+  return Math.floor((Date.now()-t)/86400000);
+}
+function lastDateFor(clubId){
+  for(var i=0;i<S.sessions.length;i++){
+    var bs=S.sessions[i].blocks||[];
+    for(var j=0;j<bs.length;j++) if(bs[j].clubId===clubId) return S.sessions[i].date;
+  }
+  return null;
+}
+
+function planCard(){
+  var P=prescribe();
+  if(!P) return '<div class="card"><div class="eyebrow">오늘 연습</div>'
+    +'<p class="muted" style="margin-top:6px">기록이 쌓이면 무엇을 칠지 여기서 짚어 드립니다. '
+    +'클럽을 등록하고 10회 평균을 한 번 넣어 보세요.</p></div>';
+
+  var h='<div class="card"><div class="spread"><div class="eyebrow">오늘 연습</div>'
+   +'<div class="row" style="gap:4px">'
+   + [60,90,120].map(function(m){
+       return '<button class="chip '+(P.min===m?"acc":"neutral")+'" style="border:0;cursor:pointer" '
+        +'data-act="planMin" data-m="'+m+'">'+m+'분</button>'; }).join("")
+   +'</div></div>';
+
+  h+='<h2 class="sec-title" style="margin-top:10px">'+esc(P.primary.head)+'</h2>';
+  h+='<p class="muted" style="margin-top:6px;color:var(--fg)">'+esc(P.primary.why)+'</p>';
+
+  if(P.rSig&&P.rSig.length){
+    h+='<ul class="plain" style="margin-top:10px">'
+     + P.rSig.map(function(z){ return '<li>'+esc(z.s)+'</li>'; }).join("")+'</ul>';
+  }
+
+  h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
+  P.plan.forEach(function(x){
+    h+='<div class="listrow" style="cursor:default;padding:10px 0">'
+     +'<span class="grade X" style="font-family:var(--fData);font-size:12px">'+x.m+'</span>'
+     +'<div class="bd"><b>'+esc(x.t)+'</b><span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
+  });
+  h+='</div>';
+
+  if(P.cue){
+    h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 생각은 하나만</div>'
+     +'<b style="font-size:16px">'+esc(P.cue.t)+'</b>\n'+esc(P.cue.d)+'</div>';
+  }
+  if(P.skip.length){
+    h+='<div class="banner warn" style="margin-top:12px"><b>'+esc(P.skip[0].x.c.name)+'은 오늘 빼십시오</b>\n'
+     +esc(P.skip[0].why)+'</div>';
+  }
+  if(P.test) h+='<div class="note" style="margin-top:12px">'+esc(P.test)+'</div>';
+
+  h+='<div class="row" style="margin-top:14px">'
+   +'<button class="btn primary" style="flex:1" data-act="newSession">이대로 연습 시작</button>'
+   +'<button class="btn" data-act="planDeep"'+(S.busy.plan?" disabled":"")+'>'
+   +(S.busy.plan?('<span class="spin"></span> '+(S.asksec.plan||0)+'초'):'더 자세히')+'</button></div>';
+  if(S.msg.plan) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.plan)+'</div>';
+  if(S.planText) h+='<div class="ai" style="margin-top:12px"><div class="hd">자세한 안내</div>'+esc(S.planText)+'</div>';
+  return h+'</div>';
+}
+
+function prescribe(){
+  var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; });
+  var P={primary:null, also:[], skip:[], cue:null, test:null, why:[], plan:[], min:planMin()};
+  if(!live.length) return null;
+
+  /* 클럽마다 상태를 모은다 */
+  var info=live.map(function(c){
+    var b=lastBlockFor(c.id), T=TARGET[tkey(c)], d=lastDateFor(c.id);
+    var off=[];
+    if(b&&T){
+      if(b.m.carry!=null&&b.m.carry<T.carry[0]) off.push({k:"캐리",v:r1(b.m.carry)+"m",want:T.carry[0]+"~"+T.carry[1]+"m"});
+      if(b.m.width!=null&&T.width&&b.m.width>T.width[1]) off.push({k:"좌우 편차",v:r1(b.m.width)+"m",want:T.width[1]+"m 이하"});
+      if(b.m.depth!=null&&T.depth&&b.m.depth>T.depth[1]) off.push({k:"앞뒤 편차",v:r1(b.m.depth)+"m",want:T.depth[1]+"m 이하"});
+      if(b.m.dir!=null&&T.dir!=null&&Math.abs(b.m.dir)>T.dir) off.push({k:"방향각",v:numToLR(b.m.dir)+"°",want:"±"+T.dir+"° 이내"});
+    }
+    return {c:c, b:b, T:T, days:daysSince(d), off:off,
+            grade:(b&&b.m.grade)||null, carry:(b&&b.m.carry!=null)?b.m.carry:null};
+  });
+
+  /* A. 거리 역전 — 로프트가 큰 채가 더 멀리 간다. 코스에서 클럽을 고를 수 없게 된다 */
+  var byLoft=info.filter(function(x){ return x.carry!=null && x.c.loft!=null; })
+                 .sort(function(a,b){ return a.c.loft-b.c.loft; });
+  var flip=null;
+  for(var i=0;i<byLoft.length-1 && !flip;i++){
+    for(var j=i+1;j<byLoft.length;j++){
+      if(byLoft[j].carry >= byLoft[i].carry - 1){ flip={lo:byLoft[i], hi:byLoft[j]}; break; }
+    }
+  }
+  if(flip){
+    P.primary={x:flip.hi, kind:"flip",
+      head:flip.hi.c.name+" 거리 다시 재기",
+      why:flip.hi.c.name+"("+flip.hi.c.loft+"도)가 "+r1(flip.hi.carry)+"m, "
+         +flip.lo.c.name+"("+flip.lo.c.loft+"도)가 "+r1(flip.lo.carry)+"m입니다. "
+         +"로프트가 큰 채가 더 멀리 나간 기록이라 거리표가 성립하지 않습니다. "
+         +"두 채를 같은 날, 같은 피로도에서 다시 재야 합니다."};
+    P.also.push({x:flip.lo, why:"같은 세션에서 함께 재야 비교가 성립합니다"});
+    P.test="성공 판정: "+flip.hi.c.name+" 캐리 < "+flip.lo.c.name+" 캐리";
+  }
+
+  /* B. 라운드가 가리키는 곳 */
+  var r0=S.rounds.filter(function(r){ return r.score!=null; })[0];
+  var rSig=[];
+  if(r0){
+    if(r0.gir!=null&&r0.gir<=6) rSig.push({t:"short", s:"그린 적중 "+r0.gir+"/18 — 열"+(18-r0.gir>=15?"다섯":"몇")+" 홀 이상을 웨지로 수습했습니다"});
+    if(r0.putts!=null&&r0.putts>=36) rSig.push({t:"putt", s:"퍼팅 "+r0.putts+"개 — 그린에서도 새고 있습니다"});
+    if((r0.ob||0)+(r0.penalty||0)>=4) rSig.push({t:"tee", s:"OB·벌타 "+((r0.ob||0)+(r0.penalty||0))+"개 — 티샷이 경기를 무너뜨립니다"});
+    var tl=holeTally(r0);
+    if(tl.dbl>=8) rSig.push({t:"dbl", s:"더블 이상 "+tl.dbl+"홀 — 한 번 흔들리면 크게 잃습니다"});
+  }
+
+  /* C. 측정이 비었거나 오래됐다 */
+  var stale=info.filter(function(x){ return !x.b || (x.days!=null&&x.days>=21); })
+                .sort(function(a,b){ return (b.days==null?999:b.days)-(a.days==null?999:a.days); });
+
+  /* D. 기준 밖이 가장 많은 클럽 */
+  var worst=info.filter(function(x){ return x.off.length; })
+                .sort(function(a,b){ return b.off.length-a.off.length; })[0];
+
+  if(!P.primary){
+    var wedge=info.filter(function(x){ return x.c.cat==="wedge"; })[0];
+    if(rSig.some(function(z){return z.t==="short";}) && wedge){
+      P.primary={x:wedge, kind:"short", head:wedge.c.name+" 거리 만들기",
+        why:"그린 적중이 "+r0.gir+"/18입니다. 놓친 홀은 전부 웨지로 처리해야 했습니다. "
+           +"라운드에서 퍼터 다음으로 많이 쓴 채인데 거리가 정해져 있지 않습니다."};
+      P.test="성공 판정: 풀·하프·쿼터 세 거리가 각각 10발 평균으로 적힌다";
+    } else if(stale.length){
+      var st=stale[0];
+      P.primary={x:st, kind:"stale", head:st.c.name+" 측정",
+        why: st.b ? (st.days+"일째 기록이 없습니다. 지금 상태를 모르는 채로 다른 것을 고칠 수 없습니다.")
+                  : "아직 한 번도 재지 않았습니다. 기준이 없으면 좋아졌는지 나빠졌는지 알 수 없습니다."};
+      P.test="성공 판정: 10발 평균이 기록된다";
+    } else if(worst){
+      P.primary={x:worst, kind:"off", head:worst.c.name+" 교정",
+        why:worst.off.map(function(o){ return o.k+" "+o.v+"(목표 "+o.want+")"; }).join(", ")+" — 기준을 벗어나 있습니다."};
+      P.test="성공 판정: "+worst.off[0].k+"가 "+worst.off[0].want+" 안으로";
+    }
+  }
+  if(!P.primary) return null;
+
+  /* 보조 — 기준자 한 채와, 확인이 필요한 한 채 */
+  var ruler=info.filter(function(x){
+    return x!==P.primary.x && x.b && !x.off.length && (x.grade==="A"||x.grade==="B");
+  }).sort(function(a,b){ return (a.grade==="A"?0:1)-(b.grade==="A"?0:1); })[0];
+  if(ruler) P.also.push({x:ruler, why:"지금 가장 잘 맞는 채입니다. 오늘 컨디션이 정상인지 재는 기준자로 씁니다"});
+  var confirm=info.filter(function(x){
+    return x!==P.primary.x && x!==(ruler||{}) && x.b && x.grade==="A" && clubSeries(x.c.id,"carry").length<=2;
+  })[0];
+  if(confirm) P.also.push({x:confirm, why:"지난번 좋았지만 기록이 한두 번뿐입니다. 진짜인지 한 번 더 봅니다"});
+
+  /* 뺄 것 — 정렬이 흔들리는 드라이버는 짧은 날에 득이 없다 */
+  var drv=info.filter(function(x){ return x.c.cat==="driver"; })[0];
+  if(drv && drv!==P.primary.x && drv.off.length && P.min<=120){
+    var kinds=drv.off.map(function(o){ return o.k; }).join("·");
+    P.skip.push({x:drv, why:kinds+"가 벗어나 있는데, 이건 스틱을 놓고 봐야 잡힙니다. "
+      +"체력도 가장 많이 쓰므로 지친 상태로 치면 나쁜 자세가 굳습니다. 오늘은 빼거나 맨 마지막 10발만."});
+  }
+
+  /* 생각은 하나만 */
+  var feel=(S.sessions[0]&&S.sessions[0].feeling)||"";
+  var cues=["왼팔","어깨","머리","정렬","톱","체중","손목","그립"];
+  var hit=cues.filter(function(k){ return feel.indexOf(k)>=0; });
+  if(hit.length>=2){
+    P.cue={t:"톱에서 잠시 멈춤", d:"지난 느낀점에 신경 쓴 동작이 "+hit.length+"개 적혀 있습니다. "
+      +"생각이 둘을 넘으면 스윙이 느려집니다. 오늘은 이것 하나만."};
+  } else {
+    var o0=(P.primary.x.off||[])[0];
+    if(o0&&o0.k==="앞뒤 편차") P.cue={t:"톱에서 잠시 멈춤", d:"앞뒤 편차는 대개 템포가 급해서 생깁니다"};
+    else if(o0&&(o0.k==="방향각"||o0.k==="좌우 편차")) P.cue={t:"헤드를 먼저 놓고 발은 나중에", d:"공 앞 30~50cm 표식에 헤드 면을 맞추고, 그다음 발을 그 면에 맞춰 섭니다"};
+    else if(o0&&o0.k==="캐리") P.cue={t:"톱에서 잠시 멈춤", d:"멈추는 그 순간에 왼팔이 펴지는 것을 느끼면 아크가 돌아옵니다"};
+    else P.cue={t:"톱에서 잠시 멈춤", d:"지금 유일하게 들고 갈 생각입니다"};
+  }
+
+  /* 시간 배분 */
+  var m=P.min, warm=10, rest=(m>=100?10:0), left=m-warm-rest;
+  var n=1+P.also.length;
+  var r5=function(v){ return Math.max(5,Math.round(v/5)*5); };
+  var mainShare = n>1 ? r5(left*0.55) : left;
+  var each = n>1 ? r5((left-mainShare)/(n-1)) : 0;
+  P.plan.push({m:warm, t:"몸풀기", d:"어깨·허리·손목. 첫 10발은 반스윙"});
+  P.plan.push({m:mainShare, t:P.primary.x.c.name,
+    d:(P.primary.kind==="short")?"풀스윙 10발 → 시계 9시 하프 10발 → 시계 8시 쿼터 10발. 각 10발의 캐리 평균을 적습니다"
+      :"10발씩 나눠 치고 평균을 적습니다"});
+  /* 쉬는 자리는 마지막 구간 직전이다. 끝에 두면 쉬는 뜻이 없다 */
+  P.also.forEach(function(a,i){
+    if(rest && i===P.also.length-1)
+      P.plan.push({m:rest, t:"쉬기", d:"여기서 쉬지 않으면 뒤 기록이 피로 기록이 됩니다"});
+    P.plan.push({m:each, t:a.x.c.name, d:a.why});
+  });
+  if(rest && !P.also.length)
+    P.plan.splice(1,0,{m:rest, t:"쉬기", d:"중간에 한 번 숨을 돌립니다"});
+  P.rSig=rSig;
+  return P;
+}
+
 /* 홀별 타수를 더하고 파 대비를 센다. */
 function holeTally(r){
   var hs=r.holes||[], ps=r.pars||[];
@@ -2141,6 +2326,27 @@ document.addEventListener("click",function(ev){
   if(a==="probeServer"){
     S.lock.probing=true; S.lock.probe=null; S.lock.focused=true; render();
     probeServer().then(function(r){ S.lock.probing=false; S.lock.probe=r; render(); });
+    return;
+  }
+
+  if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
+  if(a==="planDeep"){
+    var P=prescribe();
+    if(!P){ S.msg.plan="아직 판단할 기록이 없습니다."; render(); return; }
+    if(!ready.ai){ S.msg.plan="AI 키가 아직 없습니다."; render(); return; }
+    var lines=[];
+    lines.push("오늘 "+P.min+"분 연습을 갑니다.");
+    lines.push("앱이 고른 중심: "+P.primary.head+" — "+P.primary.why);
+    if(P.also.length) lines.push("함께 칠 채: "+P.also.map(function(a2){ return a2.x.c.name+"("+a2.why+")"; }).join(" / "));
+    if(P.skip.length) lines.push("뺄 채: "+P.skip[0].x.c.name+" — "+P.skip[0].why);
+    lines.push("오늘의 한 가지 생각: "+P.cue.t);
+    lines.push("시간 배분: "+P.plan.map(function(x){ return x.m+"분 "+x.t; }).join(" / "));
+    if(P.test) lines.push(P.test);
+    var p9=profileText()+"\n\n"+lines.join("\n")
+      +"\n\n이 계획대로 연습한다고 할 때, 중심 클럽 구간을 10발 단위로 쪼개 무엇을 어떻게 바꿔 칠지 적어 주세요. "
+      +"각 10발마다 '무엇을 바꾸는지' 한 가지와 '어떻게 세는지'를 숫자로 쓰세요. "
+      +"위에 적힌 기록의 숫자만 근거로 삼고, 없는 숫자는 만들지 마세요. 500자 이내, 머리말 없이 바로 시작.";
+    ask("plan",p9,{modelTier:"default"}).then(function(t){ S.planText=t; render(); }).catch(function(){});
     return;
   }
 
