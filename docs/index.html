@@ -1086,10 +1086,18 @@ function draftView(){
         var open=(S.openBlock===i);
         h+='<div class="listrow" data-act="openBlockRow" data-i="'+i+'">'
          +'<span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
-         +'<div class="bd"><b>'+esc(b.clubName)+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")
+         +'<div class="bd"><b>'+esc(b.clubName||"클럽 미지정")+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")
          +' · 방향각 '+numToLR(b.m.dir)+'°'+(b.shots?(' · '+b.shots+'회'):'')+'</span></div>'
          +'<span class="tiny" style="color:var(--fg3);margin-right:6px">'+(open?'접기':'자세히')+'</span>'
          +'<button class="btn ghost sm" data-act="rmBlock" data-i="'+i+'">삭제</button></div>';
+        /* 사진에서 클럽을 못 읽은 세트 — 숫자는 살아 있으니 클럽만 고르면 된다 */
+        if(!b.clubId){
+          h+='<div class="banner warn" style="margin:2px 0 10px">숫자는 읽었습니다. 어떤 클럽인지만 골라 주세요.'
+           +'<select style="margin-top:8px" data-act="setBlockClub" data-i="'+i+'">'
+           +'<option value="">클럽 고르기</option>'
+           + S.clubs.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>'; }).join("")
+           +'</select></div>';
+        }
         if(open) h+=blockDetail(b);
       });
       h+='</div>';
@@ -1633,6 +1641,19 @@ function lastDateFor(clubId){
   return null;
 }
 
+/* 사진에서 클럽을 못 읽은 세트에 클럽을 끼워 넣는다. 숫자는 그대로 둔다. */
+function pickBlockClub(i,cid){
+  if(!cid) return;
+  var c=S.clubs.filter(function(x){ return x.id===cid; })[0];
+  var b=S.draft&&S.draft.blocks&&S.draft.blocks[i];
+  if(!c||!b) return;
+  var prev=lastBlockFor(c.id);
+  var ev=evalBlock(c,b.m,prev?prev.m:null);
+  b.clubId=c.id; b.clubName=c.name;
+  b.good=ev.good; b.bad=ev.bad; b.deltas=ev.deltas; b.needClub=false;
+  render();
+}
+
 function planCard(){
   var P=prescribe();
   if(!P) return '<div class="card"><div class="eyebrow">오늘 연습</div>'
@@ -1992,14 +2013,19 @@ function runMulti(i){
     });
     if(v.grade) m.grade=String(v.grade).toUpperCase().slice(0,1);
     if(!got){ M.bad=true; M.marks[i]="숫자 못 읽음"; M.log.push(label+" — 숫자를 못 읽었습니다"); return next(); }
+    /* 숫자를 읽었으면 클럽을 못 찾았다고 통째로 버리지 않는다.
+       애써 읽은 열한 개 수치를 지우고 다시 넣게 하는 것은 말이 안 된다.
+       클럽 자리만 비워 두고 세트는 만든다. 아래에서 고르면 된다. */
     var club=v.club?guessClub(v.club):null;
+    var shots=num(v.shots); if(!(shots>0)) shots=10;
     if(!club){
-      M.bad=true;
-      M.marks[i]="클럽 못 찾음";
-      M.log.push(label+" — 클럽을 못 찾았습니다"+(v.club?(' (화면 표시 "'+v.club+'")'):"")+". 아래에서 직접 넣어 주세요.");
+      S.draft.blocks.push({clubId:"",clubName:"",m:m,shots:shots,
+        good:[],bad:[],deltas:null,coaching:"",needClub:true});
+      M.marks[i]="클럽만 고르세요";
+      M.log.push(label+" → 숫자는 읽었습니다"+(m.carry!=null?(" (캐리 "+r1(m.carry)+"m)"):"")
+        +". 클럽만 아래에서 골라 주세요"+(v.club?(' — 화면에는 "'+v.club+'"로 보입니다'):"")+".");
       return next();
     }
-    var shots=num(v.shots); if(!(shots>0)) shots=10;
     var prev=lastBlockFor(club.id);
     var ev=evalBlock(club,m,prev?prev.m:null);
     S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,
@@ -2329,6 +2355,7 @@ document.addEventListener("click",function(ev){
     return;
   }
 
+  if(a==="setBlockClub"){ return; }   /* 고르기는 change 에서 처리한다 */
   if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
   if(a==="planDeep"){
     var P=prescribe();
@@ -2763,6 +2790,9 @@ document.addEventListener("input",function(ev){
 },true);
 document.addEventListener("change",function(ev){
   var t=ev.target;
+  if(t && t.tagName==="SELECT" && t.getAttribute("data-act")==="setBlockClub"){
+    pickBlockClub(+t.getAttribute("data-i"), t.value); return;
+  }
   if(t && t.type==="file" && String(t.id||"").indexOf("multiPhoto")===0){
     var fl=t.files||[];
     multiReset();

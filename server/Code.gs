@@ -1335,7 +1335,9 @@ function apiReadShot(dataUrl) {
   var kb = Math.round(String(dataUrl).length * 0.75 / 1024);
   var prompt =
     '골프 연습장 스윙 측정기 결과 화면이다. 화면에 적힌 값만 읽어라. 없으면 null. 추정 금지.\n' +
-    'club=화면에 적힌 클럽 표기 그대로(예 "7I","#7","3번 하이브리드","DR","PW(46~48°)")\n' +
+    'club=클럽 이름. 화면 아래쪽에 "OOO 10회 클럽 측정한 결과입니다" 같은 작은 회색 문장이 있으면\n' +
+    '  거기 적힌 이름을 그대로 쓴다(예 "3번 하이브리드","드라이버","7번 아이언"). 작아도 꼭 찾아 읽어라.\n' +
+    '  그 문장이 없으면 화면에 적힌 표기 그대로(예 "7I","#7","DR","PW")\n' +
     'shots=친 발수, total=비거리 m, carry=캐리 m, apex=최고높이 m, ball=볼스피드 m/s,\n' +
     'launch=발사각 도, dir=방향각(L/R 붙여서 "L4.0"), side=사이드스핀(L/R 붙여서 "L282"),\n' +
     'back=백스핀 rpm, depth=앞뒤 편차 m, width=좌우 편차 m, landing=안착률 숫자, grade=등급 A~D\n' +
