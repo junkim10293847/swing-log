@@ -339,7 +339,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"",
+  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -793,6 +793,17 @@ function viewHome(){
     if(lastR.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">분석</div>'+esc(lastR.analysis)+'</div>';
     h+='</div>';
   }
+
+  /* 서버에 새 코드가 붙었는지 확인한다. 붙여넣기만 하고 재배포를 빠뜨리기 쉽다. */
+  h+='<div class="card"><div class="spread"><div class="eyebrow">서버 점검</div>'
+   +'<button class="btn ghost sm" data-act="checkServer"'+(S.busy.srv?" disabled":"")+'>'
+   +(S.busy.srv?'<span class="spin"></span> 확인 중':'지금 확인')+'</button></div>';
+  if(S.srv){
+    h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px">'+esc(S.srv.msg)+'</div>';
+  } else {
+    h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">앱스 스크립트를 새로 배포한 뒤 눌러 보세요. 라운드 사진 읽기와 문답 저장이 붙었는지 알려 줍니다.</p>';
+  }
+  h+='</div>';
 
   h+='</div>';
   return h;
@@ -1998,6 +2009,34 @@ document.addEventListener("click",function(ev){
         S.msg.boughtBad=true; render();
       });
     })(0);
+    return;
+  }
+
+  if(a==="checkServer"){
+    S.busy.srv=true; S.srv=null; render();
+    /* 새 서버는 클럽마다 문답 칸을, 라운드마다 홀별 칸을 함께 보낸다.
+       옛 서버에는 그 칸 자체가 없다. 그래서 한 번 불러오면 바로 구분된다. */
+    call("apiLoad").then(function(d){
+      S.busy.srv=false;
+      var cl=(d&&d.clubs)||[], rd=(d&&d.rounds)||[];
+      var hasQA = cl.length>0 && cl.some(function(c){ return Object.prototype.hasOwnProperty.call(c,"qa"); });
+      var hasHoles = rd.length>0 && rd.some(function(r){ return Object.prototype.hasOwnProperty.call(r,"holes"); });
+      var fresh = hasQA || hasHoles;
+      if(fresh){
+        S.srv={ok:true, msg:"새 코드가 붙었습니다. 라운드 사진 읽기와 클럽 문답 저장이 됩니다."
+          +(cl.length?(" 클럽 "+cl.length+"개"):"")+(rd.length?(" · 라운드 "+rd.length+"개"):"")};
+        applyPayload(d); putCache(d);
+      } else if(!cl.length && !rd.length){
+        S.srv={ok:false, msg:"클럽도 라운드도 없어 판단할 수 없습니다. 클럽을 하나 넣은 뒤 다시 눌러 주세요."};
+      } else {
+        S.srv={ok:false, msg:"아직 옛 코드입니다. 붙여넣기는 됐어도 배포가 안 된 경우가 많습니다. 배포 → 배포 관리 → 연필 → 버전을 새 버전으로 → 배포 를 해 주세요."};
+      }
+      render();
+    }).catch(function(e){
+      S.busy.srv=false;
+      S.srv={ok:false, msg:"서버에 닿지 못했습니다: "+((e&&e.message)||"알 수 없는 오류")};
+      render();
+    });
     return;
   }
 
