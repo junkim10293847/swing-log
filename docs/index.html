@@ -339,7 +339,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null,
+  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{},
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -610,14 +610,25 @@ function bagGaps(){
 /* ====================== AI ====================== */
 function ask(key,prompt,opts){
   if(!sample){ S.msg[key]="AI 코칭을 쓸 수 없는 화면입니다."; render(); return Promise.reject(); }
-  S.busy[key]=true; S.msg[key]=null; render();
-  return sample(prompt,opts||{}).then(function(r){ S.busy[key]=false; render(); return r.text; })
+  S.busy[key]=true; S.msg[key]=null; S.asksec[key]=0; render();
+  /* 몇 초째인지 보여 준다. 멈춘 것인지 도는 중인지 구분이 돼야 한다. */
+  (function tick(){
+    if(!S.busy[key]) return;
+    S.asksec[key]=(S.asksec[key]||0)+1;
+    if(S.busy[key]) render();
+    setTimeout(tick,1000);
+  })();
+  /* 끝나지 않는 일은 없어야 한다. 서버가 침묵하면 2분에 끊는다. */
+  return withTimeout(sample(prompt,opts||{}),120000,
+      "서버가 120초 동안 답하지 않았습니다. 잠시 뒤 다시 눌러 주세요.")
+    .then(function(r){ S.busy[key]=false; render(); return r.text; })
     .catch(function(e){ S.busy[key]=false;
       var c=e&&e.code;
+      var raw=(e&&e.message)?String(e.message):"";
       S.msg[key]= c==="not_granted"||c==="sampling_disabled" ? "AI 사용이 허용되지 않았습니다."
         : c==="rate_limited" ? "요청이 몰렸습니다. 잠시 뒤 다시 눌러 주세요."
         : c==="refused" ? "이 내용은 분석하지 못했습니다. 입력을 조금 바꿔 보세요."
-        : "분석에 실패했습니다. 다시 눌러 주세요.";
+        : (raw || "분석에 실패했습니다. 다시 눌러 주세요.");
       render(); throw e; });
 }
 function askJson(key,prompt,opts){
@@ -1519,7 +1530,7 @@ function clubAskCard(c){
    +'</div>';
   h+='<textarea id="cf_q" style="min-height:58px;margin-top:10px" placeholder="직접 물어도 됩니다. 예) 이 샤프트가 지금 내 스윙 속도에 무겁지 않나">'+esc(S.qDraft||"")+'</textarea>';
   h+='<button class="btn full" style="margin-top:8px" data-act="askClub"'+(S.busy.cq?" disabled":"")+'>'
-   +(S.busy.cq?'<span class="spin"></span> 답 만드는 중':'물어보기')+'</button>';
+   +(S.busy.cq?('<span class="spin"></span> 답 만드는 중 '+(S.asksec.cq||0)+'초'):'물어보기')+'</button>';
   if(S.msg.cq) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.cq)+'</div>';
   var qa=c.qa||[];
   qa.slice().reverse().forEach(function(x,i){
