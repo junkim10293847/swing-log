@@ -6,8 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
 <title>스윙 로그</title>
-<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif;background:#F1F3F0}
-@media (prefers-color-scheme:dark){body{background:#121412}}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif;background:#FCF8E6}
+@media (prefers-color-scheme:dark){body{background:#15140E}}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
 <body>
 <script src="config.js"></script>
@@ -16,13 +16,13 @@
 <style>
 /* 레이아웃: 폰 우선 단일 컬럼 + 하단 탭바. 측정 숫자는 모노 탭뉴머럴, 제목은 고딕A1 */
 :root{
-  --bg:#F1F3F0; --surface:#FFFFFF; --surface2:#E9ECE7; --line:#DEE2DB;
-  --fg:#1E231F; --fg2:#5E655D; --fg3:#949B92;
-  --accent:#2F5540; --accentSoft:#DFE8E0; --onAccent:#FFFFFF;
-  --ok:#2F6B4F; --okSoft:#DCEAE0;
-  --warn:#7D5F1C; --warnSoft:#EFE6CE;
-  --bad:#97463B; --badSoft:#F0DED8;
-  --shadow:0 1px 2px rgba(30,35,31,.04),0 4px 14px rgba(30,35,31,.045),0 16px 36px rgba(30,35,31,.03);
+  --bg:#FCF8E6; --surface:#FFFFFF; --surface2:#F4EED8; --line:#EAE2C7;
+  --fg:#23221A; --fg2:#5F5B4C; --fg3:#9A9483;
+  --accent:#2F5540; --accentSoft:#E0EAE0; --onAccent:#FFFFFF;
+  --ok:#2F6B4F; --okSoft:#DCEBE1;
+  --warn:#7A5512; --warnSoft:#F7E6B8;
+  --bad:#97463B; --badSoft:#F7DCD4;
+  --shadow:0 1px 2px rgba(60,52,24,.05),0 4px 14px rgba(60,52,24,.055),0 16px 36px rgba(60,52,24,.04);
   --ring:0 0 0 3px var(--accentSoft);
   --fDisp:'Pretendard Variable',Pretendard,system-ui,-apple-system,sans-serif;
   --fBody:'Pretendard Variable',Pretendard,system-ui,-apple-system,sans-serif;
@@ -30,23 +30,23 @@
   --r:20px;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#121412; --surface:#1B1E1B; --surface2:#252925; --line:#2F342F;
-  --fg:#E8EBE7; --fg2:#9DA49B; --fg3:#6E756D;
-  --accent:#8CB89A; --accentSoft:#1F2B23; --onAccent:#131A15;
-  --ok:#7CC09D; --okSoft:#1A2A21;
-  --warn:#CFA75F; --warnSoft:#2B2416;
-  --bad:#D98C7E; --badSoft:#2E1D1A;
+  --bg:#15140E; --surface:#1E1C14; --surface2:#28251A; --line:#352F21;
+  --fg:#EFECDF; --fg2:#A49E8B; --fg3:#75705F;
+  --accent:#9BC2A4; --accentSoft:#1F2B20; --onAccent:#141A14;
+  --ok:#86C7A2; --okSoft:#1B2B1F;
+  --warn:#DCB469; --warnSoft:#2E2613;
+  --bad:#DE9183; --badSoft:#2F1D17;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
   --ring:0 0 0 3px var(--accentSoft);
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --bg:#121412; --surface:#1B1E1B; --surface2:#252925; --line:#2F342F;
-  --fg:#E8EBE7; --fg2:#9DA49B; --fg3:#6E756D;
-  --accent:#8CB89A; --accentSoft:#1F2B23; --onAccent:#131A15;
-  --ok:#7CC09D; --okSoft:#1A2A21;
-  --warn:#CFA75F; --warnSoft:#2B2416;
-  --bad:#D98C7E; --badSoft:#2E1D1A;
+  --bg:#15140E; --surface:#1E1C14; --surface2:#28251A; --line:#352F21;
+  --fg:#EFECDF; --fg2:#A49E8B; --fg3:#75705F;
+  --accent:#9BC2A4; --accentSoft:#1F2B20; --onAccent:#141A14;
+  --ok:#86C7A2; --okSoft:#1B2B1F;
+  --warn:#DCB469; --warnSoft:#2E2613;
+  --bad:#DE9183; --badSoft:#2F1D17;
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.3);
   --ring:0 0 0 3px var(--accentSoft);
   color-scheme:dark;
@@ -79,7 +79,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;
   background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:blur(14px) saturate(1.3);
-  box-shadow:0 -1px 0 var(--line),0 -8px 24px rgba(30,35,31,.05);
+  box-shadow:0 -1px 0 var(--line),0 -8px 24px rgba(60,52,24,.06);
   padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
   display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}
 nav.tabs button{background:none;border:0;padding:8px 2px 7px;border-radius:14px;cursor:pointer;
@@ -201,12 +201,12 @@ textarea{resize:vertical;min-height:84px;line-height:1.6}
 .empty h3{font-size:17.5px;margin-bottom:8px;color:var(--fg)}
 .empty p{font-size:13.5px}
 
-.sheet{position:fixed;inset:0;z-index:60;background:rgba(18,22,19,.4);backdrop-filter:blur(3px);
+.sheet{position:fixed;inset:0;z-index:60;background:rgba(42,36,16,.34);backdrop-filter:blur(3px);
   display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .sheet .inner{background:var(--bg);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:28px 28px 0 0;
   padding:16px 18px calc(28px + env(safe-area-inset-bottom,0px));
-  box-shadow:0 -12px 48px rgba(20,24,21,.2);animation:riseUp .26s cubic-bezier(.22,.9,.3,1)}
+  box-shadow:0 -12px 48px rgba(42,36,16,.18);animation:riseUp .26s cubic-bezier(.22,.9,.3,1)}
 @keyframes riseUp{from{transform:translateY(18px)}to{transform:translateY(0)}}
 .sheet .hdl{width:40px;height:4px;border-radius:999px;background:var(--line);margin:2px auto 16px}
 
