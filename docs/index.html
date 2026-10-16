@@ -324,7 +324,7 @@ var METRICS = [
 /* ====================== 상태 ====================== */
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
-  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null,
+  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -564,6 +564,8 @@ function renderTabs(){
     return '<button data-tab="'+t.k+'" aria-current="'+(S.tab===t.k)+'"><svg viewBox="0 0 24 24"><path d="'+t.d+'"/></svg>'+t.n+'</button>';
   }).join("");
 }
+/* 다시 그릴 때는 화면을 통째로 갈아끼우므로 스크롤이 맨 위로 돌아간다.
+   보고 있던 자리를 기억했다가 그린 뒤 되돌린다. 일부러 위로 올릴 때는 S.jump 를 세운다. */
 function render(){
   if(S.lock && S.lock.need){ renderLock(); return; }
   var lw=document.getElementById("lockHost"); if(lw) lw.innerHTML="";
@@ -577,10 +579,24 @@ function render(){
   if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
   h += connCard();
   h += ({home:viewHome,clubs:viewClubs,practice:viewPractice,rounds:viewRounds,growth:viewGrowth}[S.tab]||viewHome)();
+  var inner=document.querySelector(".sheet .inner");
+  var sy=window.pageYOffset||document.documentElement.scrollTop||0;
+  var iy=inner?inner.scrollTop:0;
+  var hadSheet=!!inner;
+
   document.getElementById("main").innerHTML = h;
   var sl=document.getElementById("sheetLink");
   if(sl){ if(S.sheetUrl){ sl.href=S.sheetUrl; sl.hidden=false; } else sl.hidden=true; }
   document.getElementById("sheetHost").innerHTML = S.sheet ? sheetHTML() : "";
+
+  /* 열려 있던 시트는 보던 자리 그대로 둔다 */
+  if(hadSheet && S.sheet && iy){
+    var again=document.querySelector(".sheet .inner");
+    if(again) again.scrollTop=iy;
+  }
+  if(!S.jump && sy && (window.pageYOffset||0)!==sy) window.scrollTo(0,sy);
+  S.jump=false;
+
   drawSparks();
 }
 
@@ -1537,7 +1553,7 @@ document.addEventListener("click",function(ev){
   var el=ev.target.closest("[data-act],[data-tab]");
   if(!el) return;
   var tab=el.getAttribute("data-tab");
-  if(tab){ S.tab=tab; S.sheet=null; render(); window.scrollTo(0,0); return; }
+  if(tab){ S.tab=tab; S.sheet=null; S.jump=true; render(); window.scrollTo(0,0); return; }
   var a=el.getAttribute("data-act");
 
   if(a==="reconnect"){ reconnect(); return; }
@@ -1669,12 +1685,12 @@ document.addEventListener("click",function(ev){
   }
 
   /* --- 연습 세션 --- */
-  if(a==="newSession"){ S.tab="practice"; S.draft=newDraft(); render(); window.scrollTo(0,0); return; }
+  if(a==="newSession"){ S.tab="practice"; S.draft=newDraft(); S.jump=true; render(); window.scrollTo(0,0); return; }
   if(a==="cancelDraft"){ S.draft=null; render(); return; }
   if(a==="step"){
     var s=+el.getAttribute("data-s");
     if(s===3){ var fb=document.getElementById("feelBox"); if(fb) S.draft.feeling=fb.value; }
-    S.draft.step=s; render(); window.scrollTo(0,0); return;
+    S.draft.step=s; S.jump=true; render(); window.scrollTo(0,0); return;
   }
   if(a==="allWarm"||a==="noneWarm"||a==="allCool"||a==="noneCool"){
     var isWarm=(a==="allWarm"||a==="noneWarm");
@@ -1841,7 +1857,7 @@ document.addEventListener("click",function(ev){
     var d2=S.draft;
     var rec={id:d2.id,date:d2.date,warmup:d2.warmup,cooldown:d2.cooldown,blocks:d2.blocks,
       feeling:d2.feeling,coaching:d2.coaching,createdAt:new Date().toISOString()};
-    put("sessions",rec).then(function(){ S.draft=null; S.tab="practice"; render(); window.scrollTo(0,0); });
+    put("sessions",rec).then(function(){ S.draft=null; S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0); });
     return;
   }
   if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; render(); }); return; }
