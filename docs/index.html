@@ -245,7 +245,7 @@ ul.plain li.bad{color:var(--bad)}
     <div class="brand">스윙 로그<small id="sub">불러오는 중</small></div>
     <a class="btn ghost sm" id="sheetLink" href="#" target="_blank" rel="noopener" title="구글 시트 열기" hidden>시트</a>
     <button class="btn ghost sm" id="themeBtn" title="화면 밝기 전환" aria-label="화면 밝기 전환">◐</button>
-    <button class="btn ghost sm" data-act="lockNow" title="로그아웃" aria-label="로그아웃">나가기</button>
+    <button class="btn ghost sm" id="logoutBtn" data-act="lockNow" title="로그아웃" aria-label="로그아웃">나가기</button>
   </div>
   <main id="main"><div class="empty"><h3>준비 중</h3><p>클럽과 기록을 불러오고 있습니다.</p></div></main>
 </div>
@@ -324,7 +324,7 @@ var METRICS = [
 /* ====================== 상태 ====================== */
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
-  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false,
+  picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -587,6 +587,8 @@ function render(){
   document.getElementById("main").innerHTML = h;
   var sl=document.getElementById("sheetLink");
   if(sl){ if(S.sheetUrl){ sl.href=S.sheetUrl; sl.hidden=false; } else sl.hidden=true; }
+  var lb=document.getElementById("logoutBtn");
+  if(lb) lb.hidden=!!S.openMode;
   document.getElementById("sheetHost").innerHTML = S.sheet ? sheetHTML() : "";
 
   /* 열려 있던 시트는 보던 자리 그대로 둔다 */
@@ -642,7 +644,7 @@ function renderLock(){
      +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">'
      +(pref("auto",true)
         ? '자동 로그인을 켜 두면 이 기기에서 30일 동안 다시 묻지 않습니다.'
-        : '자동 로그인이 꺼져 있어 브라우저를 닫으면 다시 묻습니다.')
+        : '자동 로그인이 꺼져 있습니다. 창이나 탭을 새로 열 때마다 다시 묻습니다.')
      +' 비밀번호는 기기에 저장되지 않습니다.</p>';
   }
   h+='</div></div>';
@@ -2214,6 +2216,7 @@ function gate(){
   if(!S.lock.id && pref("remember",true)) S.lock.id=savedName();
   if(!apiUrl()){ S.lock.need=true; S.lock.needUrl=true; render(); return Promise.resolve(); }
   return call("apiAuthState",getToken()).then(function(st){
+    S.openMode=!!st.open;
     S.lock.name=st.name||"";
     S.lock.id=st.loginId||S.lock.id||"";
     S.lock.need=!st.unlocked;

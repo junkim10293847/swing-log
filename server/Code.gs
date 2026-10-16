@@ -116,7 +116,7 @@ function doPost(e) {
   if (!f) return json_({ ok: false, error: '알 수 없는 요청입니다: ' + fn });
 
   /* 이번 요청의 주인을 먼저 정한다. 아래 모든 읽기·쓰기가 이 값에 묶인다. */
-  CUR_UID = uidOfToken_(token);
+  CUR_UID = uidOfToken_(token) || openUid_();
   if (!OPEN_FNS[fn] && !CUR_UID) {
     return json_({ ok: false, locked: true, error: '로그인이 필요합니다.' });
   }
@@ -255,7 +255,51 @@ function uidOfToken_(token) {
 
 /* ── 바깥에서 부르는 것들 ── */
 
+/**
+ * 비번 없이 바로 들어가는 모드.
+ * 켜 두면 주소를 연 사람은 누구나 그 계정으로 들어온다.
+ * 혼자 쓰는 동안만 쓰고, 다른 사람이 생기면 lockMode 로 되돌린다.
+ */
+function openUid_() {
+  var props = PropertiesService.getScriptProperties();
+  if (props.getProperty('OPEN_MODE') !== '1') return '';
+  var pinned = props.getProperty('OPEN_UID');
+  if (pinned) return pinned;
+  var sh = sheet_(SH.user), last = sh.getLastRow();
+  if (last < 2) return '';
+  return String(sh.getRange(2, 1).getValue() || '');   /* 첫 번째 사용자 */
+}
+
+/** 비번 없이 들어가게 한다. 편집기에서 실행. */
+function openMode() {
+  var props = PropertiesService.getScriptProperties();
+  var sh = sheet_(SH.user), last = sh.getLastRow();
+  if (last < 2) throw new Error('등록된 사용자가 없습니다. 앱에서 먼저 하나 만드세요.');
+  var id = String(sh.getRange(2, 1).getValue() || '');
+  var nm = String(sh.getRange(2, 2).getValue() || '');
+  props.setProperty('OPEN_MODE', '1');
+  props.setProperty('OPEN_UID', id);
+  var txt = '비번 없이 들어가게 했습니다. "' + nm + '" 계정으로 바로 열립니다.\n' +
+            '주소를 아는 사람은 누구나 이 기록을 보고 고칠 수 있습니다. ' +
+            '되돌리려면 lockMode 를 실행하세요.';
+  Logger.log(txt); return txt;
+}
+
+/** 다시 비번을 받게 한다. */
+function lockMode() {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('OPEN_MODE');
+  props.deleteProperty('OPEN_UID');
+  var txt = '다시 이름과 비밀번호를 받습니다.';
+  Logger.log(txt); return txt;
+}
+
 function apiAuthState(token) {
+  var open = openUid_();
+  if (open) {
+    var ou = userById_(open);
+    return { unlocked: true, open: true, name: ou ? (ou['이름'] || '') : '', loginId: ou ? (ou['이름'] || '') : '' };
+  }
   var uid = uidOfToken_(token);
   if (!uid) return { unlocked: false, name: '' };
   var u = userById_(uid);
