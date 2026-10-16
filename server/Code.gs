@@ -570,6 +570,8 @@ function clearBusy() {
     if (k.indexOf('BUSY_') === 0 || k.indexOf('NOTHINK_') === 0) { props.deleteProperty(k); n++; }
   });
   props.deleteProperty('GEMINI_MODEL_OK');
+  props.deleteProperty('GEMINI_MODEL_OK_IMG');
+  props.deleteProperty('GEMINI_MODEL_OK_TXT');
   var txt = '혼잡·설정 표시 ' + n + '개를 지웠습니다. 모델 선택도 처음으로 돌렸습니다.';
   Logger.log(txt); return txt;
 }
@@ -1072,7 +1074,7 @@ function model_(refresh) {
   var props = PropertiesService.getScriptProperties();
   var forced = props.getProperty('GEMINI_MODEL');
   if (forced && !refresh) return forced;
-  var ok = props.getProperty('GEMINI_MODEL_OK');
+  var ok = props.getProperty('GEMINI_MODEL_OK_TXT') || props.getProperty('GEMINI_MODEL_OK');
   if (ok && !refresh) return ok;
   return models_(refresh)[0];
 }
@@ -1090,12 +1092,16 @@ function model_(refresh) {
 function callModel_(name, parts, key, heavy, plain) {
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + name +
             ':generateContent?key=' + encodeURIComponent(key);
-  var cfg = { temperature: 0, maxOutputTokens: heavy ? 700 : 2048 };
+  var cfg = { temperature: heavy ? 0 : 0.3, maxOutputTokens: heavy ? 700 : 4096 };
   if (!plain) {
-    if (heavy) cfg.responseMimeType = 'application/json';
-    /* 이 모델이 '생각 끄기'를 받아주지 않는다고 확인됐으면 빼고 보낸다 */
-    var noThink = PropertiesService.getScriptProperties().getProperty('NOTHINK_' + name);
-    if (!noThink) cfg.thinkingConfig = { thinkingBudget: 0 };
+    if (heavy) {
+      cfg.responseMimeType = 'application/json';
+      /* 사진 판독은 숫자를 옮겨 적는 일이라 생각할 거리가 없다. 꺼서 시간을 번다.
+         다만 이 설정을 못 받는 모델이 있어, 한 번 거부당하면 그 모델에는 다시 보내지 않는다. */
+      var noThink = PropertiesService.getScriptProperties().getProperty('NOTHINK_' + name);
+      if (!noThink) cfg.thinkingConfig = { thinkingBudget: 0 };
+    }
+    /* 글로 답하는 질문은 생각을 막지 않는다. 막으면 답이 그만큼 얕아진다. */
   }
 
   return UrlFetchApp.fetch(url, {
@@ -1125,11 +1131,34 @@ function gemini_(parts) {
   }
   var props = PropertiesService.getScriptProperties();
   var list = models_(false).slice();
-  var first = props.getProperty('GEMINI_MODEL_OK');
+  var heavyNow = false;
+  for (var hn = 0; hn < parts.length; hn++) if (parts[hn] && parts[hn].inline_data) heavyNow = true;
+  var OKKEY = heavyNow ? 'GEMINI_MODEL_OK_IMG' : 'GEMINI_MODEL_OK_TXT';
+  var first = props.getProperty(OKKEY) || props.getProperty('GEMINI_MODEL_OK');
   if (first) {
     var at = list.indexOf(first);
     if (at > 0) list.splice(at, 1);
     if (at !== 0) list.unshift(first);
+  }
+
+  /* 사진은 빠른 모델이, 글은 큰 모델이 낫다. 쓰임에 따라 순서를 달리한다. */
+  var wantHeavy = false;
+  for (var hp = 0; hp < parts.length; hp++) if (parts[hp] && parts[hp].inline_data) wantHeavy = true;
+  function rank_(n) {
+    var s = String(n).toLowerCase();
+    if (wantHeavy) {                                  /* 사진 — 가벼운 것부터 */
+      if (s.indexOf('lite') >= 0) return 0;
+      if (s.indexOf('flash') >= 0) return 1;
+      return 2;
+    }
+    if (s.indexOf('pro') >= 0) return 0;              /* 글 — 큰 것부터 */
+    if (s.indexOf('flash') >= 0 && s.indexOf('lite') < 0) return 1;
+    return 2;
+  }
+  list.sort(function (a, b) { return rank_(a) - rank_(b); });
+  if (first) {                                        /* 전에 통했던 모델은 그래도 앞에 */
+    var fa = list.indexOf(first);
+    if (fa > 0) { list.splice(fa, 1); list.unshift(first); }
   }
 
   var busy = [];      /* 혼잡으로 비킨 모델 */
@@ -1171,7 +1200,7 @@ function gemini_(parts) {
         var t = c && c.content && c.content.parts &&
                 c.content.parts.map(function (p) { return p.text || ''; }).join('');
         if (t) {
-          props.setProperty('GEMINI_MODEL_OK', name);
+          props.setProperty(OKKEY, name);
           return t.trim();
         }
         lastMsg = '답이 비어 있었습니다';
@@ -1194,7 +1223,7 @@ function gemini_(parts) {
           var c2 = j2.candidates && j2.candidates[0];
           var t2 = c2 && c2.content && c2.content.parts &&
                    c2.content.parts.map(function (p) { return p.text || ''; }).join('');
-          if (t2) { props.setProperty('GEMINI_MODEL_OK', name); return t2.trim(); }
+          if (t2) { props.setProperty(OKKEY, name); return t2.trim(); }
         }
         msg = errMsg_(body);
         lastMsg = code + ' ' + msg;
@@ -1203,7 +1232,7 @@ function gemini_(parts) {
       /* 혼잡·일시 오류 */
       if (code === 429 || code === 500 || code === 503) {
         props.setProperty('BUSY_' + name, String(Date.now() + 5 * 60 * 1000));  /* 5분간 건너뛴다 */
-        if (props.getProperty('GEMINI_MODEL_OK') === name) props.deleteProperty('GEMINI_MODEL_OK');
+        if (props.getProperty(OKKEY) === name) props.deleteProperty(OKKEY);
         busy.push(name);
         if (napMs && tryNo === 0 && maxTries > 1) { Utilities.sleep(napMs); continue; }
         break;                                   /* 바로 다음 모델로 */
@@ -1244,13 +1273,15 @@ function apiSetKey(key) {
   var props = PropertiesService.getScriptProperties();
   props.setProperty('GEMINI_KEY', key);
   props.deleteProperty('GEMINI_MODEL_OK');
+  props.deleteProperty('GEMINI_MODEL_OK_IMG');
+  props.deleteProperty('GEMINI_MODEL_OK_TXT');
   props.deleteProperty('GEMINI_MODELS');
   var pick = models_(true)[0];
   /* 실제로 한 번 돌려 보되, 모델 혼잡으로 실패한 것까지 키 탓으로 돌리지 않는다.
      모델 목록을 받아낸 시점에서 키 자체는 이미 유효하다. */
   try {
     gemini_([{ text: '한 단어로만 답하세요: 골프' }]);
-    return { ok: true, model: props.getProperty('GEMINI_MODEL_OK') || pick };
+    return { ok: true, model: props.getProperty('GEMINI_MODEL_OK_TXT') || pick };
   } catch (e) {
     return { ok: true, model: pick, warn: e.message };
   }
@@ -1261,6 +1292,8 @@ function apiClearKey() {
   var props = PropertiesService.getScriptProperties();
   props.deleteProperty('GEMINI_KEY');
   props.deleteProperty('GEMINI_MODEL_OK');
+  props.deleteProperty('GEMINI_MODEL_OK_IMG');
+  props.deleteProperty('GEMINI_MODEL_OK_TXT');
   return { ok: true };
 }
 
@@ -1315,7 +1348,7 @@ function apiReadShot(dataUrl) {
   var out = pickJson_(txt);
   out._ms = Date.now() - t0;
   out._kb = kb;
-  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '';
+  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK_IMG') || '';
   return out;
 }
 
@@ -1337,7 +1370,7 @@ function testPhotoSpeed() {
   }
   var ms = Date.now() - t0;
   var txt = '사진 한 장 왕복 ' + ms + 'ms (' + Math.round(ms / 1000) + '초)\n' +
-            '쓴 모델: ' + (PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '-') + '\n' +
+            '쓴 모델: ' + (PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK_IMG') || '-') + '\n' +
             '응답: ' + out;
   Logger.log(txt);
   return txt;
@@ -1372,7 +1405,7 @@ function apiReadRound(dataUrl) {
   var out = pickJson_(txt);
   out._ms = Date.now() - t0;
   out._kb = kb;
-  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '';
+  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK_IMG') || '';
   return out;
 }
 
