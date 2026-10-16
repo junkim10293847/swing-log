@@ -2130,17 +2130,31 @@ document.addEventListener("click",function(ev){
       if(!r0||!v){ S.msg.rphoto="답이 비어 있습니다. 다시 한 번 눌러 주세요."; render(); return; }
       var got=[];
 
-      function arr(x){
+      function arr(x,lo,hi){
         if(!x||!x.length) return null;
         var out=[],any=false;
         for(var i=0;i<18;i++){
           var n2 = (i<x.length) ? num(x[i]) : null;
-          if(n2!=null&&(n2<1||n2>15)) n2=null;          /* 한 홀에 1~15타만 받는다 */
+          if(n2!=null&&(n2<lo||n2>hi)) n2=null;
           out.push(n2); if(n2!=null) any=true;
         }
         return any?out:null;
       }
-      var hs=arr(v.holes), ps=arr(v.pars);
+      /* 파 대비 값은 0이나 음수도 나온다. 변환 뒤에 다시 거른다. */
+      var hs=arr(v.holes,-5,15), ps=arr(v.pars,3,6);
+
+      /* 스크린 결과 화면 중에는 Score 줄에 타수가 아니라 파 대비를 적는 것이 있다.
+         합이 (총타수 - 코스 파)와 맞으면 그쪽이므로 각 홀의 파를 더해 실제 타수로 돌린다. */
+      if(hs&&ps){
+        var sH=0,sP=0,nn=0;
+        for(var k=0;k<18;k++){ if(hs[k]!=null&&ps[k]!=null){ sH+=hs[k]; sP+=ps[k]; nn++; } }
+        var tot=num(v.score);
+        var looksRel = (v.relative===true) || (tot!=null && nn>=18 && Math.abs(sH+sP-tot)<=1 && Math.abs(sH-tot)>3);
+        if(looksRel&&nn>=9){
+          for(var k2=0;k2<18;k2++) if(hs[k2]!=null&&ps[k2]!=null) hs[k2]=hs[k2]+ps[k2];
+        }
+        for(var k3=0;k3<18;k3++) if(hs[k3]!=null&&(hs[k3]<1||hs[k3]>15)) hs[k3]=null;
+      }
       if(hs){ r0.holes=hs; S.openHoles=true; got.push("홀별 타수 "+hs.filter(function(x){return x!=null;}).length+"홀"); }
       if(ps){ r0.pars=ps; }
 

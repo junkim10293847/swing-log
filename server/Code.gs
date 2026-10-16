@@ -1339,12 +1339,16 @@ function apiReadRound(dataUrl) {
   var kb = Math.round(String(dataUrl).length * 0.75 / 1024);
   var prompt =
     '골프 라운드 결과 화면 또는 스코어카드다. 적힌 값만 읽어라. 없으면 null. 추정 금지.\n' +
-    'course=코스/골프장 이름, date=날짜 YYYY-MM-DD, kind="screen"(스크린골프) 또는 "field"\n' +
-    'holes=홀별 타수를 1번 홀부터 순서대로 담은 배열(OUT 9개 뒤에 IN 9개). 안 보이는 홀은 null\n' +
-    'pars=홀별 파를 같은 순서로 담은 배열. 파 줄이 없으면 null\n' +
-    'score=총 타수, par=코스 총 파, putts=총 퍼팅 수,\n' +
+    'course=코스/골프장 이름, date=날짜 YYYY-MM-DD (두 자리 연도면 앞에 20을 붙인다)\n' +
+    'kind="screen"(스크린골프) 또는 "field"\n' +
+    'holes=Score 줄의 홀별 값을 1번 홀부터 순서대로 담은 배열(앞 9홀 다음에 뒤 9홀). 빈 칸은 null\n' +
+    'pars=Par 줄의 홀별 값을 같은 순서로 담은 배열\n' +
+    'putts=Putt 줄 전체 합계 (T 칸 두 개를 더한 값). 없으면 null\n' +
+    'score=화면에 크게 적힌 총 타수, par=코스 총 파\n' +
+    'relative=Score 줄이 실제 타수가 아니라 파 대비 값이면 true, 실제 타수면 false.\n' +
+    '  판단법: Score 줄 합이 (총 타수 - 코스 파)와 같으면 true, 총 타수와 같으면 false.\n' +
     'fw=페어웨이 안착 홀 수, gir=그린 적중 홀 수, ob=OB 개수, penalty=벌타 개수\n' +
-    '퍼센트로만 적혀 있으면 null. 홀별 타수를 더한 값이 총 타수와 다르면 화면에 적힌 총 타수를 score 로 둔다.\n' +
+    '퍼센트로만 적혀 있으면 null. Score 줄은 본 그대로 적고 네가 바꾸지 마라.\n' +
     'JSON 하나만 출력. 설명 금지.';
   var txt = gemini_([
     { text: prompt },
