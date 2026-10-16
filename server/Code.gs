@@ -21,7 +21,7 @@ var SH = {
 };
 
 var HEAD = {};
-HEAD[SH.club]  = ['id','순서','이름','분류','브랜드','모델','로프트','샤프트','플렉스','길이','구입시기','예비','메모','클럽특성','점검사항','연습법'];
+HEAD[SH.club]  = ['id','순서','이름','분류','브랜드','모델','로프트','샤프트','플렉스','길이','구입시기','예비','메모','클럽특성','점검사항','연습법','문답'];
 HEAD[SH.shot]  = ['id','연습id','날짜','클럽id','클럽명','비거리','캐리','최고높이','볼스피드','발사각','방향각','사이드스핀','백스핀','앞뒤편차','좌우편차','안착률','등급','기준안','부족한점','코칭'];
 HEAD[SH.log]   = ['id','날짜','준비운동','마무리운동','느낀점','코칭','기록시각'];
 HEAD[SH.round] = ['id','날짜','종류','코스','스코어','파','퍼팅','페어웨이','그린적중','OB','벌타','더블이상','파이상','홀별','홀파','메모','분석'];
@@ -639,11 +639,12 @@ function setup() {
  * 칸을 끼우면 그 자리 오른쪽 값이 통째로 밀리므로 옛 줄도 어긋나지 않는다.
  * 한 번 끝내면 기록을 남겨 두고 다시 보지 않는다.
  */
-var SCHEMA_V = 'round-holes-1';
+var SCHEMA_V = 'round-holes-2';
 function migrate_() {
   var pr = PropertiesService.getScriptProperties();
   if (pr.getProperty('SCHEMA_DONE') === SCHEMA_V) return;
   ensureCols_(SH.round);
+  ensureCols_(SH.club);
   pr.setProperty('SCHEMA_DONE', SCHEMA_V);
 }
 function ensureCols_(name) {
@@ -775,8 +776,20 @@ function n_(v) {
 /* ───────────────────────── 앱이 부르는 함수들 ───────────────────────── */
 
 /** 화면을 처음 열 때 한 번. 전부 내려준다. */
+/** 시트 한 칸에 담긴 문답을 목록으로 되돌린다. 깨져 있으면 빈 목록. */
+function qaList_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return [];
+  try {
+    var a = JSON.parse(s);
+    if (!a || !a.length) return [];
+    return a.filter(function (x) { return x && x.q; }).slice(-5);
+  } catch (e) { return []; }
+}
+
 function apiLoad() {
   [SH.club, SH.shot, SH.log, SH.round, SH.cfg].forEach(function (n) { ensureOwnerCol_(n); });
+  migrate_();
   var clubs = rows_(SH.club).map(function (r) {
     return {
       id: r.id, order: n_(r['순서']) || 0, name: r['이름'], cat: r['분류'],
@@ -785,7 +798,7 @@ function apiLoad() {
       bought: r['구입시기'], spare: r['예비'] === true || r['예비'] === 'Y' || r['예비'] === 'y',
       note: r['메모'], spec: r['클럽특성'],
       issues: String(r['점검사항'] || '').split('\n').filter(function (x) { return x.trim(); }),
-      drill: r['연습법']
+      drill: r['연습법'], qa: qaList_(r['문답'])
     };
   }).sort(function (a, b) { return a.order - b.order; });
 
@@ -819,7 +832,6 @@ function apiLoad() {
     };
   }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
 
-  migrate_();
   var rounds = rows_(SH.round).map(function (r) {
     return {
       id: r.id, date: fmtDate_(r['날짜']), type: r['종류'] === '필드' ? 'field' : 'screen',
@@ -863,12 +875,14 @@ function fmtDate_(v) {
 
 function apiSaveClub(c) {
   if (!c.id) c.id = uid_('c');
+  migrate_();
   writeRow_(SH.club, {
     id: c.id, '순서': c.order || 0, '이름': c.name || '', '분류': c.cat || 'iron',
     '브랜드': c.brand || '', '모델': c.model || '', '로프트': c.loft == null ? '' : c.loft,
     '샤프트': c.shaft || '', '플렉스': c.flex || '', '길이': c.length || '',
     '구입시기': c.bought || '', '예비': c.spare ? 'Y' : '', '메모': c.note || '',
-    '클럽특성': c.spec || '', '점검사항': (c.issues || []).join('\n'), '연습법': c.drill || ''
+    '클럽특성': c.spec || '', '점검사항': (c.issues || []).join('\n'), '연습법': c.drill || '',
+    '문답': (c.qa && c.qa.length) ? JSON.stringify(c.qa.slice(-5)) : ''
   });
   return c.id;
 }

@@ -339,7 +339,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0,
+  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -1232,6 +1232,8 @@ function sheetClub(){
   if(c.drill) h+='<div class="ai" style="margin-top:12px"><div class="hd">맞춤 연습법</div>'+esc(c.drill)+'</div>';
   h+='</div>';
 
+  h+=clubAskCard(c);
+
   h+='<div class="row" style="margin-top:14px"><button class="btn primary" style="flex:1" data-act="saveClub">저장</button>'
    +(isNew?'':'<button class="btn" data-act="delClub" data-id="'+esc(c.id)+'">삭제</button>')+'</div>';
   return h;
@@ -1393,6 +1395,51 @@ function sheetRound(){
 }
 
 /* ====================== 동작 ====================== */
+function askClubNow(){
+  var c=S.sheet&&S.sheet.data; if(!c) return;
+  var q=String(S.qDraft||"").trim();
+  if(!q){ S.msg.cq="무엇을 물어볼지 적거나 위의 질문을 눌러 주세요."; render(); return; }
+  if(!ready.ai){ S.msg.cq="AI 키가 아직 없습니다. 스크립트 편집기에서 setGeminiKey 를 한 번 실행하세요."; render(); return; }
+  S.msg.cq=null;
+
+  var lb=lastBlockFor(c.id);
+  var bb=clubBest(c.id);
+  var hist=clubSeries(c.id,"carry");
+  var T=TARGET[tkey(c)];
+  var gaps=bagGaps().map(function(r){ return r.c.name+" "+(r.loft!=null?r.loft+"도 ":"")+r1(r.carry)+"m"; }).join(" / ");
+  var lastR=S.rounds&&S.rounds[0];
+
+  var p=profileText()+"\n\n아래 클럽 하나에 대한 질문입니다.\n"
+   +"클럽: "+[c.name,c.brand,c.model,(c.loft?c.loft+"도":""),c.shaft,c.flex,(c.length?c.length+"인치":""),
+             (c.bought?("구입 "+c.bought):""),(c.spare?"예비":"")].filter(Boolean).join(" / ")
+   +(c.note?("\n메모: "+c.note):"")
+   +"\n최근 10회 평균: "+(lb?metricSummary(lb.m):"측정 기록 없음")
+   +(bb?("\n이 클럽 최고 캐리: "+bb.carry+"m"):"")
+   +"\n측정 횟수: "+hist.length+"회"
+   +(T?("\n이 클럽의 목표: 캐리 "+T.carry[0]+"~"+T.carry[1]+"m, 발사각 "+T.launch[0]+"~"+T.launch[1]+"도, 백스핀 "+T.back[0]+"~"+T.back[1]+", 좌우 편차 "+T.width[1]+"m 이하"):"")
+   +(c.spec?("\n이전 진단: "+c.spec):"")
+   +(c.issues&&c.issues.length?("\n점검할 점: "+c.issues.join(" / ")):"")
+   +(gaps?("\n가방 전체(긴 것부터): "+gaps):"")
+   +(lastR&&lastR.score!=null?("\n최근 라운드: "+lastR.date+" "+lastR.score+"타"+(lastR.par?("(파 "+lastR.par+")"):"")):"")
+   +(function(){
+      var prev=(c.qa||[]).slice(-2);
+      if(!prev.length) return "";
+      return "\n\n앞서 주고받은 문답\n"+prev.map(function(x){ return "질문: "+x.q+"\n답: "+x.a; }).join("\n");
+    })()
+   +"\n\n질문: "+q
+   +"\n\n위 기록만 근거로 답하세요. 기록에 없는 숫자는 만들지 말고 '측정이 없다'고 쓰세요. "
+   +"결론을 첫 문장에 쓰고, 근거가 되는 숫자를 함께 적으세요. 마지막 줄은 다음 연습에서 확인할 것 한 가지. "
+   +"300자 이내, 머리말 없이 바로 시작.";
+
+  ask("cq",p,{modelTier:"default"}).then(function(t){
+    var c2=S.sheet&&S.sheet.data; if(!c2) return;
+    c2.qa=(c2.qa||[]).concat([{q:q,a:t,at:fmtDate(today())}]).slice(-5);
+    S.qDraft="";
+    if(c2.id) put("clubs",c2,true);
+    render();
+  }).catch(function(){});
+}
+
 function readClubForm(c){
   function g(id){ var e=document.getElementById(id); return e?e.value.trim():""; }
   c.name=g("cf_name")||c.name||"이름 없는 클럽";
@@ -1400,7 +1447,41 @@ function readClubForm(c){
   c.brand=g("cf_brand"); c.model=g("cf_model"); c.shaft=g("cf_shaft"); c.flex=g("cf_flex");
   c.length=g("cf_len"); c.bought=g("cf_bought"); c.note=g("cf_note");
   var sp=document.getElementById("cf_spare"); c.spare=sp?sp.checked:false;
+  var qe=document.getElementById("cf_q"); if(qe) S.qDraft=qe.value;
   return c;
+}
+
+/* 클럽마다 자주 묻는 것들 — 눌러서 바로 물어본다 */
+var ASKQ = {
+  driver:["이 샤프트가 내 스윙에 맞나","로프트를 올려야 하나 내려야 하나","거리를 10m 늘릴 방법","지금 바꿀 때인가"],
+  wood:["페어웨이에서 띄우는 법","하이브리드와 역할이 겹치나","이 샤프트가 맞나"],
+  hybrid:["아이언 대신 어디서 쓸까","띄우려면 뭘 바꿀까","이 로프트가 간격에 맞나"],
+  iron:["이 아이언이 내 스윙에 맞나","로프트·라이각 점검이 필요한가","번호 사이 거리 간격이 비어 있나","뒤땅이 나는 이유"],
+  wedge:["이 로프트로 몇 m까지 보낼 수 있나","풀스윙과 하프스윙 거리 차이","벙커에서 바운스가 맞나"],
+  putter:["이 길이가 내 키에 맞나","짧은 거리 미스를 줄이는 법","로프트·라이각 점검이 필요한가"]
+};
+
+function clubAskCard(c){
+  var qs=ASKQ[c.cat]||ASKQ.iron;
+  var h='<div class="card" style="margin-top:12px"><div class="eyebrow">이 클럽에 물어보기</div>';
+  h+='<p class="muted" style="margin:6px 0 10px">이 클럽 스펙과 내 측정 기록, 가방 구성을 함께 보고 답합니다.</p>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px">'
+   + qs.map(function(q){ return '<button class="chip acc" style="cursor:pointer;border:0" data-act="askPreset" data-q="'+esc(q)+'">'+esc(q)+'</button>'; }).join("")
+   +'</div>';
+  h+='<textarea id="cf_q" style="min-height:58px;margin-top:10px" placeholder="직접 물어도 됩니다. 예) 이 샤프트가 지금 내 스윙 속도에 무겁지 않나">'+esc(S.qDraft||"")+'</textarea>';
+  h+='<button class="btn full" style="margin-top:8px" data-act="askClub"'+(S.busy.cq?" disabled":"")+'>'
+   +(S.busy.cq?'<span class="spin"></span> 답 만드는 중':'물어보기')+'</button>';
+  if(S.msg.cq) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.cq)+'</div>';
+  var qa=c.qa||[];
+  qa.slice().reverse().forEach(function(x,i){
+    h+='<div class="ai" style="margin-top:12px"><div class="hd">'+esc(x.q)+'</div>'+esc(x.a)
+     +'<div class="tiny" style="margin-top:8px;color:var(--fg3)">'+esc(x.at||"")+'</div></div>';
+  });
+  if(qa.length){
+    h+='<button class="btn ghost sm full" style="margin-top:10px" data-act="clearQA">문답 지우기</button>';
+    h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">최근 5개까지 이 클럽에 함께 저장됩니다.</p>';
+  }
+  return h+'</div>';
 }
 /* 홀별 타수를 더하고 파 대비를 센다. */
 function holeTally(r){
@@ -1758,8 +1839,10 @@ document.addEventListener("click",function(ev){
 
   /* --- 탐색 --- */
   if(a==="openClub"){ var c=S.clubs.filter(function(x){return x.id===el.getAttribute("data-id");})[0];
-    if(c){ S.sheet={kind:"club",data:JSON.parse(JSON.stringify(c))}; S.msg.diag=null; S.msg.drill=null; render(); } return; }
-  if(a==="addClub"){ clearPick(); S.sheet={kind:"club",data:{cat:"iron"}}; S.msg.diag=null; render(); return; }
+    if(c){ S.sheet={kind:"club",data:JSON.parse(JSON.stringify(c))};
+      S.msg.diag=null; S.msg.drill=null; S.msg.cq=null; S.qDraft=""; render(); } return; }
+  if(a==="addClub"){ clearPick(); S.sheet={kind:"club",data:{cat:"iron"}};
+    S.msg.diag=null; S.msg.cq=null; S.qDraft=""; render(); return; }
   if(a==="seedClubs"){
     if(S.busy.seed) return;
     S.busy.seed=true; render();
@@ -1837,6 +1920,25 @@ document.addEventListener("click",function(ev){
       d.issues=rest.split("\n").map(function(x){return x.replace(/^[-•\s]+/,"").trim();}).filter(function(x){return x.length>3;});
       render();
     }).catch(function(){});
+    return;
+  }
+
+  if(a==="askPreset"){
+    readClubForm(S.sheet.data);
+    S.qDraft=el.getAttribute("data-q")||"";
+    askClubNow();
+    return;
+  }
+  if(a==="askClub"){
+    readClubForm(S.sheet.data);
+    askClubNow();
+    return;
+  }
+  if(a==="clearQA"){
+    var cz=readClubForm(S.sheet.data);
+    cz.qa=[];
+    if(cz.id) put("clubs",cz,true);
+    render();
     return;
   }
 
