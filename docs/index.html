@@ -325,6 +325,7 @@ var METRICS = [
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
+  fromCache:false, cacheAt:0, syncing:false, cfgRaw:null,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -402,18 +403,65 @@ function applyCfg(cfg){
     TARGET[k]=t;
   });
 }
-function loadAll(){
+/* 기록은 구글 시트가 원본이다. 다만 열 때마다 서버를 깨우고 시트를 다 읽느라
+   몇 초를 기다리게 된다. 그래서 마지막으로 받은 내용을 이 기기에 한 벌 베껴 두고,
+   열자마자 그것부터 보여준 뒤 뒤에서 조용히 새로 받아 맞춘다.
+   베껴 둔 것은 어디까지나 사본이고, 기준은 늘 시트다. */
+var CACHE_KEY="swinglog.cache";
+
+function putCache(d){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({at:Date.now(), d:d})); }catch(e){}
+}
+function getCache(){
+  try{
+    var raw=localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    var o=JSON.parse(raw);
+    return (o&&o.d)?o:null;
+  }catch(e){ return null; }
+}
+function dropCache(){ try{ localStorage.removeItem(CACHE_KEY); }catch(e){} }
+
+/** 화면에 있는 내용을 이 기기 사본에 그대로 반영한다 */
+function syncCache(){
+  putCache({clubs:S.clubs, sessions:S.sessions, rounds:S.rounds,
+            cfg:S.cfgRaw||null, hasAI:ready.ai, sheetUrl:S.sheetUrl});
+}
+
+function applyPayload(d){
+  function byDate(a,b){ return String(b.date||"").localeCompare(String(a.date||"")); }
+  S.clubs=(d.clubs||[]).sort(function(a,b){ return (a.order||0)-(b.order||0); });
+  S.sessions=(d.sessions||[]).sort(byDate);
+  S.rounds=(d.rounds||[]).sort(byDate);
+  applyCfg(d.cfg);
+  S.cfgRaw=d.cfg||null;
+  ready.ai=!!d.hasAI; ready.img=!!d.hasAI;
+  S.sheetUrl=d.sheetUrl||"";
+}
+
+/** 베껴 둔 사본으로 화면을 먼저 채운다. 있으면 true. */
+function showCached(){
+  var c=getCache();
+  if(!c) return false;
+  applyPayload(c.d);
+  S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null;
+  S.loaded=true; S.fromCache=true; S.cacheAt=c.at;
+  return true;
+}
+
+function loadAll(quiet){
+  if(quiet) S.syncing=true;
   return call("apiLoad").then(function(d){
-    function byDate(a,b){ return String(b.date||"").localeCompare(String(a.date||"")); }
-    S.clubs=(d.clubs||[]).sort(function(a,b){ return (a.order||0)-(b.order||0); });
-    S.sessions=(d.sessions||[]).sort(byDate);
-    S.rounds=(d.rounds||[]).sort(byDate);
-    applyCfg(d.cfg);
-    ready.ai=!!d.hasAI; ready.img=!!d.hasAI;
-    S.sheetUrl=d.sheetUrl||"";
+    applyPayload(d);
+    putCache(d);
     S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null;
-    S.loaded=true; if(S.loadTimer) clearTimeout(S.loadTimer); setTimeout(render,0);
+    S.loaded=true; S.fromCache=false; S.syncing=false;
+    if(S.loadTimer) clearTimeout(S.loadTimer); setTimeout(render,0);
   }).catch(function(e){
+    S.syncing=false;
+    if(S.fromCache){            /* 사본이 떠 있으면 화면을 비우지 않는다 */
+      S.conn.err=null; S.loaded=true; render(); return;
+    }
     S.conn.tried=true; S.conn.err=errMsg(e); S.loaded=true;
     if(S.loadTimer) clearTimeout(S.loadTimer); render();
   });
@@ -428,13 +476,14 @@ function put(name,obj,quiet){
     if(!hit) arr.unshift(obj);
     if(name==="clubs") arr.sort(function(a,b){return (a.order||0)-(b.order||0);});
     else arr.sort(function(a,b){return String(b.date||"").localeCompare(String(a.date||""));});
+    syncCache();
     if(!quiet) render();
   }).catch(function(e){ flash("시트에 저장하지 못했습니다. "+errMsg(e)); });
 }
 function del(name,id){
   var fn = name==="clubs" ? "apiDeleteClub" : name==="sessions" ? "apiDeleteSession" : "apiDeleteRound";
   return call(fn,id).then(function(){
-    S[name]=S[name].filter(function(x){return x.id!==id;}); render();
+    S[name]=S[name].filter(function(x){return x.id!==id;}); syncCache(); render();
   }).catch(function(e){ flash("삭제하지 못했습니다. "+errMsg(e)); });
 }
 function flash(t){ S.msg.flash=t; render(); setTimeout(function(){ if(S.msg.flash===t){ S.msg.flash=null; render(); } },4200); }
@@ -574,7 +623,8 @@ function render(){
   var sub=document.getElementById("sub");
   sub.textContent = !S.loaded ? "불러오는 중"
     : !connOK() ? "구글 시트에 연결되지 않음"
-    : (S.clubs.length+"개 클럽 · 연습 "+S.sessions.length+"회 · 라운드 "+S.rounds.length+"회");
+    : (S.clubs.length+"개 클럽 · 연습 "+S.sessions.length+"회 · 라운드 "+S.rounds.length+"회"
+       + (S.syncing ? " · 맞추는 중" : ""));
   var h = "";
   if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
   h += connCard();
@@ -1752,7 +1802,7 @@ document.addEventListener("click",function(ev){
     var tk=getToken();
     S.lock.need=true; S.lock.mode="login"; S.lock.err=null; S.lock.focused=false;
     S.lock.id=pref("remember",true)?savedName():"";
-    saveToken(""); render();
+    saveToken(""); dropCache(); render();
     if(tk) call("apiLock",tk).catch(function(){});
     return;
   }
@@ -2231,6 +2281,8 @@ function gate(){
 
 function boot(){
   S.conn.tried=true;
+  var had=showCached();
+  if(had) render();              /* 기다리지 않고 바로 보여준다 */
   /* 잠금을 푼 뒤부터 센다. 페이지가 열린 시각부터 재면 잠금 화면에 머문 시간까지 포함돼
      한 번 지나가 버리고, 그 뒤로는 영영 아무 말도 하지 않게 된다. */
   if(S.loadTimer) clearTimeout(S.loadTimer);
@@ -2240,7 +2292,7 @@ function boot(){
     if(!S.conn.err) S.conn.err="시트가 20초 동안 답하지 않았습니다. 다시 연결을 눌러 주세요.";
     S.loaded=true; render();
   },20000);
-  return loadAll();
+  return loadAll(had);
 }
 function reconnect(){
   S.conn.retrying=true; S.conn.err=null; render();
