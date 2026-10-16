@@ -566,8 +566,11 @@ function useModel() {
 /** 혼잡 표시를 전부 지운다. */
 function clearBusy() {
   var props = PropertiesService.getScriptProperties(), n = 0;
-  props.getKeys().forEach(function (k) { if (k.indexOf('BUSY_') === 0) { props.deleteProperty(k); n++; } });
-  var txt = '혼잡 표시 ' + n + '개를 지웠습니다.';
+  props.getKeys().forEach(function (k) {
+    if (k.indexOf('BUSY_') === 0 || k.indexOf('NOTHINK_') === 0) { props.deleteProperty(k); n++; }
+  });
+  props.deleteProperty('GEMINI_MODEL_OK');
+  var txt = '혼잡·설정 표시 ' + n + '개를 지웠습니다. 모델 선택도 처음으로 돌렸습니다.';
   Logger.log(txt); return txt;
 }
 
@@ -1080,15 +1083,20 @@ function model_(refresh) {
  *  - 뱉는 양: JSON 으로 못 박고 길이를 줄이면 생성이 짧게 끝난다.
  *  - 보내는 양: 사진을 작게 줄이는 건 화면 쪽에서 한다.
  */
-function callModel_(name, parts, key, heavy) {
+/**
+ * plain 이면 온도와 길이만 담아 보낸다.
+ * 모델마다 받아주는 설정이 달라서, 거부당하면 맨몸으로 한 번 더 두드린다.
+ */
+function callModel_(name, parts, key, heavy, plain) {
   var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + name +
             ':generateContent?key=' + encodeURIComponent(key);
   var cfg = { temperature: 0, maxOutputTokens: heavy ? 700 : 2048 };
-  if (heavy) cfg.responseMimeType = 'application/json';
-
-  /* 이 모델이 '생각 끄기'를 받아주지 않는다고 확인됐으면 빼고 보낸다 */
-  var noThink = PropertiesService.getScriptProperties().getProperty('NOTHINK_' + name);
-  if (!noThink) cfg.thinkingConfig = { thinkingBudget: 0 };
+  if (!plain) {
+    if (heavy) cfg.responseMimeType = 'application/json';
+    /* 이 모델이 '생각 끄기'를 받아주지 않는다고 확인됐으면 빼고 보낸다 */
+    var noThink = PropertiesService.getScriptProperties().getProperty('NOTHINK_' + name);
+    if (!noThink) cfg.thinkingConfig = { thinkingBudget: 0 };
+  }
 
   return UrlFetchApp.fetch(url, {
     method: 'post',
@@ -1125,6 +1133,7 @@ function gemini_(parts) {
   }
 
   var busy = [];      /* 혼잡으로 비킨 모델 */
+  var refused = [];   /* 요청을 거부한 모델 */
   var lastMsg = '';
 
   /* 사진이 붙은 호출은 한 번이 20~40초로 무겁다.
@@ -1149,6 +1158,7 @@ function gemini_(parts) {
 
   for (var i = 0; i < list.length && i < maxModels; i++) {
     var name = list[i];
+    var triedPlain = false;
     for (var tryNo = 0; tryNo < maxTries; tryNo++) {
       var res = callModel_(name, parts, key, heavy);
       var code = res.getResponseCode();
@@ -1171,23 +1181,23 @@ function gemini_(parts) {
       var msg = errMsg_(body);
       lastMsg = code + ' ' + msg;
 
-      /* 이 모델이 '생각 끄기'나 JSON 지정을 모르면, 그 설정만 빼고 같은 모델로 즉시 한 번 더 */
-      if (code === 400 && /thinking|thinkingConfig|responseMimeType|Unknown name|not supported/i.test(msg)) {
-        if (!props.getProperty('NOTHINK_' + name)) {
-          props.setProperty('NOTHINK_' + name, '1');
-          res = callModel_(name, parts, key, false);
-          code = res.getResponseCode();
-          body = res.getContentText();
-          if (code === 200) {
-            var j2 = JSON.parse(body);
-            var c2 = j2.candidates && j2.candidates[0];
-            var t2 = c2 && c2.content && c2.content.parts &&
-                     c2.content.parts.map(function (p) { return p.text || ''; }).join('');
-            if (t2) { props.setProperty('GEMINI_MODEL_OK', name); return t2.trim(); }
-          }
-          msg = errMsg_(body);
-          lastMsg = code + ' ' + msg;
+      /* 거부(400)는 설정 탓일 때가 많다. 구글이 이유를 '잘못된 인자'라고만 할 때도 있어
+         문구를 따지지 않고, 설정을 모두 뺀 맨몸으로 같은 모델에 한 번 더 보낸다. */
+      if (code === 400 && !/API key|API_KEY/i.test(msg) && !triedPlain) {
+        triedPlain = true;
+        props.setProperty('NOTHINK_' + name, '1');
+        res = callModel_(name, parts, key, heavy, true);
+        code = res.getResponseCode();
+        body = res.getContentText();
+        if (code === 200) {
+          var j2 = JSON.parse(body);
+          var c2 = j2.candidates && j2.candidates[0];
+          var t2 = c2 && c2.content && c2.content.parts &&
+                   c2.content.parts.map(function (p) { return p.text || ''; }).join('');
+          if (t2) { props.setProperty('GEMINI_MODEL_OK', name); return t2.trim(); }
         }
+        msg = errMsg_(body);
+        lastMsg = code + ' ' + msg;
       }
 
       /* 혼잡·일시 오류 */
@@ -1203,7 +1213,8 @@ function gemini_(parts) {
       /* 키 문제는 모델을 바꿔도 소용없다 */
       if (code === 403) throw new Error('키 권한 문제입니다. ' + (msg || '키를 다시 발급해 보세요.'));
       if (code === 400 && /API key|API_KEY/i.test(msg)) throw new Error('키가 올바르지 않습니다. 다시 넣어 주세요.');
-      if (code === 400) throw new Error('요청이 거부됐습니다. ' + msg);
+      /* 한 모델이 거부했다고 끝이 아니다. 다음 모델이 받아주는 경우가 많다. */
+      if (code === 400) { refused.push(name); break; }
       break;                                    /* 그 밖의 오류 — 다음 모델 */
     }
   }
@@ -1212,6 +1223,10 @@ function gemini_(parts) {
     throw new Error('구글 모델 ' + busy.length + '개가 모두 혼잡합니다(' + busy.join(', ') + '). ' +
                     '지금은 구글 쪽 사정이라 기다리는 수밖에 없습니다. ' +
                     '1~2분 뒤 다시 누르시거나, 아래 칸에 직접 넣어 주세요.');
+  }
+  if (refused.length) {
+    throw new Error('구글이 요청을 거부했습니다(' + refused.join(', ') + '). ' +
+                    '마지막 응답: ' + lastMsg + ' — 편집기에서 clearBusy 를 실행한 뒤 다시 눌러 보세요.');
   }
   throw new Error('읽어내지 못했습니다. ' + lastMsg);
 }
