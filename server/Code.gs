@@ -24,7 +24,7 @@ var HEAD = {};
 HEAD[SH.club]  = ['id','순서','이름','분류','브랜드','모델','로프트','샤프트','플렉스','길이','구입시기','예비','메모','클럽특성','점검사항','연습법'];
 HEAD[SH.shot]  = ['id','연습id','날짜','클럽id','클럽명','비거리','캐리','최고높이','볼스피드','발사각','방향각','사이드스핀','백스핀','앞뒤편차','좌우편차','안착률','등급','기준안','부족한점','코칭'];
 HEAD[SH.log]   = ['id','날짜','준비운동','마무리운동','느낀점','코칭','기록시각'];
-HEAD[SH.round] = ['id','날짜','종류','코스','스코어','파','퍼팅','페어웨이','그린적중','OB','벌타','더블이상','파이상','메모','분석'];
+HEAD[SH.round] = ['id','날짜','종류','코스','스코어','파','퍼팅','페어웨이','그린적중','OB','벌타','더블이상','파이상','홀별','홀파','메모','분석'];
 HEAD[SH.cfg]   = ['클럽키','이름','캐리최소','캐리최대','발사각최소','발사각최대','백스핀최소','백스핀최대','좌우편차최대','앞뒤편차최대','방향각허용'];
 
 /* 여러 사람이 쓰므로 모든 줄에 주인을 적는다. 기존 시트에는 맨 뒤에 덧붙는다. */
@@ -93,7 +93,8 @@ function dispatch_(fn) {
     apiSaveSession: apiSaveSession, apiDeleteSession: apiDeleteSession,
     apiSaveRound: apiSaveRound, apiDeleteRound: apiDeleteRound,
     apiSetKey: apiSetKey, apiClearKey: apiClearKey,
-    apiAsk: apiAsk, apiReadShot: apiReadShot, apiReadClub: apiReadClub
+    apiAsk: apiAsk, apiReadShot: apiReadShot, apiReadClub: apiReadClub,
+    apiReadRound: apiReadRound
   };
   return map[fn] || null;
 }
@@ -633,6 +634,32 @@ function setup() {
  * 예전에 만든 시트에는 주인 칸이 없다. 한 번만 덧붙이고,
  * 이미 들어 있던 줄은 전부 첫 번째 사용자 것으로 넘긴다.
  */
+/**
+ * 이미 쓰고 있는 시트에 HEAD 에만 있는 칸을 끼워 넣는다.
+ * 칸을 끼우면 그 자리 오른쪽 값이 통째로 밀리므로 옛 줄도 어긋나지 않는다.
+ * 한 번 끝내면 기록을 남겨 두고 다시 보지 않는다.
+ */
+var SCHEMA_V = 'round-holes-1';
+function migrate_() {
+  var pr = PropertiesService.getScriptProperties();
+  if (pr.getProperty('SCHEMA_DONE') === SCHEMA_V) return;
+  ensureCols_(SH.round);
+  pr.setProperty('SCHEMA_DONE', SCHEMA_V);
+}
+function ensureCols_(name) {
+  var sh = sheet_(name);
+  var head = HEAD[name];
+  var width = sh.getLastColumn();
+  if (!width) return;
+  var cur = sh.getRange(1, 1, 1, width).getValues()[0].map(function (v) { return String(v); });
+  for (var i = 0; i < head.length; i++) {
+    if (cur.indexOf(head[i]) >= 0) continue;
+    sh.insertColumnBefore(i + 1);
+    sh.getRange(1, i + 1).setValue(head[i]).setFontWeight('bold').setBackground('#efede7');
+    cur.splice(i, 0, head[i]);
+  }
+}
+
 function ensureOwnerCol_(name) {
   var sh = sheet_(name);
   var head = HEAD[name];
@@ -682,7 +709,7 @@ function rows_(name) {
   if (last < 2) return [];
   var head = HEAD[name];
   var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
-  var oc = head.length - 1;                    /* 주인 칸 위치 */
+  var oc = head.indexOf(OWNER);                /* 주인 칸 위치 — 이름으로 찾는다 */
   var mine = (name !== SH.user) && !!CUR_UID;
   var out = [];
   for (var i = 0; i < vals.length; i++) {
@@ -792,12 +819,15 @@ function apiLoad() {
     };
   }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
 
+  migrate_();
   var rounds = rows_(SH.round).map(function (r) {
     return {
       id: r.id, date: fmtDate_(r['날짜']), type: r['종류'] === '필드' ? 'field' : 'screen',
       course: r['코스'], score: n_(r['스코어']), par: n_(r['파']), putts: n_(r['퍼팅']),
       fw: n_(r['페어웨이']), gir: n_(r['그린적중']), ob: n_(r['OB']), penalty: n_(r['벌타']),
-      dbl: n_(r['더블이상']), parOrBetter: n_(r['파이상']), note: r['메모'] || '', analysis: r['분석'] || ''
+      dbl: n_(r['더블이상']), parOrBetter: n_(r['파이상']),
+      holes: strList_(r['홀별']), pars: strList_(r['홀파']),
+      note: r['메모'] || '', analysis: r['분석'] || ''
     };
   }).sort(function (a, b) { return String(b.date).localeCompare(String(a.date)); });
 
@@ -844,6 +874,36 @@ function apiSaveClub(c) {
 }
 function apiDeleteClub(id) { return delRow_(SH.club, id); }
 
+/**
+ * 같은 분류의 클럽에 구입 시기를 한 번에 적는다.
+ * 아래 cat 과 when 두 줄만 고쳐 편집기에서 실행한다. 재배포는 필요 없다.
+ * cat: driver | wood | hybrid | iron | wedge | putter  (전부면 'all')
+ */
+function setBought() {
+  var cat  = 'iron';
+  var when = '2026년 6월 7일';
+
+  var sh = sheet_(SH.club);
+  var last = sh.getLastRow();
+  if (last < 2) return '클럽이 없습니다.';
+  var head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  var cCat = head.indexOf('분류') + 1, cWhen = head.indexOf('구입시기') + 1, cName = head.indexOf('이름') + 1;
+  if (!cCat || !cWhen) return '클럽 시트에 분류 또는 구입시기 칸이 없습니다.';
+
+  var rows = sh.getRange(2, 1, last - 1, sh.getLastColumn()).getValues();
+  var hit = [];
+  for (var i = 0; i < rows.length; i++) {
+    var c = String(rows[i][cCat - 1] || '').trim();
+    if (cat !== 'all' && c !== cat) continue;
+    sh.getRange(i + 2, cWhen).setValue(when);
+    hit.push(String(rows[i][cName - 1] || ''));
+  }
+  var msg = hit.length ? (hit.length + '개에 "' + when + '" 를 적었습니다: ' + hit.join(', '))
+                       : ('분류가 ' + cat + ' 인 클럽이 없습니다.');
+  Logger.log(msg);
+  return msg;
+}
+
 function apiSaveSession(s) {
   if (!s.id) s.id = uid_('s');
   writeRow_(SH.log, {
@@ -880,6 +940,7 @@ function apiDeleteSession(id) {
 
 function apiSaveRound(r) {
   if (!r.id) r.id = uid_('r');
+  migrate_();
   writeRow_(SH.round, {
     id: r.id, '날짜': r.date, '종류': r.type === 'field' ? '필드' : '스크린', '코스': r.course || '',
     '스코어': r.score == null ? '' : r.score, '파': r.par == null ? '' : r.par,
@@ -887,11 +948,31 @@ function apiSaveRound(r) {
     '그린적중': r.gir == null ? '' : r.gir, 'OB': r.ob == null ? '' : r.ob,
     '벌타': r.penalty == null ? '' : r.penalty, '더블이상': r.dbl == null ? '' : r.dbl,
     '파이상': r.parOrBetter == null ? '' : r.parOrBetter,
+    '홀별': listStr_(r.holes), '홀파': listStr_(r.pars),
     '메모': r.note || '', '분석': r.analysis || ''
   });
   return r.id;
 }
 function apiDeleteRound(id) { return delRow_(SH.round, id); }
+
+/** [4,5,null,3] → "4,5,,3" — 한 칸에 홀별 타수를 담는다. */
+function listStr_(a) {
+  if (!a || !a.length) return '';
+  return a.map(function (v) { return (v == null || v === '') ? '' : v; }).join(',');
+}
+/** "4,5,,3" → [4,5,null,3] */
+function strList_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (!s) return null;
+  var out = s.split(',').map(function (x) {
+    x = String(x).trim();
+    if (!x) return null;
+    var n = Number(x);
+    return isNaN(n) ? null : n;
+  });
+  var any = out.some(function (x) { return x != null; });
+  return any ? out : null;
+}
 
 /* ───────────────────────── AI (선택) ───────────────────────── */
 
@@ -1231,6 +1312,35 @@ function testPhotoSpeed() {
             '응답: ' + out;
   Logger.log(txt);
   return txt;
+}
+
+/**
+ * 라운드 결과 화면이나 스코어카드에서 점수를 읽는다.
+ * 스크린골프 결과 화면은 숫자가 또렷해 잘 읽히고, 손으로 쓴 종이는 덜 읽힌다.
+ */
+function apiReadRound(dataUrl) {
+  var t0 = Date.now();
+  var m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
+  if (!m) throw new Error('사진을 읽을 수 없는 형식입니다.');
+  var kb = Math.round(String(dataUrl).length * 0.75 / 1024);
+  var prompt =
+    '골프 라운드 결과 화면 또는 스코어카드다. 적힌 값만 읽어라. 없으면 null. 추정 금지.\n' +
+    'course=코스/골프장 이름, date=날짜 YYYY-MM-DD, kind="screen"(스크린골프) 또는 "field"\n' +
+    'holes=홀별 타수를 1번 홀부터 순서대로 담은 배열(OUT 9개 뒤에 IN 9개). 안 보이는 홀은 null\n' +
+    'pars=홀별 파를 같은 순서로 담은 배열. 파 줄이 없으면 null\n' +
+    'score=총 타수, par=코스 총 파, putts=총 퍼팅 수,\n' +
+    'fw=페어웨이 안착 홀 수, gir=그린 적중 홀 수, ob=OB 개수, penalty=벌타 개수\n' +
+    '퍼센트로만 적혀 있으면 null. 홀별 타수를 더한 값이 총 타수와 다르면 화면에 적힌 총 타수를 score 로 둔다.\n' +
+    'JSON 하나만 출력. 설명 금지.';
+  var txt = gemini_([
+    { text: prompt },
+    { inline_data: { mime_type: m[1], data: m[2] } }
+  ]);
+  var out = pickJson_(txt);
+  out._ms = Date.now() - t0;
+  out._kb = kb;
+  out._model = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL_OK') || '';
+  return out;
 }
 
 /** 클럽 사진에서 스펙을 읽는다. */

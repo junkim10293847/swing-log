@@ -221,6 +221,19 @@ body.locked > :not(#lockHost){display:none !important}
   -webkit-tap-highlight-color:transparent}
 .opt input{width:17px;height:17px;accent-color:var(--accent);margin:0;cursor:pointer}
 .photoPrev{width:100%;max-height:220px;object-fit:contain;border-radius:12px;background:var(--surface2)}
+.holes{display:grid;grid-template-columns:34px repeat(9,minmax(0,1fr));gap:3px;align-items:center}
+.holes>span{font-size:11px;color:var(--fg3);text-align:center;font-family:var(--fBody)}
+.holes>span.rl{text-align:left;color:var(--fg2);font-weight:600}
+.holes input{padding:6px 0;text-align:center;font-size:14px;border-radius:7px;min-width:0}
+.holes .par{font-size:12px;color:var(--fg3);text-align:center}
+.holeSum{display:flex;gap:14px;margin-top:8px;font-size:12px;color:var(--fg3);font-family:var(--fBody)}
+.holeSum b{color:var(--fg);font-size:13px}
+.hRow{font-size:11px;letter-spacing:.3px;display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.hRow i{font-style:normal;min-width:26px;text-align:center;padding:3px 2px;border-radius:6px;
+  background:var(--surface2);color:var(--fg2);font-family:var(--fBody)}
+.hRow i.bird{background:#DCEBD8;color:#2E5E22}
+.hRow i.bogey{background:#F4E6D2;color:#8A5A14}
+.hRow i.dbl{background:#F6D9D2;color:#9A3412}
 ul.plain{list-style:none;padding:0;margin:6px 0 0}
 ul.plain li{font-size:13px;line-height:1.65;padding-left:14px;position:relative;color:var(--fg2)}
 ul.plain li:before{content:"·";position:absolute;left:3px}
@@ -325,7 +338,8 @@ var METRICS = [
 var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
-  fromCache:false, cacheAt:0, syncing:false, cfgRaw:null,
+  fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
+  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -802,6 +816,27 @@ function viewClubs(){
   h+='<div class="spread"><div><h2 class="sec-title">내 클럽</h2><p class="tiny">사진을 올리면 모델과 스펙을 읽어 채워 넣습니다</p></div>'
    +'<button class="btn primary sm" data-act="addClub">클럽 추가</button></div>';
 
+  /* 같은 분류에 구입 시기를 한 번에 — 세트로 산 클럽은 하나하나 넣을 일이 없다 */
+  if(S.clubs.length){
+    if(!S.openBought){
+      h+='<button class="btn ghost sm" data-act="openBought">구입 시기 일괄 입력</button>';
+    } else {
+      h+='<div class="card"><div class="spread"><div class="eyebrow">구입 시기 일괄 입력</div>'
+       +'<button class="btn ghost sm" data-act="closeBought">접기</button></div>'
+       +'<div class="grid2" style="margin-top:10px">'
+       +'<label class="f">분류<select id="bt_cat">'
+       + [["iron","아이언"],["wedge","웨지"],["hybrid","하이브리드"],["wood","우드"],["driver","드라이버"],["putter","퍼터"],["all","전체"]].map(function(x){
+           return '<option value="'+x[0]+'"'+(x[0]==="iron"?" selected":"")+'>'+x[1]+'</option>'; }).join("")
+       +'</select></label>'
+       +'<label class="f">구입 시기<input type="text" id="bt_when" value="'+esc(S.boughtWhen||"")+'" placeholder="예) 2026년 6월 7일"></label>'
+       +'</div>'
+       +'<button class="btn full" style="margin-top:10px" data-act="applyBought"'+(S.busy.bought?" disabled":"")+'>'
+       +(S.busy.bought?('<span class="spin"></span> 넣는 중 '+(S.boughtDone||0)+'/'+(S.boughtAll||0)):'해당 클럽 전부에 넣기')+'</button>';
+      if(S.msg.bought) h+='<div class="banner '+(S.msg.boughtBad?'bad':'ok')+'" style="margin-top:10px">'+esc(S.msg.bought)+'</div>';
+      h+='</div>';
+    }
+  }
+
   if(!S.clubs.length){
     h+= connOK()
       ? ('<div class="card empty"><h3>등록된 클럽이 없습니다</h3>'
@@ -1027,6 +1062,14 @@ function viewRounds(){
        +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/14")
        +mTile("그린적중",r.gir,"/18")+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
        +mTile("파온 미스",r.gir!=null?(18-r.gir):null,"")+mTile("핸디",r.score!=null&&r.par?(r.score-r.par):null,"")+'</div>';
+      var tl=holeTally(r);
+      if(tl.marks){
+        h+='<div class="hRow" style="margin-top:10px">'+tl.marks+'</div>';
+        h+='<div class="holeSum"><span>OUT <b>'+tl.out+'</b></span><span>IN <b>'+tl.inn+'</b></span>'
+         +'<span>합계 <b>'+tl.sum+'</b></span>'
+         +(tl.dbl?('<span>더블 이상 <b>'+tl.dbl+'</b></span>'):'')
+         +(tl.good?('<span>파 이상 <b>'+tl.good+'</b></span>'):'')+'</div>';
+      }
       if(r.note) h+='<div class="note" style="margin-top:10px">'+esc(r.note)+'</div>';
       h+='<button class="btn sm full" style="margin-top:10px" data-act="analyzeRound" data-id="'+esc(r.id)+'">'
        +(S.busy["rd"+r.id]?'<span class="spin"></span> 분석 중':(r.analysis?'다시 분석':'약점 분석'))+'</button>';
@@ -1310,7 +1353,24 @@ function sheetRound(){
   var h='<div class="spread"><h3 style="font-size:19px">라운드 점수</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
   h+='<div class="stack" style="margin-top:14px">';
-  h+='<div class="grid2"><label class="f">날짜<input type="date" id="rf_date" value="'+esc(r.date||today())+'"></label>'
+  /* 사진이 먼저다. 결과 화면을 올리면 홀별 타수까지 읽는다. */
+  h+='<div class="card"><div class="eyebrow">결과 화면 사진</div>'
+   +'<p class="muted" style="margin:6px 0">스크린골프 결과 화면이나 스코어카드를 올리면 홀별 타수까지 읽어 아래를 채웁니다.</p>'
+   +fileField("roundPhoto","사진 고르기","홀별 표와 총타수가 다 들어가게");
+  if(ready.img){
+    h+='<button class="btn full" style="margin-top:10px" data-act="readRoundPhoto"'+(S.busy.rphoto?" disabled":"")+'>'
+     +(S.busy.rphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' '+(S.sec||0)+'초'):'사진에서 읽기')+'</button>';
+    if(S.busy.rphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">보통 5~15초입니다. 초가 올라가면 돌고 있는 중입니다.</p>';
+  }
+  if(S.msg.rphoto){
+    h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.rphoto)+'</div>';
+    if(ready.img && S.files && S.files.roundPhoto)
+      h+='<button class="btn ghost full" style="margin-top:8px" data-act="readRoundPhoto">고른 사진 그대로 다시 시도</button>';
+  }
+  if(S.note&&S.note.rphoto) h+='<div class="banner ok" style="margin-top:10px">'+esc(S.note.rphoto)+'</div>';
+  h+='</div>';
+
+  h+='<div class="grid2" style="margin-top:12px"><label class="f">날짜<input type="date" id="rf_date" value="'+esc(r.date||today())+'"></label>'
    +'<label class="f">종류<select id="rf_type"><option value="screen"'+(r.type!=="field"?" selected":"")+'>스크린</option>'
    +'<option value="field"'+(r.type==="field"?" selected":"")+'>필드</option></select></label></div>';
   h+='<label class="f">골프장 / 코스<input type="text" id="rf_course" value="'+esc(r.course||"")+'"></label>';
@@ -1325,6 +1385,7 @@ function sheetRound(){
    +'<label class="f">더블 이상<input type="number" class="num" id="rf_dbl" value="'+esc(r.dbl==null?"":r.dbl)+'"></label>'
    +'<label class="f">파 이상<input type="number" class="num" id="rf_par_or_better" value="'+esc(r.parOrBetter==null?"":r.parOrBetter)+'"></label>'
    +'</div>';
+  h+=holeCard(r);
   h+='<label class="f">기억나는 장면 (실수한 홀, 잘된 샷)<textarea id="rf_note" style="min-height:70px">'+esc(r.note||"")+'</textarea></label>';
   h+='</div>';
   h+='<button class="btn primary full" style="margin-top:14px" data-act="saveRound">저장하고 분석</button>';
@@ -1341,6 +1402,74 @@ function readClubForm(c){
   var sp=document.getElementById("cf_spare"); c.spare=sp?sp.checked:false;
   return c;
 }
+/* 홀별 타수를 더하고 파 대비를 센다. */
+function holeTally(r){
+  var hs=r.holes||[], ps=r.pars||[];
+  var o={out:0,inn:0,sum:0,par:0,dbl:0,good:0,marks:"",n:0};
+  for(var i=0;i<18;i++){
+    var v=hs[i], p=ps[i];
+    if(v!=null&&!isNaN(v)){ o.sum+=v; o.n++; if(i<9) o.out+=v; else o.inn+=v; }
+    if(p!=null&&!isNaN(p)) o.par+=p;
+    if(v!=null&&p!=null&&!isNaN(v)&&!isNaN(p)){
+      var d=v-p;
+      if(d>=2) o.dbl++;
+      if(d<=0) o.good++;
+      var cls = d<0?"bird":(d===0?"":(d===1?"bogey":"dbl"));
+      o.marks+='<i class="'+cls+'">'+(d>0?("+"+d):(d<0?String(d):"E"))+'</i>';
+    }
+  }
+  return o;
+}
+
+function holeCard(r){
+  var hs=r.holes||[];
+  var open = S.openHoles || hs.some(function(v){ return v!=null; });
+  if(!open) return '<button class="btn ghost full" data-act="openHoles">홀별 타수 직접 넣기</button>';
+  function nine(from){
+    var o='<div class="holes"><span class="rl">홀</span>', i;
+    for(i=from;i<from+9;i++) o+='<span>'+(i+1)+'</span>';
+    o+='<span class="rl">파</span>';
+    for(i=from;i<from+9;i++) o+='<input type="number" class="par num" id="rp_'+i+'" inputmode="numeric" value="'+esc((r.pars&&r.pars[i]!=null)?r.pars[i]:"")+'">';
+    o+='<span class="rl">타수</span>';
+    for(i=from;i<from+9;i++) o+='<input type="number" class="num" id="rh_'+i+'" inputmode="numeric" value="'+esc(hs[i]==null?"":hs[i])+'">';
+    return o+'</div>';
+  }
+  var t=holeTally(r);
+  var h='<div class="card"><div class="spread"><div class="eyebrow">홀별 타수</div>'
+   +'<button class="btn ghost sm" data-act="closeHoles">접기</button></div>';
+  h+='<div style="margin-top:10px">'+nine(0)+'</div><div style="margin-top:12px">'+nine(9)+'</div>';
+  if(t.n) h+='<div class="holeSum"><span>OUT <b>'+t.out+'</b></span><span>IN <b>'+t.inn+'</b></span>'
+   +'<span>합계 <b>'+t.sum+'</b></span>'+(t.par?('<span>코스 파 '+t.par+'</span>'):'')
+   +(t.n<18?('<span>'+t.n+'홀만 들어옴</span>'):'')+'</div>';
+  if(t.marks) h+='<div class="hRow">'+t.marks+'</div>';
+  h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">사진에서 읽은 값입니다. 틀린 칸만 고치세요. 합계와 파 대비는 저장할 때 다시 계산합니다.</p>';
+  return h+'</div>';
+}
+
+/* 화면에 들어온 라운드 값을 상태로 옮긴다. 다시 그려도 쓴 내용이 남는다. */
+function readRoundForm(r){
+  function g(id){ var e=document.getElementById(id); return e?String(e.value).trim():null; }
+  var v;
+  if((v=g("rf_date"))!=null) r.date=v||today();
+  if((v=g("rf_type"))!=null) r.type=v;
+  if((v=g("rf_course"))!=null) r.course=v;
+  [["rf_score","score"],["rf_par","par"],["rf_putts","putts"],["rf_fw","fw"],["rf_gir","gir"],
+   ["rf_ob","ob"],["rf_pen","penalty"],["rf_dbl","dbl"],["rf_par_or_better","parOrBetter"]]
+   .forEach(function(x){ var e=document.getElementById(x[0]); if(e) r[x[1]]=num(e.value); });
+  if((v=g("rf_note"))!=null) r.note=v;
+  if(document.getElementById("rh_0")){
+    var hs=[],ps=[],anyH=false,anyP=false;
+    for(var i=0;i<18;i++){
+      var hv=num(g("rh_"+i)), pv=num(g("rp_"+i));
+      hs.push(hv); ps.push(pv);
+      if(hv!=null) anyH=true;
+      if(pv!=null) anyP=true;
+    }
+    r.holes=anyH?hs:null; r.pars=anyP?ps:null;
+  }
+  return r;
+}
+
 function readBlockForm(b){
   var sel=document.getElementById("bk_club"); if(sel) b.clubId=sel.value;
   METRICS.forEach(function(x){
@@ -1657,7 +1786,8 @@ document.addEventListener("click",function(ev){
     return;
   }
   if(a==="openSession"){ S.sheet={kind:"session",id:el.getAttribute("data-id")}; render(); return; }
-  if(a==="newRound"){ S.tab="rounds"; S.sheet={kind:"round",data:{date:today(),type:"screen",par:72}}; render(); return; }
+  if(a==="newRound"){ S.tab="rounds"; S.openHoles=false;
+    S.sheet={kind:"round",data:{date:today(),type:"screen",par:72}}; render(); return; }
 
   /* --- 클럽 --- */
   if(a==="saveClub"){
@@ -1724,6 +1854,38 @@ document.addEventListener("click",function(ev){
     ask("drill",p2,{modelTier:"default"}).then(function(t){
       if(S.sheet&&S.sheet.data){ S.sheet.data.drill=t; render(); }
     }).catch(function(){});
+    return;
+  }
+
+  if(a==="openBought"){ S.openBought=true; S.msg.bought=null; render(); return; }
+  if(a==="closeBought"){ S.openBought=false; render(); return; }
+  if(a==="applyBought"){
+    var bcE=document.getElementById("bt_cat"), bwE=document.getElementById("bt_when");
+    var bcat=bcE?bcE.value:"iron", bwhen=bwE?String(bwE.value).trim():"";
+    S.boughtWhen=bwhen;
+    if(!bwhen){ S.msg.bought="구입 시기를 먼저 적어 주세요."; S.msg.boughtBad=true; render(); return; }
+    var targets=S.clubs.filter(function(c){ return bcat==="all" || c.cat===bcat; });
+    if(!targets.length){ S.msg.bought="해당 분류의 클럽이 없습니다."; S.msg.boughtBad=true; render(); return; }
+    S.busy.bought=true; S.msg.bought=null; S.msg.boughtBad=false;
+    S.boughtDone=0; S.boughtAll=targets.length; render();
+    (function step(i){
+      if(i>=targets.length){
+        S.busy.bought=false;
+        S.msg.bought=targets.length+"개에 "+bwhen+" 을 넣었습니다 — "+targets.map(function(c){return c.name;}).join(", ");
+        S.msg.boughtBad=false;
+        syncCache(); render();
+        return;
+      }
+      var c0=targets[i];
+      c0.bought=bwhen;
+      put("clubs",c0,true).then(function(){
+        S.boughtDone=i+1; render(); step(i+1);
+      }).catch(function(e){
+        S.busy.bought=false;
+        S.msg.bought=(c0.name||"클럽")+" 에서 멈췄습니다: "+((e&&e.message)||"저장 실패")+". 다시 눌러 주세요.";
+        S.msg.boughtBad=true; render();
+      });
+    })(0);
     return;
   }
 
@@ -1827,6 +1989,86 @@ document.addEventListener("click",function(ev){
     }).catch(function(e){
       S.busy.key=false;
       S.msg.key=(e&&e.message)||"키를 저장하지 못했습니다.";
+      render();
+    });
+    return;
+  }
+
+  if(a==="openHoles"){ readRoundForm(S.sheet.data); S.openHoles=true; render(); return; }
+  if(a==="closeHoles"){ readRoundForm(S.sheet.data); S.openHoles=false; render(); return; }
+
+  if(a==="readRoundPhoto"){
+    var rf=fileOf("roundPhoto");
+    if(!rf){ S.msg.rphoto="사진을 먼저 고르세요."; render(); return; }
+    readRoundForm(S.sheet.data);
+    S.busy.rphoto=true; S.msg.rphoto=null; S.note.rphoto=null; S.shrunk=null;
+    S.stage="사진 줄이는 중"; S.sec=0; render();
+    (function tick(){
+      if(!S.busy.rphoto) return;
+      S.sec++;
+      if(S.sec===2) S.stage="보내는 중";
+      if(S.sec===5) S.stage="읽는 중";
+      render();
+      setTimeout(tick,1000);
+    })();
+    sample.json("라운드 결과 화면",{images:[rf],modelTier:"default"})
+    .then(function(v){
+      S.busy.rphoto=false; S.stage=null;
+      var r0=S.sheet&&S.sheet.data;
+      if(!r0||!v){ S.msg.rphoto="답이 비어 있습니다. 다시 한 번 눌러 주세요."; render(); return; }
+      var got=[];
+
+      function arr(x){
+        if(!x||!x.length) return null;
+        var out=[],any=false;
+        for(var i=0;i<18;i++){
+          var n2 = (i<x.length) ? num(x[i]) : null;
+          if(n2!=null&&(n2<1||n2>15)) n2=null;          /* 한 홀에 1~15타만 받는다 */
+          out.push(n2); if(n2!=null) any=true;
+        }
+        return any?out:null;
+      }
+      var hs=arr(v.holes), ps=arr(v.pars);
+      if(hs){ r0.holes=hs; S.openHoles=true; got.push("홀별 타수 "+hs.filter(function(x){return x!=null;}).length+"홀"); }
+      if(ps){ r0.pars=ps; }
+
+      if(v.course){ r0.course=String(v.course).slice(0,60); got.push("코스"); }
+      if(v.date&&/^\d{4}-\d{2}-\d{2}$/.test(String(v.date).trim())){ r0.date=String(v.date).trim(); got.push("날짜"); }
+      if(v.kind==="field"||v.kind==="screen") r0.type=v.kind;
+
+      var t=holeTally(r0);
+      [["score","스코어",50,200],["par","파",54,80],["putts","퍼팅",10,60],
+       ["fw","페어웨이",0,14],["gir","그린 적중",0,18],["ob","OB",0,30],["penalty","벌타",0,40]]
+      .forEach(function(x){
+        var n3=num(v[x[0]]);
+        if(n3==null||n3<x[2]||n3>x[3]) return;
+        r0[x[0]==="penalty"?"penalty":x[0]]=n3; got.push(x[1]);
+      });
+
+      /* 홀별이 들어왔으면 합계와 파 대비는 직접 센다. 화면 숫자보다 이게 정확하다. */
+      if(t.n>=18){
+        if(r0.score==null) r0.score=t.sum;
+        if(t.par) r0.par=t.par;
+      }
+      if(t.marks){ r0.dbl=t.dbl; r0.parOrBetter=t.good; got.push("더블 이상/파 이상"); }
+
+      if(!got.length){
+        S.msg.rphoto="읽어낸 값이 없습니다. 홀별 표와 총타수가 한 화면에 또렷하게 들어가도록 다시 찍어 주세요.";
+      } else {
+        S.msg.rphoto=null;
+        var sv = (t.n>=18 && r0.score!=null && t.sum!==r0.score)
+          ? " 홀별 합계는 "+t.sum+"타인데 화면 총타수는 "+r0.score+"타입니다. 둘 중 맞는 쪽으로 고치세요." : "";
+        S.note.rphoto="읽었습니다 — "+got.join(", ")+"."+sv
+          +(v._ms?(" 서버 "+Math.round(v._ms/1000)+"초"+(v._model?" · "+v._model:"")):"");
+      }
+      render();
+    })
+    .catch(function(e){
+      S.busy.rphoto=false; S.stage=null;
+      var em=(e&&e.message)?String(e.message):"";
+      S.msg.rphoto = /알 수 없는 요청/.test(em)
+        ? "서버가 아직 라운드 사진 읽기를 모릅니다. 앱스 스크립트에 새 Code.gs 를 붙여넣고 새 버전으로 배포해 주세요."
+        : (em || "사진을 읽지 못했습니다. 직접 넣어 주세요.");
       render();
     });
     return;
@@ -1942,6 +2184,13 @@ document.addEventListener("click",function(ev){
     r2.score=num(g2("rf_score")); r2.par=num(g2("rf_par")); r2.putts=num(g2("rf_putts"));
     r2.fw=num(g2("rf_fw")); r2.gir=num(g2("rf_gir")); r2.ob=num(g2("rf_ob"));
     r2.penalty=num(g2("rf_pen")); r2.dbl=num(g2("rf_dbl")); r2.parOrBetter=num(g2("rf_par_or_better"));
+    readRoundForm(r2);                                  /* 홀별 표까지 담는다 */
+    var rt=holeTally(r2);
+    if(rt.n>=18){
+      if(r2.score==null) r2.score=rt.sum;
+      if(r2.par==null&&rt.par) r2.par=rt.par;
+    }
+    if(rt.marks){ if(r2.dbl==null) r2.dbl=rt.dbl; if(r2.parOrBetter==null) r2.parOrBetter=rt.good; }
     r2.note=g2("rf_note");
     put("rounds",r2).then(function(){
       S.sheet=null; render();
@@ -1962,10 +2211,19 @@ document.addEventListener("click",function(ev){
       +[["퍼팅",rr.putts],["페어웨이 안착",rr.fw!=null?rr.fw+"/14":null],["그린 적중",rr.gir!=null?rr.gir+"/18":null],
         ["OB",rr.ob],["벌타",rr.penalty],["더블 이상",rr.dbl],["파 이상",rr.parOrBetter]]
         .filter(function(x){return x[1]!=null&&x[1]!=="";}).map(function(x){return x[0]+" "+x[1];}).join(" / ")
+      +(function(){
+         var tz=holeTally(rr);
+         if(!tz.n) return "";
+         var line=[]; for(var i=0;i<18;i++){ if(rr.holes[i]==null) continue;
+           line.push((i+1)+"번 "+rr.holes[i]+(rr.pars&&rr.pars[i]!=null?("/파"+rr.pars[i]):"")); }
+         return "\n홀별 타수: "+line.join(", ")
+           +"\nOUT "+tz.out+" IN "+tz.inn+(tz.dbl?(" / 더블 이상 "+tz.dbl+"홀"):"");
+       })()
       +(rr.note?("\n본인 메모: "+rr.note):"")
       +(lbd?("\n최근 드라이버 연습 10회 평균: "+metricSummary(lbd.m)):"")
       +"\n\n이 스코어에서 타수를 가장 많이 잃은 영역을 숫자로 짚어 주세요. "
       +"퍼팅·그린 적중·페어웨이·벌타 중 어디서 몇 타를 잃었는지 추정하고, 다음 연습에서 손댈 곳 한 군데만 지정하세요. "
+      +"홀별 타수가 있으면 전반과 후반 중 어디서 무너졌는지, 무너진 홀이 몰려 있는지도 짚으세요. "
       +"장비 교체는 답에 넣지 마세요. 400자 이내, 머리말 없이 바로 시작.";
     ask("rd"+rid,p6,{modelTier:"default"}).then(function(t){
       rr.analysis=t; put("rounds",rr,true).then(render);
@@ -2219,7 +2477,8 @@ sample.json = function(prompt,opts){
     try{ return JSON.parse(t); }catch(e){ throw {code:"invalid_json",message:t}; }
   });
   return toDataURLp(f).then(function(u){
-    var fn = /클럽/.test(prompt) ? "apiReadClub" : "apiReadShot";
+    var fn = /라운드/.test(prompt) ? "apiReadRound"
+           : /클럽/.test(prompt) ? "apiReadClub" : "apiReadShot";
     return withTimeout(call(fn,u), 170000,
       "답이 오지 않았습니다"+sizeNote()+". 편집기에서 testPhotoSpeed 를 실행하면 "
       +"구글 쪽이 느린 것인지 알 수 있습니다. 급하면 아래 칸에 직접 넣어 주세요.");
