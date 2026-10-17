@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v26">
+<meta name="app-version" content="v27">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -396,7 +396,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
-  askOpen:"", askDraft:"", askAns:{}, askAsked:{}, verNew:null, verLog:[], verLatest:"",
+  askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -474,7 +474,12 @@ function call(name){
     headers:{"Content-Type":"text/plain;charset=utf-8"},
     body:JSON.stringify({fn:name,args:args,token:getToken()})
   }).then(function(r){
-    if(!r.ok) throw {message:"서버가 "+r.status+" 로 답했습니다."};
+    if(!r.ok){
+      if(r.status===404) throw {message:"서버 주소가 더 이상 살아 있지 않습니다. "
+        +"앱스 스크립트에서 '새 배포'를 만들면 주소가 바뀝니다. 배포 관리에서 지금 주소를 확인해 주세요.", dead:true};
+      if(r.status===401||r.status===403) throw {message:"서버에 접근이 막혔습니다. 배포 설정에서 '모든 사용자'로 열려 있는지 확인해 주세요."};
+      throw {message:"서버가 "+r.status+" 로 답했습니다."};
+    }
     return r.text();
   }).then(function(t){
     var j;
@@ -562,14 +567,18 @@ function loadAll(quiet){
   return call("apiLoad").then(function(d){
     applyPayload(d);
     putCache(d);
-    S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null;
+    S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null; S.offline=null;
     S.loaded=true; S.fromCache=false; S.syncing=false;
     if(S.loadTimer) clearTimeout(S.loadTimer); setTimeout(render,0);
   }).catch(function(e){
     S.syncing=false;
-    if(S.fromCache){            /* 사본이 떠 있으면 화면을 비우지 않는다 */
-      S.conn.err=null; S.loaded=true; render(); return;
+    if(S.fromCache){
+      /* 사본이 떠 있으면 화면을 비우지는 않되, 끊긴 사실은 알린다.
+         조용히 넘기면 저장도 안 되는 상태로 계속 쓰게 된다. */
+      S.conn.err=null; S.loaded=true;
+      S.offline=errMsg(e); render(); return;
     }
+    S.offline=null;
     S.conn.tried=true; S.conn.err=errMsg(e); S.loaded=true;
     if(S.loadTimer) clearTimeout(S.loadTimer); render();
   });
@@ -845,6 +854,7 @@ function render(){
        + (S.syncing ? " · 맞추는 중" : ""));
   var h = "";
   if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
+  h += offlineBar();
   h += connCard();
   h += ({home:viewHome,clubs:viewClubs,practice:viewPractice,rounds:viewRounds,growth:viewGrowth}[S.tab]||viewHome)();
   var inner=document.querySelector(".sheet .inner");
@@ -984,6 +994,16 @@ function viewHome(){
 function mTile(n,v,suf){ return '<div class="metric"><b>'+(v==null||v===""?"—":esc(String(v))+esc(suf||""))+'</b><span>'+esc(n)+'</span></div>'; }
 
 /* ---------- 연결 상태 ---------- */
+function offlineBar(){
+  if(!S.offline) return "";
+  return '<div class="card" style="margin-bottom:14px;background:var(--badSoft)">'
+   +'<b style="font-size:14.5px;color:var(--bad)">서버와 끊겼습니다 — 지금 보이는 것은 이 기기에 저장된 사본입니다</b>'
+   +'<p class="tiny" style="margin-top:6px;white-space:normal;color:var(--bad)">'+esc(S.offline)+'</p>'
+   +'<p class="tiny" style="margin-top:6px;white-space:normal">새로 기록해도 시트에 올라가지 않습니다. '
+   +'AI 질문도 되지 않습니다.</p>'
+   +'<button class="btn sm full" style="margin-top:10px" data-act="reconnect">다시 연결</button></div>';
+}
+
 function connCard(){
   if(!S.conn.tried || connOK()) return "";
   var c=S.conn, why;
