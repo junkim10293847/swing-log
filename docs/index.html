@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v21">
+<meta name="app-version" content="v22">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -190,6 +190,17 @@ textarea{resize:vertical;min-height:84px;line-height:1.6}
 .listrow .rt b{font-size:16px;font-weight:700;letter-spacing:-.02em;display:block}
 .listrow .rt span{font-size:11px;color:var(--fg3);font-family:var(--fBody)}
 
+.lc{margin:0 0 12px;display:grid;gap:8px}
+.lc-ai{background:var(--accentSoft);border-radius:14px 14px 14px 4px;padding:12px 14px;font-size:14.5px;line-height:1.65}
+.lc-ai p{margin:0}.lc-ai p+p{margin-top:6px}
+.lc-v{font-size:12.5px;font-weight:700;color:var(--accent);margin-bottom:4px}
+.lc-next{margin:8px 0 2px;padding:8px 10px;border-radius:10px;background:var(--surface);font-weight:600}
+.lc-next b{color:var(--accent);margin-right:4px}
+.lc-q{margin-top:8px!important;font-weight:600}
+.lc-me{justify-self:end;max-width:85%;background:var(--accent);color:#fff;border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:14px}
+.lc-opts{display:flex;flex-wrap:wrap;gap:6px}
+.lc-opts .btn{border:1.5px solid var(--accent);color:var(--accent);background:var(--surface);border-radius:999px;padding:8px 14px;font-weight:600}
+.lc-in{display:flex;gap:6px}.lc-in input{flex:1;min-width:0}
 .ai{background:var(--accentSoft);border-radius:16px;padding:15px 16px;font-size:14.5px;line-height:1.75;white-space:pre-wrap}
 .ai .hd{font-family:var(--fDisp);font-size:12.5px;font-weight:700;letter-spacing:0;color:var(--accent);margin-bottom:7px}
 .note{background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:15px 16px;font-size:14.5px;line-height:1.72;white-space:pre-wrap}
@@ -1217,7 +1228,7 @@ function draftView(){
            + S.clubs.map(function(c){ return '<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>'; }).join("")
            +'</select></div>';
         }
-        if(open) h+=blockDetail(b);
+        if(open) h+=blockDetail(b)+liveChat(b,i);
       });
       h+='</div>';
     }
@@ -2278,6 +2289,7 @@ function runMulti(i){
     var ev=evalBlock(club,m,prev?prev.m:null);
     S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,mode:mdNow,
       good:ev.good,bad:ev.bad,deltas:ev.deltas,coaching:""});
+    S.openBlock=S.draft.blocks.length-1;
     M.marks[i]=club.name+(m.carry!=null?(" "+r1(m.carry)+"m"):"");
     M.log.push(label+" → "+club.name+" · 캐리 "+(m.carry!=null?r1(m.carry)+"m":"—")+sizeNote());
     next();
@@ -2405,6 +2417,83 @@ function blockDetail(b){
   }
   h+='</div>';
   return h;
+}
+
+
+/* ====================== 세트별 이어지는 코칭 ======================
+   한 세트를 치면 → 코치가 판정·진단·다음 한 가지·질문을 준다 → 답을 고르면 다시 좁혀 준다
+   → 같은 채로 다음 세트를 치면 지난 지시가 효과가 있었는지 숫자로 먼저 판정한다. */
+function lcParse(t){
+  var o={raw:t||""}, keys={"판정":"verdict","진단":"diag","다음":"next","질문":"q","보기":"opts"};
+  String(t||"").split(/\n+/).forEach(function(line){
+    var m=line.match(/^\s*[-*·]?\s*(판정|진단|다음|질문|보기)\s*[:：]\s*(.*)$/);
+    if(m) o[keys[m[1]]]=m[2].trim();
+  });
+  o.opts=o.opts?o.opts.split(/\s*[|｜\/]\s*/).filter(Boolean).slice(0,4):[];
+  if(!o.diag&&!o.next) o.diag=String(t||"").trim();
+  return o;
+}
+function liveChat(b,i){
+  if(!b.clubId) return "";
+  var chat=b.chat||[], key="lc"+i, busy=S.busy[key];
+  var h='<div class="lc">';
+  if(!chat.length){
+    h+='<button class="btn primary full" data-act="lcStart" data-i="'+i+'"'+(busy?" disabled":"")+'>'
+      +(busy?'<span class="spin"></span> 코치가 보는 중 <span data-tick="'+key+'">'+(S.asksec[key]||0)+'초</span>':'🎯 이 세트 코칭 받기')+'</button>';
+  }
+  chat.forEach(function(x,k){
+    if(x.r==="me"){ h+='<div class="lc-me">'+esc(x.t)+'</div>'; return; }
+    var o=x.o||lcParse(x.t), last=(k===chat.length-1);
+    h+='<div class="lc-ai">'
+      +(o.verdict?'<div class="lc-v">'+esc(o.verdict)+'</div>':'')
+      +(o.diag?'<p>'+esc(o.diag)+'</p>':'')
+      +(o.next?'<div class="lc-next"><b>다음 세트</b> '+esc(o.next)+'</div>':'')
+      +(o.q?'<p class="lc-q">❓ '+esc(o.q)+'</p>':'')
+      +'</div>';
+    if(last&&o.q&&!busy){
+      h+='<div class="lc-opts">'+(o.opts||[]).map(function(v){
+          return '<button class="btn ghost sm" data-act="lcAns" data-i="'+i+'" data-v="'+esc(v)+'">'+esc(v)+'</button>'; }).join("")
+        +'</div><div class="lc-in"><input id="lcIn'+i+'" placeholder="직접 답하기 (예: 공이 처음부터 오른쪽으로 나가요)">'
+        +'<button class="btn sm" data-act="lcSend" data-i="'+i+'">보내기</button></div>';
+    }
+  });
+  if(chat.length&&busy) h+='<div class="lc-ai"><span class="spin"></span> 코치가 생각하는 중 <span data-tick="'+key+'">'+(S.asksec[key]||0)+'초</span></div>';
+  if(S.msg[key]) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg[key])+'</div>';
+  if(chat.length&&!busy) h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">지시대로 같은 채로 한 세트 더 치고 사진을 올리면, 효과가 있었는지 먼저 판정해 드립니다.</p>';
+  return h+'</div>';
+}
+function liveCoach(i,answer){
+  var d=S.draft; if(!d) return; var b=d.blocks[i]; if(!b||!b.clubId) return;
+  if(!ready.ai){ S.msg["lc"+i]="AI 키가 아직 없습니다."; render(); return; }
+  var cl=S.clubs.filter(function(x){return x.id===b.clubId;})[0], T=cl?TARGET[tkey(cl)]:null;
+  b.chat=b.chat||[];
+  if(answer){ b.chat.push({r:"me",t:answer}); }
+  /* 오늘 같은 채로 앞서 친 세트와 그때 준 지시 */
+  var earlier=d.blocks.slice(0,i).filter(function(x){return x.clubId===b.clubId;}).map(function(x,n){
+    var lastAi=(x.chat||[]).filter(function(c){return c.r==="ai";}).slice(-1)[0];
+    var ans=(x.chat||[]).filter(function(c){return c.r==="me";}).map(function(c){return c.t;}).join(" / ");
+    return "· 오늘 "+(n+1)+"번째 세트: "+metricSummary(x.m)
+      +(lastAi&&lastAi.o&&lastAi.o.next?(" → 그때 지시: "+lastAi.o.next):"")+(ans?(" (본인 설명: "+ans+")"):"");
+  });
+  var prevS=lastBlockFor(b.clubId);
+  var talk=b.chat.map(function(c){ return (c.r==="me"?"본인: ":"코치: ")+c.t; }).join("\n");
+  var p=profileText()
+    +"\n\n지금 연습장에서 이 채를 치는 중입니다. 당신은 옆에 서 있는 전담 코치입니다."
+    +"\n클럽: "+b.clubName+(cl?(" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")"):"")
+    +(T?("\n목표: 캐리 "+T.carry[0]+"~"+T.carry[1]+"m, 발사각 "+T.launch[0]+"~"+T.launch[1]+"도, 백스핀 "+T.back[0]+"~"+T.back[1]+", 좌우 편차 "+T.width[1]+"m 이하, 방향각 ±"+T.dir+"도 이내"):"")
+    +"\n방금 세트("+(b.shots||10)+"타 평균): "+metricSummary(b.m)
+    +(earlier.length?("\n오늘 같은 채 앞 세트:\n"+earlier.join("\n")):"")
+    +(prevS?("\n지난 연습("+fmtDate(prevS.date)+"): "+metricSummary(prevS.m)):"")
+    +(talk?("\n\n이 세트에서 나눈 대화:\n"+talk):"")
+    +"\n\n규칙: 고칠 것은 한 번에 하나만. 근거는 숫자로. 원인이 둘 이상일 수 있으면 질문으로 좁힌다(공이 처음부터 어느 쪽으로 출발하는지, 어느 쪽으로 휘는지, 맞는 위치, 손맛 등). "
+    +(earlier.length?"앞 세트에서 준 지시가 있으면 '판정'에 그 효과를 숫자로 먼저 적는다(좋아짐/그대로/나빠짐). ":"")
+    +(answer?"본인의 답을 반영해 진단과 다음 지시를 더 구체적으로 고친다. 원인이 확실해졌으면 질문은 생략해도 된다. ":"")
+    +"\n아래 형식 그대로, 줄마다 한 문장, 전체 220자 이내로 답하세요.\n판정: \n진단: \n다음: (다음 세트에서 바꿀 동작 하나 + 성공 판정 숫자)\n질문: (원인을 좁히는 짧은 질문 하나)\n보기: 짧은 답1 | 짧은 답2 | 짧은 답3";
+  ask("lc"+i,p,{modelTier:"default",cache:false}).then(function(t){
+    var o=lcParse(t); b.chat.push({r:"ai",t:t,o:o});
+    if(o.next) b.coaching=[o.verdict,o.diag,"다음: "+o.next].filter(Boolean).join("\n");
+    render();
+  }).catch(function(){ if(answer&&b.chat.length&&b.chat[b.chat.length-1].r==="me") b.chat.pop(); render(); });
 }
 
 function metricSummary(m){
@@ -2703,6 +2792,10 @@ document.addEventListener("click",function(ev){
     S.draft[key2]=on ? list.map(function(x,i){ return i; }) : [];
     render(); return;
   }
+  if(a==="lcStart"){ liveCoach(+el.getAttribute("data-i")); return; }
+  if(a==="lcAns"){ liveCoach(+el.getAttribute("data-i"),el.getAttribute("data-v")); return; }
+  if(a==="lcSend"){ var li=+el.getAttribute("data-i"), inp=document.getElementById("lcIn"+li), tx=inp?inp.value.trim():"";
+    if(!tx){ if(inp) inp.focus(); return; } liveCoach(li,tx); return; }
   if(a==="openBlockRow"){
     var bi2=+el.getAttribute("data-i");
     S.openBlock=(S.openBlock===bi2)?null:bi2;
@@ -2938,6 +3031,7 @@ document.addEventListener("click",function(ev){
     S.draft.blocks.push({clubId:b2.clubId,clubName:club2.name,m:b2.m,
       shots:(b2.shots||S.draft.setSize||10), mode:(S.draft.mode||"집중"),
       good:ev2.good,bad:ev2.bad,deltas:ev2.deltas,coaching:""});
+    S.openBlock=S.draft.blocks.length-1;
     S.sheet=null; S.sheetShown=null; render(); return;
   }
 
