@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v10">
+<meta name="app-version" content="v11">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1698,6 +1698,10 @@ function clubAskCard(c){
 
 function planMin(){ try{ return +(localStorage.getItem("swinglog.min")||120); }catch(e){ return 120; } }
 function setPlanMin(v){ try{ localStorage.setItem("swinglog.min",String(v)); }catch(e){} }
+/* 9홀을 같이 도는 날이 있다. 그 시간을 빼지 않으면 배분이 전부 틀어진다. */
+var HOLE9=45;
+function planHoles(){ try{ return localStorage.getItem("swinglog.holes9")==="1"; }catch(e){ return false; } }
+function setPlanHoles(on){ try{ localStorage.setItem("swinglog.holes9",on?"1":"0"); }catch(e){} }
 
 function daysSince(d){
   if(!d) return null;
@@ -1799,10 +1803,17 @@ function planCard(){
 
   h+='<div class="segWrap"><span class="lab">오늘 연습할 시간</span>'
    +'<div class="seg" role="group" aria-label="연습 시간">'
-   + [60,90,120].map(function(m){
+   + [60,90,120,150].map(function(m){
        return '<button type="button" aria-pressed="'+(P.min===m?"true":"false")+'" '
-        +'data-act="planMin" data-m="'+m+'">'+m+'분</button>'; }).join("")
+        +'data-act="planMin" data-m="'+m+'">'+m+'</button>'; }).join("")
    +'</div></div>';
+  h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
+   +'<div class="seg" role="group" aria-label="9홀 포함">'
+   +'<button type="button" aria-pressed="'+(P.holes9?"false":"true")+'" data-act="planHoles" data-h="0">연습만</button>'
+   +'<button type="button" aria-pressed="'+(P.holes9?"true":"false")+'" data-act="planHoles" data-h="1">9홀 포함</button>'
+   +'</div></div>';
+  if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
+   +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
 
   h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
   P.plan.forEach(function(x){
@@ -1833,7 +1844,7 @@ function planCard(){
 
 function prescribe(){
   var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; });
-  var P={primary:null, also:[], skip:[], cue:null, test:null, why:[], plan:[], min:planMin()};
+  var P={primary:null, also:[], skip:[], cue:null, test:null, why:[], plan:[], min:planMin(), holes9:planHoles()};
   if(!live.length) return null;
 
   /* 클럽마다 상태를 모은다 */
@@ -1944,7 +1955,12 @@ function prescribe(){
   }
 
   /* 시간 배분 */
-  var m=P.min, warm=10, rest=(m>=100?10:0), left=m-warm-rest;
+  var m=P.min, warm=10;
+  /* 9홀을 돌면 그 자체가 쉬는 구간이 된다. 따로 쉬는 시간을 또 두지 않는다 */
+  var h9=P.holes9?HOLE9:0;
+  var rest=(!P.holes9 && m>=100)?10:0;
+  var left=m-warm-rest-h9;
+  P.tight = left<25;
   var n=1+P.also.length;
   var r5=function(v){ return Math.max(5,Math.round(v/5)*5); };
   var mainShare = n>1 ? r5(left*0.55) : left;
@@ -1961,6 +1977,14 @@ function prescribe(){
   });
   if(rest && !P.also.length)
     P.plan.splice(1,0,{m:rest, t:"쉬기", d:"중간에 한 번 숨을 돌립니다"});
+  if(P.holes9){
+    P.plan.push({m:HOLE9, t:"9홀",
+      d:"티샷마다 정렬 루틴을 지킵니다 — 공 뒤에서 목표선 보기 → 앞 50cm 표식 고르기 → 헤드 먼저 놓고 발은 나중. "
+       +"두 번째 샷은 오늘 잰 거리만 믿고 채를 고릅니다. 끝나면 페어웨이에 몇 번 올렸는지 세어 두세요."});
+  }
+  if(P.holes9){
+    P.test=(P.test?P.test+" / ":"")+"9홀에서 페어웨이 안착 몇 번인지 세기";
+  }
   P.rSig=rSig;
   return P;
 }
@@ -2501,6 +2525,7 @@ document.addEventListener("click",function(ev){
     render(); return;
   }
   if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
+  if(a==="planHoles"){ setPlanHoles(el.getAttribute("data-h")==="1"); S.planText=null; render(); return; }
   if(a==="planDeep"){
     var P=prescribe();
     if(!P){ S.msg.plan="아직 판단할 기록이 없습니다."; render(); return; }
