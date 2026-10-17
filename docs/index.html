@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v13">
+<meta name="app-version" content="v14">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -379,7 +379,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -878,13 +878,6 @@ function viewHome(){
 
   h+='<div class="stack">';
 
-  /* 오늘 할 일 */
-  h+='<div class="card"><div class="eyebrow">오늘 할 일</div>';
-  h+='<h2 class="sec-title" style="margin-top:4px">연습 시작하기</h2>';
-  h+='<p class="muted" style="margin-top:4px">준비운동 체크 → 클럽별 10회 기록 → 느낀점 → 마무리 운동 순서로 진행합니다.</p>';
-  h+='<div class="row" style="margin-top:12px"><button class="btn primary" data-act="newSession">연습 시작</button>';
-  h+='<button class="btn" data-act="newRound">라운드 점수 입력</button></div></div>';
-
   h+=planCard();
 
   /* 최근 연습 */
@@ -1085,6 +1078,16 @@ function newDraft(){
 /* 연습하는 내내 눈앞에 두는 띠. 손에 채를 들고 보는 것이라 크고 짧게 쓴다.
    계획은 연습을 시작할 때 한 번 굳혀 draft 에 담는다. 중간에 기록이 쌓였다고
    오늘 할 일이 바뀌면 혼란스럽다. */
+/* 지금 어느 구간인지 보고 타수와 방식을 맞춰 둔다. 손으로 바꿀 일을 없앤다. */
+function syncModeToPlan(){
+  var d=S.draft; if(!d||!d.plan) return;
+  var done=d.planDone||[], nx=null;
+  for(var i=0;i<d.plan.plan.length;i++) if(done.indexOf(i)<0){ nx=d.plan.plan[i]; break; }
+  if(!nx) return;
+  if(nx.t==="섞어치기"){ d.mode="섞어"; d.setSize=5; }
+  else if(nx.t!=="쉬기" && nx.t!=="몸풀기" && nx.t!=="9홀"){ d.mode="집중"; d.setSize=10; }
+}
+
 function todayStrip(d){
   var P=d.plan||null;
   if(!P) return '';
@@ -1163,22 +1166,29 @@ function draftView(){
     h+='<div class="card"><div class="eyebrow">2단계 · 세트 기록</div>'
      +'<h3 style="font-size:17px;margin:4px 0 2px">한 세트씩 평균을 남깁니다</h3>'
      +'<p class="muted">측정 화면 사진을 올리면 숫자를 읽어 채웁니다.</p>';
-    h+='<div class="segWrap"><span class="lab">측정기 타수</span>'
-     +'<div class="seg" role="group" aria-label="세트 타수">'
-     + [5,10,15,20].map(function(n){
-         return '<button type="button" aria-pressed="'+(SZ===n?"true":"false")+'" '
-          +'data-act="setSize" data-n="'+n+'">'+n+'타</button>'; }).join("")
-     +'</div></div>';
-    h+='<div class="segWrap"><span class="lab">지금 치는 방식</span>'
-     +'<div class="seg" role="group" aria-label="연습 방식">'
-     +'<button type="button" aria-pressed="'+(MD==="집중"?"true":"false")+'" data-act="setMode" data-m="집중">집중</button>'
-     +'<button type="button" aria-pressed="'+(MD==="섞어"?"true":"false")+'" data-act="setMode" data-m="섞어">섞어치기</button>'
-     +'</div>'
-     +'<p class="tiny" style="margin-top:6px">'
-     +(MD==="섞어"
-        ? '섞어치기로 담깁니다. 이 숫자는 클럽 기준에 넣지 않으니 나빠져도 기준이 내려가지 않습니다.'
-        : '기준이 되는 기록입니다. 한 채를 연속으로 쳐서 만든 평균만 여기에 두세요.')
-     +'</p></div>';
+    /* 평소에는 지금 설정만 한 줄로 보인다. 바꿀 일이 있을 때만 펼친다.
+       섞어치기 구간에 들어가면 앱이 알아서 5타·섞어로 바꾼다. */
+    h+='<div class="spread" style="margin-top:10px">'
+     +'<span class="tiny">'+SZ+'타 · '+esc(MD==="섞어"?"섞어치기":"집중")+'</span>'
+     +'<button class="btn ghost sm" data-act="setOpen">'+(S.setOpen?'접기':'바꾸기')+'</button></div>';
+    if(S.setOpen){
+      h+='<div class="segWrap"><span class="lab">측정기 타수</span>'
+       +'<div class="seg" role="group" aria-label="세트 타수">'
+       + [5,10,15,20].map(function(n){
+           return '<button type="button" aria-pressed="'+(SZ===n?"true":"false")+'" '
+            +'data-act="setSize" data-n="'+n+'">'+n+'타</button>'; }).join("")
+       +'</div></div>';
+      h+='<div class="segWrap"><span class="lab">지금 치는 방식</span>'
+       +'<div class="seg" role="group" aria-label="연습 방식">'
+       +'<button type="button" aria-pressed="'+(MD==="집중"?"true":"false")+'" data-act="setMode" data-m="집중">집중</button>'
+       +'<button type="button" aria-pressed="'+(MD==="섞어"?"true":"false")+'" data-act="setMode" data-m="섞어">섞어치기</button>'
+       +'</div>'
+       +'<p class="tiny" style="margin-top:6px">'
+       +(MD==="섞어"
+          ? '섞어치기 숫자는 클럽 기준에 넣지 않습니다. 나빠져도 기준이 내려가지 않습니다.'
+          : '기준이 되는 기록입니다. 한 채를 연속으로 쳐서 만든 평균만 여기에 두세요.')
+       +'</p></div>';
+    }
     if(d.blocks.length){
       h+='<div style="margin-top:8px">';
       d.blocks.forEach(function(b,i){
@@ -1818,63 +1828,60 @@ function planCard(){
   var P=prescribe();
   if(!P) return '<div class="card"><div class="eyebrow">오늘 연습</div>'
     +'<p class="muted" style="margin-top:6px">기록이 쌓이면 무엇을 칠지 여기서 짚어 드립니다. '
-    +'클럽을 등록하고 10회 평균을 한 번 넣어 보세요.</p></div>';
+    +'클럽을 등록하고 한 세트를 넣어 보세요.</p></div>';
 
-  var h='<div class="card"><div class="eyebrow">오늘 연습</div>';
+  /* 평소에는 네 줄만 보인다 — 무엇을, 왜, 무슨 생각으로, 시작.
+     시간·배분·뺄 채·판정은 눌러야 나온다. 매번 볼 것이 아니다. */
+  var h='<div class="card"><div class="spread"><div class="eyebrow">오늘 연습</div>'
+   +'<span class="tiny">'+P.min+'분'+(P.holes9?' · 9홀':'')+'</span></div>';
   h+='<h2 class="sec-title" style="margin-top:6px">'+esc(P.primary.head)+'</h2>';
   h+='<p class="muted" style="margin-top:6px;color:var(--fg)">'+esc(P.primary.why)+'</p>';
 
-  if(P.rSig&&P.rSig.length){
-    h+='<ul class="plain" style="margin-top:10px">'
-     + P.rSig.map(function(z){ return '<li>'+esc(z.s)+'</li>'; }).join("")+'</ul>';
-  }
+  if(P.cue) h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 생각은 하나만</div>'
+   +'<b style="font-size:16px">'+esc(P.cue.t)+'</b></div>';
 
-  h+='<div class="segWrap"><span class="lab">오늘 연습할 시간</span>'
-   +'<div class="seg" role="group" aria-label="연습 시간">'
-   + [60,90,120,150].map(function(m){
-       return '<button type="button" aria-pressed="'+(P.min===m?"true":"false")+'" '
-        +'data-act="planMin" data-m="'+m+'">'+m+'</button>'; }).join("")
-   +'</div></div>';
-  h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
-   +'<div class="seg" role="group" aria-label="9홀 포함">'
-   +'<button type="button" aria-pressed="'+(P.holes9?"false":"true")+'" data-act="planHoles" data-h="0">연습만</button>'
-   +'<button type="button" aria-pressed="'+(P.holes9?"true":"false")+'" data-act="planHoles" data-h="1">9홀 포함</button>'
-   +'</div></div>';
-  if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
-   +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
+  h+='<button class="btn primary full" style="margin-top:14px" data-act="newSession">이대로 연습 시작</button>';
+  h+='<div class="row" style="margin-top:8px;gap:8px">'
+   +'<button class="btn ghost sm" style="flex:1" data-act="planOpen">'
+   +(S.planOpen?'접기':'시간 바꾸기 · 자세히')+'</button>'
+   +'<button class="btn ghost sm" style="flex:1" data-act="newRound">라운드 점수 입력</button></div>';
 
-  var mode = P.holes9 ? "집중 + 9홀" : (P.mixed ? "집중 + 섞어치기" : "집중");
-  var modeWhy = P.holes9
-    ? "앞에서 거리를 만들고, 9홀에서 그 거리를 실제로 씁니다."
-    : (P.mixed
-      ? "앞은 한 채에 집중해 숫자를 만들고, 뒤는 섞어 칩니다. 섞어 치면 그날은 더 빗맞지만 코스로 옮겨지는 것은 그쪽입니다."
-      : "시간이 짧아 오늘은 한 가지만 합니다.");
-  h+='<div class="banner" style="margin-top:12px"><b>오늘 방식 — '+esc(mode)+'</b>\n'+esc(modeWhy)+'</div>';
+  if(S.planOpen){
+    h+='<div class="segWrap"><span class="lab">연습할 시간</span>'
+     +'<div class="seg" role="group" aria-label="연습 시간">'
+     + [60,90,120,150].map(function(m){
+         return '<button type="button" aria-pressed="'+(P.min===m?"true":"false")+'" '
+          +'data-act="planMin" data-m="'+m+'">'+m+'</button>'; }).join("")
+     +'</div></div>';
+    h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
+     +'<div class="seg" role="group" aria-label="9홀 포함">'
+     +'<button type="button" aria-pressed="'+(P.holes9?"false":"true")+'" data-act="planHoles" data-h="0">연습만</button>'
+     +'<button type="button" aria-pressed="'+(P.holes9?"true":"false")+'" data-act="planHoles" data-h="1">9홀 포함</button>'
+     +'</div></div>';
+    if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
+     +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
 
-  h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
-  P.plan.forEach(function(x){
-    h+='<div class="listrow" style="cursor:default;padding:10px 0">'
-     +'<span class="grade X" style="font-family:var(--fData);font-size:12px">'+x.m+'</span>'
-     +'<div class="bd"><b>'+esc(x.t)+'</b><span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
-  });
-  h+='</div>';
+    h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
+    P.plan.forEach(function(x){
+      h+='<div class="listrow" style="cursor:default;padding:10px 0">'
+       +'<span class="grade X" style="font-family:var(--fData);font-size:12px">'+x.m+'</span>'
+       +'<div class="bd"><b>'+esc(x.t)+'</b><span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
+    });
+    h+='</div>';
 
-  if(P.cue){
-    h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 생각은 하나만</div>'
-     +'<b style="font-size:16px">'+esc(P.cue.t)+'</b>\n'+esc(P.cue.d)+'</div>';
-  }
-  if(P.skip.length){
-    h+='<div class="banner warn" style="margin-top:12px"><b>'+esc(P.skip[0].x.c.name)+'은 오늘 빼십시오</b>\n'
+    if(P.cue&&P.cue.d) h+='<p class="tiny" style="margin-top:8px;white-space:normal">'+esc(P.cue.d)+'</p>';
+    if(P.rSig&&P.rSig.length)
+      h+='<ul class="plain" style="margin-top:10px">'
+       + P.rSig.map(function(z){ return '<li>'+esc(z.s)+'</li>'; }).join("")+'</ul>';
+    if(P.skip.length) h+='<div class="banner warn" style="margin-top:12px"><b>'+esc(P.skip[0].x.c.name)+'은 오늘 빼십시오</b>\n'
      +esc(P.skip[0].why)+'</div>';
-  }
-  if(P.test) h+='<div class="note" style="margin-top:12px">'+esc(P.test)+'</div>';
+    if(P.test) h+='<div class="note" style="margin-top:12px">'+esc(P.test)+'</div>';
 
-  h+='<div class="row" style="margin-top:14px">'
-   +'<button class="btn primary" style="flex:1" data-act="newSession">이대로 연습 시작</button>'
-   +'<button class="btn" data-act="planDeep"'+(S.busy.plan?" disabled":"")+'>'
-   +(S.busy.plan?('<span class="spin"></span> '+(S.asksec.plan||0)+'초'):'더 자세히')+'</button></div>';
-  if(S.msg.plan) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.plan)+'</div>';
-  if(S.planText) h+='<div class="ai" style="margin-top:12px"><div class="hd">자세한 안내</div>'+esc(S.planText)+'</div>';
+    h+='<button class="btn sm full" style="margin-top:12px" data-act="planDeep"'+(S.busy.plan?" disabled":"")+'>'
+     +(S.busy.plan?('<span class="spin"></span> '+(S.asksec.plan||0)+'초'):'10발 단위로 더 자세히')+'</button>';
+    if(S.msg.plan) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.plan)+'</div>';
+    if(S.planText) h+='<div class="ai" style="margin-top:12px"><div class="hd">자세한 안내</div>'+esc(S.planText)+'</div>';
+  }
   return h+'</div>';
 }
 
@@ -2574,6 +2581,7 @@ document.addEventListener("click",function(ev){
   }
 
   if(a==="setBlockClub"){ return; }   /* 고르기는 change 에서 처리한다 */
+  if(a==="setOpen"){ S.setOpen=!S.setOpen; render(); return; }
   if(a==="setSize"){ if(S.draft){ S.draft.setSize=+el.getAttribute("data-n"); render(); } return; }
   if(a==="setMode"){ if(S.draft){ S.draft.mode=el.getAttribute("data-m"); render(); } return; }
   if(a==="stripToggle"){ S.stripOpen=!S.stripOpen; render(); return; }
@@ -2585,8 +2593,10 @@ document.addEventListener("click",function(ev){
     S.draft.planDone=S.draft.planDone||[];
     var at=S.draft.planDone.indexOf(si2);
     if(at>=0) S.draft.planDone.splice(at,1); else S.draft.planDone.push(si2);
+    syncModeToPlan();
     render(); return;
   }
+  if(a==="planOpen"){ S.planOpen=!S.planOpen; render(); return; }
   if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
   if(a==="planHoles"){ setPlanHoles(el.getAttribute("data-h")==="1"); S.planText=null; render(); return; }
   if(a==="planDeep"){
