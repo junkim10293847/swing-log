@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v11">
+<meta name="app-version" content="v12">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1815,6 +1815,14 @@ function planCard(){
   if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
    +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
 
+  var mode = P.holes9 ? "집중 + 9홀" : (P.mixed ? "집중 + 섞어치기" : "집중");
+  var modeWhy = P.holes9
+    ? "앞에서 거리를 만들고, 9홀에서 그 거리를 실제로 씁니다."
+    : (P.mixed
+      ? "앞은 한 채에 집중해 숫자를 만들고, 뒤는 섞어 칩니다. 섞어 치면 그날은 더 빗맞지만 코스로 옮겨지는 것은 그쪽입니다."
+      : "시간이 짧아 오늘은 한 가지만 합니다.");
+  h+='<div class="banner" style="margin-top:12px"><b>오늘 방식 — '+esc(mode)+'</b>\n'+esc(modeWhy)+'</div>';
+
   h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
   P.plan.forEach(function(x){
     h+='<div class="listrow" style="cursor:default;padding:10px 0">'
@@ -1977,6 +1985,29 @@ function prescribe(){
   });
   if(rest && !P.also.length)
     P.plan.splice(1,0,{m:rest, t:"쉬기", d:"중간에 한 번 숨을 돌립니다"});
+  /* 섞어치기 — 같은 채를 연속으로 치지 않는 구간.
+     그날은 더 빗맞지만 코스로 옮겨지는 것은 이쪽이다. 측정이 끝난 뒤에 둔다.
+     9홀을 도는 날은 9홀이 그 역할을 하므로 따로 두지 않는다. */
+  if(!P.holes9 && left>=45){
+    var mixM=r5(Math.min(20,left*0.2));
+    /* 앞 구간에서 조금씩 떼어 온다 */
+    var cut=mixM, order=[];
+    for(var pi2=P.plan.length-1;pi2>=0;pi2--) if(P.plan[pi2].t!=="몸풀기"&&P.plan[pi2].t!=="쉬기") order.push(pi2);
+    order.forEach(function(ix){
+      if(cut<=0) return;
+      var take=Math.min(cut, Math.max(0, P.plan[ix].m-15));
+      P.plan[ix].m-=take; cut-=take;
+    });
+    mixM-=cut;
+    if(mixM>=10){
+      var names=[P.primary.x.c.name].concat(P.also.map(function(a2){ return a2.x.c.name; })).slice(0,3);
+      P.plan.push({m:mixM, t:"섞어치기",
+        d:names.join("·")+"를 번갈아 칩니다. 같은 채를 연속으로 두 번 치지 않고, 매 샷 목표를 바꾸고, "
+         +"한 발마다 어드레스부터 다시 합니다. 여기서는 잘 맞는 것보다 매번 새로 준비하는 것이 목적입니다."});
+      P.mixed=true;
+    }
+  }
+
   if(P.holes9){
     P.plan.push({m:HOLE9, t:"9홀",
       d:"티샷마다 정렬 루틴을 지킵니다 — 공 뒤에서 목표선 보기 → 앞 50cm 표식 고르기 → 헤드 먼저 놓고 발은 나중. "
