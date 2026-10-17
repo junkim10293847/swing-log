@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v15">
+<meta name="app-version" content="v16">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -381,7 +381,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:null, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -1311,29 +1311,40 @@ function viewRounds(){
       ? '<div class="card empty"><h3>라운드 기록이 없습니다</h3><p>점수와 퍼팅 수만 넣어도 분석이 나옵니다.</p></div>'
       : '<div class="card empty"><h3>라운드 기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
   } else {
-    S.rounds.forEach(function(r){
-      h+='<div class="card"><div class="spread"><div><b style="font-family:var(--fDisp);font-size:16px">'+esc(fmtDate(r.date))+'</b>'
+    /* 기록이 쌓이면 다 펼쳐 둘 수 없다. 가장 최근 것만 열어 두고 나머지는 접는다. */
+    S.rounds.forEach(function(r,idx){
+      var open=(S.openRound==null) ? (idx===0) : (S.openRound===r.id);
+      var over=(r.score!=null&&r.par)?((r.score-r.par>0?"+":"")+(r.score-r.par)):null;
+      h+='<div class="card">';
+      h+='<div class="listrow" style="padding:0;border:0" data-act="openRound" data-id="'+esc(r.id)+'">'
+       +'<div class="bd"><b style="font-family:var(--fDisp);font-size:16px">'+esc(fmtDate(r.date))+'</b>'
        +' <span class="chip neutral">'+(r.type==="field"?"필드":"스크린")+'</span>'
-       +(r.course?'<div class="tiny">'+esc(r.course)+'</div>':'')+'</div>'
-       +'<button class="btn ghost sm" data-act="delRound" data-id="'+esc(r.id)+'">삭제</button></div>';
-      h+='<div class="metrics" style="margin-top:10px">'
-       +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/14")
-       +mTile("그린적중",r.gir,"/18")+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
-       +mTile("파온 미스",r.gir!=null?(18-r.gir):null,"")
-       +mTile("파 대비",(r.score!=null&&r.par)?((r.score-r.par>0?"+":"")+(r.score-r.par)):null,"")+'</div>';
-      var tl=holeTally(r);
-      if(tl.marks){
-        h+='<div class="hRow" style="margin-top:10px">'+tl.marks+'</div>';
-        h+='<div class="holeSum"><span>OUT <b>'+tl.out+'</b></span><span>IN <b>'+tl.inn+'</b></span>'
-         +'<span>합계 <b>'+tl.sum+'</b></span>'
-         +(tl.dbl?('<span>더블 이상 <b>'+tl.dbl+'</b></span>'):'')
-         +(tl.good?('<span>파 이상 <b>'+tl.good+'</b></span>'):'')+'</div>';
+       +'<span style="white-space:normal">'+esc(r.course||"")+'</span></div>'
+       +'<div class="rt"><b>'+(r.score!=null?r.score:"—")+'</b><span>'+(over||"타")+'</span></div>'
+       +'<span class="tiny" style="color:var(--fg3);margin-left:8px">'+(open?'접기':'펼치기')+'</span></div>';
+
+      if(open){
+        h+='<div class="metrics" style="margin-top:12px">'
+         +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/14")
+         +mTile("그린적중",r.gir,"/18")+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
+         +mTile("파온 미스",r.gir!=null?(18-r.gir):null,"")
+         +mTile("파 대비",over,"")+'</div>';
+        var tl=holeTally(r);
+        if(tl.marks){
+          h+='<div class="hRow" style="margin-top:10px">'+tl.marks+'</div>';
+          h+='<div class="holeSum"><span>OUT <b>'+tl.out+'</b></span><span>IN <b>'+tl.inn+'</b></span>'
+           +'<span>합계 <b>'+tl.sum+'</b></span>'
+           +(tl.dbl?('<span>더블 이상 <b>'+tl.dbl+'</b></span>'):'')
+           +(tl.good?('<span>파 이상 <b>'+tl.good+'</b></span>'):'')+'</div>';
+        }
+        if(r.note) h+='<div class="note" style="margin-top:10px">'+esc(r.note)+'</div>';
+        h+='<div class="row" style="margin-top:10px;gap:8px">'
+         +'<button class="btn sm" style="flex:1" data-act="analyzeRound" data-id="'+esc(r.id)+'">'
+         +(S.busy["rd"+r.id]?'<span class="spin"></span> 분석 중':(r.analysis?'다시 분석':'약점 분석'))+'</button>'
+         +'<button class="btn ghost sm" data-act="delRound" data-id="'+esc(r.id)+'">삭제</button></div>';
+        if(S.msg["rd"+r.id]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg["rd"+r.id])+'</div>';
+        if(r.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">약점 분석</div>'+esc(r.analysis)+'</div>';
       }
-      if(r.note) h+='<div class="note" style="margin-top:10px">'+esc(r.note)+'</div>';
-      h+='<button class="btn sm full" style="margin-top:10px" data-act="analyzeRound" data-id="'+esc(r.id)+'">'
-       +(S.busy["rd"+r.id]?'<span class="spin"></span> 분석 중':(r.analysis?'다시 분석':'약점 분석'))+'</button>';
-      if(S.msg["rd"+r.id]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg["rd"+r.id])+'</div>';
-      if(r.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">약점 분석</div>'+esc(r.analysis)+'</div>';
       h+='</div>';
     });
   }
@@ -2613,6 +2624,13 @@ document.addEventListener("click",function(ev){
     var at=S.draft.planDone.indexOf(si2);
     if(at>=0) S.draft.planDone.splice(at,1); else S.draft.planDone.push(si2);
     syncModeToPlan();
+    render(); return;
+  }
+  if(a==="openRound"){
+    var rid2=el.getAttribute("data-id");
+    var first=(S.rounds[0]||{}).id;
+    var nowOpen=(S.openRound==null) ? (rid2===first) : (S.openRound===rid2);
+    S.openRound = nowOpen ? "" : rid2;    /* 빈 값이면 전부 접힌 상태 */
     render(); return;
   }
   if(a==="planOpen"){ S.planOpen=!S.planOpen; render(); return; }
