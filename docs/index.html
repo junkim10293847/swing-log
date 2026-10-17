@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v18">
+<meta name="app-version" content="v19">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -768,12 +768,13 @@ function profileText(){
 
 
 /* ====================== 렌더 ====================== */
+/* 자주 쓰는 순서다. 클럽은 한 번 등록하면 거의 들어갈 일이 없어 맨 뒤로 뺐다. */
 var TABS=[
   {k:"home",n:"홈",d:"M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5"},
-  {k:"clubs",n:"내 클럽",d:"M8 3v12M8 15a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M8 6l8 3-8 3"},
   {k:"practice",n:"연습",d:"M4 20 20 4M14 4h6v6M9.5 14.5 4 20"},
   {k:"rounds",n:"라운드",d:"M4 4v16M4 5h12l-2.5 3.5L16 12H4"},
-  {k:"growth",n:"성장",d:"M3 19h18M6 15l4-5 3.5 3L19 6"}
+  {k:"growth",n:"성장",d:"M3 19h18M6 15l4-5 3.5 3L19 6"},
+  {k:"clubs",n:"내 클럽",d:"M8 3v12M8 15a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M8 6l8 3-8 3"}
 ];
 function renderTabs(){
   document.getElementById("tabs").innerHTML = TABS.map(function(t){
