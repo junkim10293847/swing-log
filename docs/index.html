@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v17">
+<meta name="app-version" content="v18">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1764,7 +1764,13 @@ function clubAskCard(c){
    기록에서 규칙으로 뽑는다. AI 없이 즉시 나오고, 왜 그런지가 숫자로 남는다.
    순서가 곧 우선순위다. 앞의 것이 잡히면 뒤는 보조로 내린다. */
 
-function planMin(){ try{ return +(localStorage.getItem("swinglog.min")||120); }catch(e){ return 120; } }
+var MINS=[60,90,120];
+function planMin(){
+  var v=120;
+  try{ v=+(localStorage.getItem("swinglog.min")||120); }catch(e){}
+  if(MINS.indexOf(v)<0) v=120;      /* 예전에 골라 둔 값이 범위 밖이면 되돌린다 */
+  return v;
+}
 function setPlanMin(v){ try{ localStorage.setItem("swinglog.min",String(v)); }catch(e){} }
 /* 9홀을 같이 도는 날이 있다. 그 시간을 빼지 않으면 배분이 전부 틀어진다. */
 var HOLE9=45;
@@ -1863,7 +1869,7 @@ function planCard(){
   /* 평소에는 네 줄만 보인다 — 무엇을, 왜, 무슨 생각으로, 시작.
      시간·배분·뺄 채·판정은 눌러야 나온다. 매번 볼 것이 아니다. */
   var h='<div class="card"><div class="spread"><div class="eyebrow">오늘 연습</div>'
-   +'<span class="tiny">'+P.min+'분'+(P.holes9?' · 9홀':'')+'</span></div>';
+   +'<span class="tiny">'+(P.min===60?'1시간':(P.min===90?'1시간 반':'2시간'))+(P.holes9?' · 9홀':'')+'</span></div>';
   h+='<h2 class="sec-title" style="margin-top:6px">'+esc(P.primary.head)+'</h2>';
   h+='<p class="muted" style="margin-top:6px;color:var(--fg)">'+esc(P.primary.why)+'</p>';
 
@@ -1879,9 +1885,9 @@ function planCard(){
   if(S.planOpen){
     h+='<div class="segWrap"><span class="lab">연습할 시간</span>'
      +'<div class="seg" role="group" aria-label="연습 시간">'
-     + [60,90,120,150].map(function(m){
+     + MINS.map(function(m){
          return '<button type="button" aria-pressed="'+(P.min===m?"true":"false")+'" '
-          +'data-act="planMin" data-m="'+m+'">'+m+'</button>'; }).join("")
+          +'data-act="planMin" data-m="'+m+'">'+(m===60?'1시간':(m===90?'1시간 반':'2시간'))+'</button>'; }).join("")
      +'</div></div>';
     h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
      +'<div class="seg" role="group" aria-label="9홀 포함">'
