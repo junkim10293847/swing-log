@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v12">
+<meta name="app-version" content="v13">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -611,25 +611,35 @@ function metricState(club,k,v){
   if(k==="dir") return Math.abs(v)<=T.dir ? "good":"off";
   return "";
 }
+function isFocus(b){ return !b || b.mode!=="섞어"; }
+
 function lastBlockFor(clubId,beforeSessionId){
   for(var i=0;i<S.sessions.length;i++){
     var s=S.sessions[i]; if(beforeSessionId && s.id===beforeSessionId) continue;
     var bs=s.blocks||[];
-    for(var j=bs.length-1;j>=0;j--) if(bs[j].clubId===clubId && bs[j].m) return {m:bs[j].m,date:s.date};
+    for(var j=bs.length-1;j>=0;j--) if(bs[j].clubId===clubId && bs[j].m && isFocus(bs[j])) return {m:bs[j].m,date:s.date};
   }
   return null;
 }
 function clubBest(clubId){
   var best=null;
   S.sessions.forEach(function(s){ (s.blocks||[]).forEach(function(b){
-    if(b.clubId===clubId && b.m && b.m.carry!=null && (!best||b.m.carry>best.carry)) best={carry:b.m.carry,date:s.date};
+    if(b.clubId===clubId && isFocus(b) && b.m && b.m.carry!=null && (!best||b.m.carry>best.carry)) best={carry:b.m.carry,date:s.date};
   });});
   return best;
 }
 function clubSeries(clubId,k){
   var out=[];
   S.sessions.slice().reverse().forEach(function(s){ (s.blocks||[]).forEach(function(b){
-    if(b.clubId===clubId && b.m && b.m[k]!=null) out.push({v:b.m[k],date:s.date});
+    if(b.clubId===clubId && isFocus(b) && b.m && b.m[k]!=null) out.push({v:b.m[k],date:s.date});
+  });});
+  return out;
+}
+/* 섞어 친 것만 따로 — 코스로 얼마나 옮겨졌는지는 이쪽으로 본다 */
+function mixSeries(clubId,k){
+  var out=[];
+  S.sessions.slice().reverse().forEach(function(s){ (s.blocks||[]).forEach(function(b){
+    if(b.clubId===clubId && !isFocus(b) && b.m && b.m[k]!=null) out.push({v:b.m[k],date:s.date});
   });});
   return out;
 }
@@ -1070,7 +1080,7 @@ function newDraft(){
     }
   }catch(e){}
   return {id:uuid(),date:today(),step:0,warmup:[],cooldown:[],blocks:[],feeling:"",coaching:"",
-    cur:{clubId:"",m:{}},editing:false, plan:P, planDone:[]};
+    cur:{clubId:"",m:{}},editing:false, plan:P, planDone:[], setSize:10, mode:"집중"};
 }
 /* 연습하는 내내 눈앞에 두는 띠. 손에 채를 들고 보는 것이라 크고 짧게 쓴다.
    계획은 연습을 시작할 때 한 번 굳혀 draft 에 담는다. 중간에 기록이 쌓였다고
@@ -1149,17 +1159,35 @@ function draftView(){
   }
 
   if(d.step===1){
-    h+='<div class="card"><div class="eyebrow">2단계 · 클럽별 10회</div>'
-     +'<h3 style="font-size:17px;margin:4px 0 2px">한 클럽씩, 10회 평균을 남깁니다</h3>'
+    var SZ=d.setSize||10, MD=d.mode||"집중";
+    h+='<div class="card"><div class="eyebrow">2단계 · 세트 기록</div>'
+     +'<h3 style="font-size:17px;margin:4px 0 2px">한 세트씩 평균을 남깁니다</h3>'
      +'<p class="muted">측정 화면 사진을 올리면 숫자를 읽어 채웁니다.</p>';
+    h+='<div class="segWrap"><span class="lab">측정기 타수</span>'
+     +'<div class="seg" role="group" aria-label="세트 타수">'
+     + [5,10,15,20].map(function(n){
+         return '<button type="button" aria-pressed="'+(SZ===n?"true":"false")+'" '
+          +'data-act="setSize" data-n="'+n+'">'+n+'타</button>'; }).join("")
+     +'</div></div>';
+    h+='<div class="segWrap"><span class="lab">지금 치는 방식</span>'
+     +'<div class="seg" role="group" aria-label="연습 방식">'
+     +'<button type="button" aria-pressed="'+(MD==="집중"?"true":"false")+'" data-act="setMode" data-m="집중">집중</button>'
+     +'<button type="button" aria-pressed="'+(MD==="섞어"?"true":"false")+'" data-act="setMode" data-m="섞어">섞어치기</button>'
+     +'</div>'
+     +'<p class="tiny" style="margin-top:6px">'
+     +(MD==="섞어"
+        ? '섞어치기로 담깁니다. 이 숫자는 클럽 기준에 넣지 않으니 나빠져도 기준이 내려가지 않습니다.'
+        : '기준이 되는 기록입니다. 한 채를 연속으로 쳐서 만든 평균만 여기에 두세요.')
+     +'</p></div>';
     if(d.blocks.length){
       h+='<div style="margin-top:8px">';
       d.blocks.forEach(function(b,i){
         var open=(S.openBlock===i);
         h+='<div class="listrow" data-act="openBlockRow" data-i="'+i+'">'
          +'<span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
-         +'<div class="bd"><b>'+esc(b.clubName||"클럽 미지정")+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")
-         +' · 방향각 '+numToLR(b.m.dir)+'°'+(b.shots?(' · '+b.shots+'회'):'')+'</span></div>'
+         +'<div class="bd"><b>'+esc(b.clubName||"클럽 미지정")
+         +(b.mode==="섞어"?' <span class="chip neutral">섞어</span>':'')+'</b><span>캐리 '+(b.m.carry!=null?r1(b.m.carry)+"m":"—")
+         +' · 방향각 '+numToLR(b.m.dir)+'°'+(b.shots?(' · '+b.shots+'타'):'')+'</span></div>'
          +'<span class="tiny" style="color:var(--fg3);margin-right:6px">'+(open?'접기':'자세히')+'</span>'
          +'<button class="btn ghost sm" data-act="rmBlock" data-i="'+i+'">삭제</button></div>';
         /* 사진에서 클럽을 못 읽은 세트 — 숫자는 살아 있으니 클럽만 고르면 된다 */
@@ -1448,7 +1476,7 @@ function sheetClub(){
 function sheetBlock(){
   var b=S.sheet.data;
   var club=S.clubs.filter(function(c){return c.id===b.clubId;})[0];
-  var h='<div class="spread"><h3 style="font-size:19px">10회 평균 입력</h3>'
+  var h='<div class="spread"><h3 style="font-size:19px">'+((S.draft&&S.draft.setSize)||10)+'타 평균 입력</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
 
   /* 사진이 먼저다. 클럽까지 사진에서 잡는다. */
@@ -1486,7 +1514,7 @@ function sheetBlock(){
     h+='</div>';
   }
 
-  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">10회 평균</div><div class="grid3" style="margin-top:10px">';
+  h+='<div class="card" style="margin-top:12px"><div class="eyebrow">'+((S.draft&&S.draft.setSize)||10)+'타 평균</div><div class="grid3" style="margin-top:10px">';
   METRICS.forEach(function(x){
     var v=b.m[x.k];
     var val = x.lr ? (v==null?"":numToLR(v,x.k==="side"?0:1)) : (v==null?"":v);
@@ -2002,8 +2030,9 @@ function prescribe(){
     if(mixM>=10){
       var names=[P.primary.x.c.name].concat(P.also.map(function(a2){ return a2.x.c.name; })).slice(0,3);
       P.plan.push({m:mixM, t:"섞어치기",
-        d:names.join("·")+"를 번갈아 칩니다. 같은 채를 연속으로 두 번 치지 않고, 매 샷 목표를 바꾸고, "
-         +"한 발마다 어드레스부터 다시 합니다. 여기서는 잘 맞는 것보다 매번 새로 준비하는 것이 목적입니다."});
+        d:"측정기를 5타로 놓고 "+names.join("·")+"를 5타씩 번갈아 칩니다. "
+         +"세트마다 결과 화면을 찍어 두면 기록이 남습니다. 매 세트 목표를 바꾸고, 한 발마다 어드레스부터 다시 합니다. "
+         +"여기 숫자는 기준에서 빼니 나빠져도 괜찮습니다."});
       P.mixed=true;
     }
   }
@@ -2201,9 +2230,10 @@ function runMulti(i){
        애써 읽은 열한 개 수치를 지우고 다시 넣게 하는 것은 말이 안 된다.
        클럽 자리만 비워 두고 세트는 만든다. 아래에서 고르면 된다. */
     var club=v.club?guessClub(v.club):null;
-    var shots=num(v.shots); if(!(shots>0)) shots=10;
+    var shots=num(v.shots); if(!(shots>0)) shots=(S.draft.setSize||10);
+    var mdNow=S.draft.mode||"집중";
     if(!club){
-      S.draft.blocks.push({clubId:"",clubName:"",m:m,shots:shots,
+      S.draft.blocks.push({clubId:"",clubName:"",m:m,shots:shots,mode:mdNow,
         good:[],bad:[],deltas:null,coaching:"",needClub:true});
       M.marks[i]="클럽만 고르세요";
       M.log.push(label+" → 숫자는 읽었습니다"+(m.carry!=null?(" (캐리 "+r1(m.carry)+"m)"):"")
@@ -2212,7 +2242,7 @@ function runMulti(i){
     }
     var prev=lastBlockFor(club.id);
     var ev=evalBlock(club,m,prev?prev.m:null);
-    S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,
+    S.draft.blocks.push({clubId:club.id,clubName:club.name,m:m,shots:shots,mode:mdNow,
       good:ev.good,bad:ev.bad,deltas:ev.deltas,coaching:""});
     M.marks[i]=club.name+(m.carry!=null?(" "+r1(m.carry)+"m"):"");
     M.log.push(label+" → "+club.name+" · 캐리 "+(m.carry!=null?r1(m.carry)+"m":"—")+sizeNote());
@@ -2544,6 +2574,8 @@ document.addEventListener("click",function(ev){
   }
 
   if(a==="setBlockClub"){ return; }   /* 고르기는 change 에서 처리한다 */
+  if(a==="setSize"){ if(S.draft){ S.draft.setSize=+el.getAttribute("data-n"); render(); } return; }
+  if(a==="setMode"){ if(S.draft){ S.draft.mode=el.getAttribute("data-m"); render(); } return; }
   if(a==="stripToggle"){ S.stripOpen=!S.stripOpen; render(); return; }
   if(a==="reloadApp"){ try{ dropCache(); }catch(e){} location.reload(); return; }
   if(a==="openChangelog"){ S.sheet={kind:"changelog",data:{}}; checkVersion(true).then(render); render(); return; }
@@ -2859,7 +2891,9 @@ document.addEventListener("click",function(ev){
     if(!club2){ flash("클럽을 선택하세요."); return; }
     var prev=lastBlockFor(b2.clubId);
     var ev2=evalBlock(club2,b2.m,prev?prev.m:null);
-    S.draft.blocks.push({clubId:b2.clubId,clubName:club2.name,m:b2.m,good:ev2.good,bad:ev2.bad,deltas:ev2.deltas,coaching:""});
+    S.draft.blocks.push({clubId:b2.clubId,clubName:club2.name,m:b2.m,
+      shots:(b2.shots||S.draft.setSize||10), mode:(S.draft.mode||"집중"),
+      good:ev2.good,bad:ev2.bad,deltas:ev2.deltas,coaching:""});
     S.sheet=null; render(); return;
   }
 

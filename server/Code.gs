@@ -22,7 +22,7 @@ var SH = {
 
 var HEAD = {};
 HEAD[SH.club]  = ['id','순서','이름','분류','브랜드','모델','로프트','샤프트','플렉스','길이','구입시기','예비','메모','클럽특성','점검사항','연습법','문답'];
-HEAD[SH.shot]  = ['id','연습id','날짜','클럽id','클럽명','비거리','캐리','최고높이','볼스피드','발사각','방향각','사이드스핀','백스핀','앞뒤편차','좌우편차','안착률','등급','기준안','부족한점','코칭'];
+HEAD[SH.shot]  = ['id','연습id','날짜','클럽id','클럽명','타수','방식','비거리','캐리','최고높이','볼스피드','발사각','방향각','사이드스핀','백스핀','앞뒤편차','좌우편차','안착률','등급','기준안','부족한점','코칭'];
 HEAD[SH.log]   = ['id','날짜','준비운동','마무리운동','느낀점','코칭','기록시각'];
 HEAD[SH.round] = ['id','날짜','종류','코스','스코어','파','퍼팅','페어웨이','그린적중','OB','벌타','더블이상','파이상','홀별','홀파','메모','분석'];
 HEAD[SH.cfg]   = ['클럽키','이름','캐리최소','캐리최대','발사각최소','발사각최대','백스핀최소','백스핀최대','좌우편차최대','앞뒤편차최대','방향각허용'];
@@ -644,12 +644,13 @@ function setup() {
  * 칸을 끼우면 그 자리 오른쪽 값이 통째로 밀리므로 옛 줄도 어긋나지 않는다.
  * 한 번 끝내면 기록을 남겨 두고 다시 보지 않는다.
  */
-var SCHEMA_V = 'round-holes-2';
+var SCHEMA_V = 'shot-mode-3';
 function migrate_() {
   var pr = PropertiesService.getScriptProperties();
   if (pr.getProperty('SCHEMA_DONE') === SCHEMA_V) return;
   ensureCols_(SH.round);
   ensureCols_(SH.club);
+  ensureCols_(SH.shot);
   pr.setProperty('SCHEMA_DONE', SCHEMA_V);
 }
 function ensureCols_(name) {
@@ -815,6 +816,7 @@ function apiLoad() {
     var k = String(r['연습id'] || r['날짜']);
     (byLog[k] = byLog[k] || []).push({
       id: r.id, clubId: r['클럽id'], clubName: r['클럽명'],
+      shots: n_(r['타수']), mode: (r['방식'] === '섞어' ? '섞어' : '집중'),
       m: {
         total: n_(r['비거리']), carry: n_(r['캐리']), apex: n_(r['최고높이']),
         ball: n_(r['볼스피드']), launch: n_(r['발사각']), dir: n_(r['방향각']),
@@ -925,6 +927,7 @@ function setBought() {
 
 function apiSaveSession(s) {
   if (!s.id) s.id = uid_('s');
+  migrate_();
   writeRow_(SH.log, {
     id: s.id, '날짜': s.date, '준비운동': (s.warmup || []).join(','),
     '마무리운동': (s.cooldown || []).join(','), '느낀점': s.feeling || '',
@@ -939,6 +942,7 @@ function apiSaveSession(s) {
     var m = b.m || {};
     writeRow_(SH.shot, {
       id: b.id || uid_('b'), '연습id': s.id, '날짜': s.date, '클럽id': b.clubId || '', '클럽명': b.clubName || '',
+      '타수': b.shots == null ? '' : b.shots, '방식': b.mode === '섞어' ? '섞어' : '집중',
       '비거리': m.total == null ? '' : m.total, '캐리': m.carry == null ? '' : m.carry,
       '최고높이': m.apex == null ? '' : m.apex, '볼스피드': m.ball == null ? '' : m.ball,
       '발사각': m.launch == null ? '' : m.launch, '방향각': m.dir == null ? '' : m.dir,
