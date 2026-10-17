@@ -369,6 +369,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  stripOpen:false,
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -1046,9 +1047,67 @@ function viewPractice(){
 function countReq(list){ return list.filter(function(x){return x.req;}).length; }
 
 function newDraft(){
+  var P=null;
+  try{
+    var p0=prescribe();
+    if(p0){
+      P={head:p0.primary.head,
+         cue:p0.cue?p0.cue.t:null, cueWhy:p0.cue?p0.cue.d:null,
+         plan:p0.plan.map(function(x){ return {m:x.m,t:x.t,d:x.d}; }),
+         skip:p0.skip.length?(p0.skip[0].x.c.name+"은 오늘 빼십시오 — "+p0.skip[0].why):null,
+         test:p0.test||null};
+    }
+  }catch(e){}
   return {id:uuid(),date:today(),step:0,warmup:[],cooldown:[],blocks:[],feeling:"",coaching:"",
-    cur:{clubId:"",m:{}},editing:false};
+    cur:{clubId:"",m:{}},editing:false, plan:P, planDone:[]};
 }
+/* 연습하는 내내 눈앞에 두는 띠. 손에 채를 들고 보는 것이라 크고 짧게 쓴다.
+   계획은 연습을 시작할 때 한 번 굳혀 draft 에 담는다. 중간에 기록이 쌓였다고
+   오늘 할 일이 바뀌면 혼란스럽다. */
+function todayStrip(d){
+  var P=d.plan||null;
+  if(!P) return '';
+  var done=d.planDone||[];
+  var h='<div class="card" style="background:var(--accentSoft)">';
+  h+='<div class="spread"><div class="eyebrow" style="color:var(--accent)">오늘 할 것</div>'
+   +'<button class="btn ghost sm" data-act="stripToggle">'+(S.stripOpen?'접기':'펼치기')+'</button></div>';
+
+  h+='<h3 style="font-size:19px;margin:6px 0 2px">'+esc(P.head)+'</h3>';
+  if(P.cue){
+    h+='<p style="margin-top:4px;font-size:15px"><b>생각 하나 — '+esc(P.cue)+'</b></p>';
+    if(S.stripOpen&&P.cueWhy) h+='<p class="tiny" style="margin-top:2px;white-space:normal">'+esc(P.cueWhy)+'</p>';
+  }
+
+  /* 다음에 칠 것 하나만 크게 */
+  var nextI=-1;
+  for(var i=0;i<P.plan.length;i++) if(done.indexOf(i)<0){ nextI=i; break; }
+  if(nextI>=0){
+    var nx=P.plan[nextI];
+    h+='<div class="note" style="margin-top:10px;background:var(--surface)">'
+     +'<div class="spread"><div><b style="font-size:16px">지금 → '+esc(nx.t)+'</b>'
+     +'<div class="tiny" style="margin-top:2px;color:var(--fg2);white-space:normal">'+esc(nx.d)+'</div></div>'
+     +'<button class="btn primary sm" style="flex:none" data-act="stripDone" data-i="'+nextI+'">'+nx.m+'분 끝</button></div></div>';
+  } else {
+    h+='<div class="banner ok" style="margin-top:10px">오늘 계획을 다 돌았습니다.</div>';
+  }
+
+  if(S.stripOpen){
+    h+='<div style="margin-top:8px">';
+    P.plan.forEach(function(x,i){
+      var on=done.indexOf(i)>=0;
+      h+='<div class="listrow" style="cursor:pointer;padding:9px 0;opacity:'+(on?'.45':'1')+'" '
+       +'data-act="stripDone" data-i="'+i+'">'
+       +'<span class="grade '+(on?'A':'X')+'" style="font-family:var(--fData);font-size:12px">'+(on?'✓':x.m)+'</span>'
+       +'<div class="bd"><b style="'+(on?'text-decoration:line-through':'')+'">'+esc(x.t)+'</b>'
+       +'<span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
+    });
+    h+='</div>';
+    if(P.skip) h+='<div class="banner warn" style="margin-top:8px">'+esc(P.skip)+'</div>';
+    if(P.test) h+='<div class="note" style="margin-top:8px;background:var(--surface)">'+esc(P.test)+'</div>';
+  }
+  return h+'</div>';
+}
+
 function draftView(){
   var d=S.draft, h='<div class="stack">';
   h+='<div class="spread" style="align-items:center;gap:10px">'
@@ -1058,6 +1117,8 @@ function draftView(){
 
   h+='<div class="steps">'+[0,1,2,3].map(function(i){
       return '<div class="'+(i<d.step?"done":(i===d.step?"on":""))+'"></div>'; }).join("")+'</div>';
+
+  h+=todayStrip(d);
 
   if(d.step===0){
     var reqN=countReq(WARMUP), doneN=WARMUP.filter(function(x,i){return x.req&&d.warmup.indexOf(i)>=0;}).length;
@@ -2356,6 +2417,15 @@ document.addEventListener("click",function(ev){
   }
 
   if(a==="setBlockClub"){ return; }   /* 고르기는 change 에서 처리한다 */
+  if(a==="stripToggle"){ S.stripOpen=!S.stripOpen; render(); return; }
+  if(a==="stripDone"){
+    var si2=+el.getAttribute("data-i");
+    if(!S.draft) return;
+    S.draft.planDone=S.draft.planDone||[];
+    var at=S.draft.planDone.indexOf(si2);
+    if(at>=0) S.draft.planDone.splice(at,1); else S.draft.planDone.push(si2);
+    render(); return;
+  }
   if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
   if(a==="planDeep"){
     var P=prescribe();
