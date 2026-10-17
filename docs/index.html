@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="2026-10-17 v3">
+<meta name="app-version" content="v9">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1751,7 +1751,7 @@ function verBar(){
 function verRow(){
   var h='<div class="card" style="background:transparent;box-shadow:none;padding:4px 0">'
    +'<div class="spread">'
-   +'<span class="tiny">버전 '+esc(APP_VER)+(S.verNew?'':' · 최신')+'</span>'
+   +'<span class="tiny">'+esc(APP_VER)+(S.verNew?'':' · 최신')+'</span>'
    +'<button class="btn ghost sm" data-act="openChangelog">변경 내역</button></div></div>';
   return h;
 }
@@ -1759,7 +1759,7 @@ function verRow(){
 function sheetChangelog(){
   var h='<div class="spread"><h3 style="font-size:19px">변경 내역</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
-  h+='<p class="muted" style="margin-top:8px">지금 쓰시는 버전은 <b>'+esc(APP_VER)+'</b> 입니다.</p>';
+  h+='<p class="muted" style="margin-top:8px">지금 쓰시는 것은 <b>'+esc(APP_VER)+'</b> 입니다.</p>';
   var log=S.verLog||[];
   if(!log.length){ h+='<div class="card empty" style="margin-top:14px"><h3>내역을 불러오지 못했습니다</h3><p>잠시 뒤 다시 열어 주세요.</p></div>'; return h; }
   h+='<div style="margin-top:14px">';
