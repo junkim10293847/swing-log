@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v14">
+<meta name="app-version" content="v15">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -203,11 +203,13 @@ textarea{resize:vertical;min-height:84px;line-height:1.6}
 .empty p{font-size:13.5px}
 
 .sheet{position:fixed;inset:0;z-index:60;background:rgba(18,19,33,.4);backdrop-filter:blur(3px);
-  display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
+  display:flex;align-items:flex-end;justify-content:center}
+.sheet.fresh{animation:fadeIn .2s ease}
+.sheet.fresh .inner{animation:riseUp .26s cubic-bezier(.22,.9,.3,1)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .sheet .inner{background:var(--bg);width:100%;max-width:720px;max-height:92vh;overflow:auto;border-radius:28px 28px 0 0;
   padding:16px 18px calc(28px + env(safe-area-inset-bottom,0px));
-  box-shadow:0 -12px 48px rgba(18,19,33,.2);animation:riseUp .26s cubic-bezier(.22,.9,.3,1)}
+  box-shadow:0 -12px 48px rgba(18,19,33,.2)}
 @keyframes riseUp{from{transform:translateY(18px)}to{transform:translateY(0)}}
 .sheet .hdl{width:40px;height:4px;border-radius:999px;background:var(--line);margin:2px auto 16px}
 
@@ -379,13 +381,27 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
 function connOK(){ return !!(S.conn.db && S.conn.user && S.conn.uid && !S.conn.err); }
 
 function uuid(){ return "x"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+/* 초만 올라가는 자리는 화면을 다시 그리지 않고 글자만 바꾼다.
+   통째로 다시 그리면 열려 있던 시트가 매번 다시 열리면서 깜빡인다. */
+function tickOnly(){
+  var hit=false;
+  document.querySelectorAll("[data-tick]").forEach(function(el){
+    var k=el.getAttribute("data-tick");
+    var v=(k==="sec")?(S.sec||0):((S.asksec&&S.asksec[k])||0);
+    var want=String(v)+"초";
+    if(el.textContent!==want){ el.textContent=want; }
+    hit=true;
+  });
+  return hit;
+}
+
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];}); }
 function today(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function fmtDate(s){ if(!s) return ""; var p=String(s).split("-"); return p.length<3?s:(+p[1])+"월 "+(+p[2])+"일"; }
@@ -665,7 +681,7 @@ function ask(key,prompt,opts){
   (function tick(){
     if(!S.busy[key]) return;
     S.asksec[key]=(S.asksec[key]||0)+1;
-    if(S.busy[key]) render();
+    if(!tickOnly()) render();        /* 글자만 못 바꾸면 그때만 다시 그린다 */
     setTimeout(tick,1000);
   })();
   /* 끝나지 않는 일은 없어야 한다. 서버가 침묵하면 2분에 끊는다. */
@@ -1402,7 +1418,10 @@ function drawSparks(){
 
 /* ====================== 시트(모달) ====================== */
 function sheetHTML(){
-  var s=S.sheet, h='<div class="sheet" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
+  var s=S.sheet;
+  var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
+  S.sheetShown=s.kind;
+  var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
   h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
@@ -1495,7 +1514,7 @@ function sheetBlock(){
    +fileField("shotPhoto","사진 고르기","결과 화면 전체가 또렷하게");
   if(ready.img){
     h+='<button class="btn full" style="margin-top:10px" data-act="readShotPhoto"'+(S.busy.sphoto?" disabled":"")+'>'
-     +(S.busy.sphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' '+(S.sec||0)+'초'):'사진에서 읽기')+'</button>';
+     +(S.busy.sphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' <span data-tick="sec">'+(S.sec||0)+'초</span>'):'사진에서 읽기')+'</button>';
     if(S.busy.sphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">보통 5~15초입니다. 초가 올라가면 돌고 있는 중입니다.</p>';
   } else {
     h+=keyForm();
@@ -1604,7 +1623,7 @@ function sheetRound(){
    +fileField("roundPhoto","사진 고르기","홀별 표와 총타수가 다 들어가게");
   if(ready.img){
     h+='<button class="btn full" style="margin-top:10px" data-act="readRoundPhoto"'+(S.busy.rphoto?" disabled":"")+'>'
-     +(S.busy.rphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' '+(S.sec||0)+'초'):'사진에서 읽기')+'</button>';
+     +(S.busy.rphoto?('<span class="spin"></span> '+esc(S.stage||"읽는 중")+' <span data-tick="sec">'+(S.sec||0)+'초</span>'):'사진에서 읽기')+'</button>';
     if(S.busy.rphoto) h+='<p class="tiny" style="margin-top:6px;color:var(--fg3)">보통 5~15초입니다. 초가 올라가면 돌고 있는 중입니다.</p>';
   }
   if(S.msg.rphoto){
@@ -1717,7 +1736,7 @@ function clubAskCard(c){
    +'</div>';
   h+='<textarea id="cf_q" style="min-height:58px;margin-top:10px" placeholder="직접 물어도 됩니다. 예) 이 샤프트가 지금 내 스윙 속도에 무겁지 않나">'+esc(S.qDraft||"")+'</textarea>';
   h+='<button class="btn full" style="margin-top:8px" data-act="askClub"'+(S.busy.cq?" disabled":"")+'>'
-   +(S.busy.cq?('<span class="spin"></span> 답 만드는 중 '+(S.asksec.cq||0)+'초'):'물어보기')+'</button>';
+   +(S.busy.cq?('<span class="spin"></span> 답 만드는 중 <span data-tick="cq">'+(S.asksec.cq||0)+'초</span>'):'물어보기')+'</button>';
   if(S.msg.cq) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.cq)+'</div>';
   var qa=c.qa||[];
   qa.slice().reverse().forEach(function(x,i){
@@ -1878,7 +1897,7 @@ function planCard(){
     if(P.test) h+='<div class="note" style="margin-top:12px">'+esc(P.test)+'</div>';
 
     h+='<button class="btn sm full" style="margin-top:12px" data-act="planDeep"'+(S.busy.plan?" disabled":"")+'>'
-     +(S.busy.plan?('<span class="spin"></span> '+(S.asksec.plan||0)+'초'):'10발 단위로 더 자세히')+'</button>';
+     +(S.busy.plan?('<span class="spin"></span> <span data-tick="plan">'+(S.asksec.plan||0)+'초</span>'):'10발 단위로 더 자세히')+'</button>';
     if(S.msg.plan) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.plan)+'</div>';
     if(S.planText) h+='<div class="ai" style="margin-top:12px"><div class="hd">자세한 안내</div>'+esc(S.planText)+'</div>';
   }
@@ -2398,7 +2417,7 @@ document.addEventListener("click",function(ev){
   var el=ev.target.closest("[data-act],[data-tab]");
   if(!el) return;
   var tab=el.getAttribute("data-tab");
-  if(tab){ S.tab=tab; S.sheet=null; S.jump=true; render(); window.scrollTo(0,0); return; }
+  if(tab){ S.tab=tab; S.sheet=null; S.sheetShown=null; S.jump=true; render(); window.scrollTo(0,0); return; }
   var a=el.getAttribute("data-act");
 
   if(a==="reconnect"){ reconnect(); return; }
@@ -2417,8 +2436,8 @@ document.addEventListener("click",function(ev){
     },1600);
     return;
   }
-  if(a==="closeSheetBg"){ if(ev.target.closest(".inner")) return; S.sheet=null; render(); return; }
-  if(a==="closeSheet"){ S.sheet=null; render(); return; }
+  if(a==="closeSheetBg"){ if(ev.target.closest(".inner")) return; S.sheet=null; S.sheetShown=null; render(); return; }
+  if(a==="closeSheet"){ S.sheet=null; S.sheetShown=null; render(); return; }
 
   /* --- 탐색 --- */
   if(a==="openClub"){ var c=S.clubs.filter(function(x){return x.id===el.getAttribute("data-id");})[0];
@@ -2459,10 +2478,10 @@ document.addEventListener("click",function(ev){
   if(a==="saveClub"){
     var c2=readClubForm(S.sheet.data);
     if(!c2.order) c2.order=(S.clubs.length+1)*10;
-    put("clubs",c2).then(function(){ S.sheet=null; render(); });
+    put("clubs",c2).then(function(){ S.sheet=null; S.sheetShown=null; render(); });
     return;
   }
-  if(a==="delClub"){ del("clubs",el.getAttribute("data-id")).then(function(){ S.sheet=null; render(); }); return; }
+  if(a==="delClub"){ del("clubs",el.getAttribute("data-id")).then(function(){ S.sheet=null; S.sheetShown=null; render(); }); return; }
 
   if(a==="readClubPhoto"){
     var f=fileOf("clubPhoto");
@@ -2764,9 +2783,10 @@ document.addEventListener("click",function(ev){
     (function tick(){
       if(!S.busy.rphoto) return;
       S.sec++;
+      var changed=(S.sec===2||S.sec===5);
       if(S.sec===2) S.stage="보내는 중";
       if(S.sec===5) S.stage="읽는 중";
-      render();
+      if(changed || !tickOnly()) render();
       setTimeout(tick,1000);
     })();
     sample.json("라운드 결과 화면",{images:[rf],modelTier:"default"})
@@ -2855,9 +2875,10 @@ document.addEventListener("click",function(ev){
     (function tick(){
       if(!S.busy.sphoto) return;
       S.sec++;
+      var changed=(S.sec===2||S.sec===5);
       if(S.sec===2) S.stage="보내는 중";
       if(S.sec===5) S.stage="읽는 중";
-      render();
+      if(changed || !tickOnly()) render();
       setTimeout(tick,1000);
     })();
     sample.json("측정 화면",{images:[sf],modelTier:"default"})
@@ -2904,7 +2925,7 @@ document.addEventListener("click",function(ev){
     S.draft.blocks.push({clubId:b2.clubId,clubName:club2.name,m:b2.m,
       shots:(b2.shots||S.draft.setSize||10), mode:(S.draft.mode||"집중"),
       good:ev2.good,bad:ev2.bad,deltas:ev2.deltas,coaching:""});
-    S.sheet=null; render(); return;
+    S.sheet=null; S.sheetShown=null; render(); return;
   }
 
   if(a==="coachFeel"){
@@ -2928,7 +2949,7 @@ document.addEventListener("click",function(ev){
     put("sessions",rec).then(function(){ S.draft=null; S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0); });
     return;
   }
-  if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; render(); }); return; }
+  if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; S.sheetShown=null; render(); }); return; }
 
   if(a==="coachBlock"){
     var si=el.getAttribute("data-si"), bi=+el.getAttribute("data-bi");
@@ -2967,7 +2988,7 @@ document.addEventListener("click",function(ev){
     if(rt.marks){ if(r2.dbl==null) r2.dbl=rt.dbl; if(r2.parOrBetter==null) r2.parOrBetter=rt.good; }
     r2.note=g2("rf_note");
     put("rounds",r2).then(function(){
-      S.sheet=null; render();
+      S.sheet=null; S.sheetShown=null; render();
       var btn=document.querySelector('[data-act="analyzeRound"][data-id="'+r2.id+'"]');
       if(btn) btn.click();
     });
