@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="2026.10.17.2">
+<meta name="app-version" content="2026-10-17 v3">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1766,7 +1766,7 @@ function sheetChangelog(){
   log.forEach(function(e){
     var now=(e.v===APP_VER);
     h+='<div class="listrow" style="cursor:default;align-items:flex-start">'
-     +'<span class="chip '+(now?'acc':'neutral')+'" style="margin-top:2px">'+esc(e.v)+'</span>'
+     +'<span class="chip '+(now?'acc':'neutral')+'" style="margin-top:2px;white-space:nowrap;font-family:var(--fData)">'+esc(e.v)+'</span>'
      +'<div class="bd"><span style="white-space:normal;color:var(--fg);font-size:14px">'+esc(e.note||"")+'</span>'
      +'<span class="tiny">'+esc(e.date||"")+(now?' · 지금 이 버전':'')+'</span></div></div>';
   });
