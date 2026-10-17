@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v22">
+<meta name="app-version" content="v23">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -395,7 +395,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -797,8 +797,34 @@ function renderTabs(){
 }
 /* 다시 그릴 때는 화면을 통째로 갈아끼우므로 스크롤이 맨 위로 돌아간다.
    보고 있던 자리를 기억했다가 그린 뒤 되돌린다. 일부러 위로 올릴 때는 S.jump 를 세운다. */
+/* ───────── 하던 기록 지키기 ─────────
+   사진을 찍거나 다른 앱을 보러 나간 사이 안드로이드가 탭을 정리해 버린다.
+   돌아왔을 때 그때까지 넣은 세트가 사라지면 안 되므로 기기에 계속 적어 둔다. */
+var DRAFT_KEY="swinglog.draft";
+function saveDraft(){
+  /* 적기만 한다. 지우는 것은 저장을 마쳤거나 그만뒀을 때뿐이다.
+     여기서 지우면 앱이 다시 열릴 때 첫 그리기에 적어 둔 것이 날아간다. */
+  try{ if(S.draft) localStorage.setItem(DRAFT_KEY, JSON.stringify({at:Date.now(), tab:S.tab, d:S.draft})); }catch(e){}
+}
+function dropDraft(){ try{ localStorage.removeItem(DRAFT_KEY); }catch(e){} }
+function loadDraft(){
+  try{
+    var raw=localStorage.getItem(DRAFT_KEY); if(!raw) return null;
+    var o=JSON.parse(raw);
+    if(!o||!o.d||!o.d.id) return null;
+    if(Date.now()-(o.at||0) > 20*60*60*1000){ dropDraft(); return null; }   /* 하루 지난 것은 이어 할 일이 아니다 */
+    return o;
+  }catch(e){ return null; }
+}
+function restoreDraft(){
+  var o=loadDraft(); if(!o) return false;
+  S.draft=o.d; S.tab="practice"; S.resumed=true;
+  return true;
+}
+
 function render(){
   if(S.lock && S.lock.need){ renderLock(); return; }
+  saveDraft();
   var lw=document.getElementById("lockHost"); if(lw) lw.innerHTML="";
   document.body.classList.remove("locked");
   renderTabs();
@@ -1162,6 +1188,8 @@ function draftView(){
   h+='<div class="steps">'+[0,1,2,3].map(function(i){
       return '<div class="'+(i<d.step?"done":(i===d.step?"on":""))+'"></div>'; }).join("")+'</div>';
 
+  if(S.resumed) h+='<div class="banner ok">하던 기록을 그대로 이어서 보고 있습니다. '
+   +'세트 '+((d.blocks||[]).length)+'개가 남아 있습니다.</div>';
   h+=todayStrip(d);
 
   if(d.step===0){
@@ -2367,8 +2395,9 @@ function fileField(id,title,hint){
 /* 파일 창이 실제로 열렸는지는 화면이 가려지는지로 본다 */
 var pickLeft=false;
 window.addEventListener("blur",function(){ pickLeft=true; });
+window.addEventListener("pagehide",saveDraft);
 document.addEventListener("visibilitychange",function(){
-  if(document.hidden){ pickLeft=true; return; }
+  if(document.hidden){ pickLeft=true; saveDraft(); return; }
   /* 다시 들여다볼 때 새 버전이 올라왔는지 본다. 하루에 몇 번 되지 않는 가벼운 호출이다 */
   if(S.loaded) checkVersion(true).then(function(){ if(S.verNew) render(); });
 });
@@ -2779,7 +2808,7 @@ document.addEventListener("click",function(ev){
 
   /* --- 연습 세션 --- */
   if(a==="newSession"){ S.tab="practice"; S.draft=newDraft(); S.jump=true; render(); window.scrollTo(0,0); return; }
-  if(a==="cancelDraft"){ S.draft=null; render(); return; }
+  if(a==="cancelDraft"){ S.draft=null; S.resumed=false; dropDraft(); render(); return; }
   if(a==="step"){
     var s=+el.getAttribute("data-s");
     if(s===3){ var fb=document.getElementById("feelBox"); if(fb) S.draft.feeling=fb.value; }
@@ -3053,7 +3082,10 @@ document.addEventListener("click",function(ev){
     var d2=S.draft;
     var rec={id:d2.id,date:d2.date,warmup:d2.warmup,cooldown:d2.cooldown,blocks:d2.blocks,
       feeling:d2.feeling,coaching:d2.coaching,createdAt:new Date().toISOString()};
-    put("sessions",rec).then(function(){ S.draft=null; S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0); });
+    put("sessions",rec).then(function(){
+      S.draft=null; S.resumed=false; dropDraft();
+      S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0);
+    });
     return;
   }
   if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; S.sheetShown=null; render(); }); return; }
@@ -3485,6 +3517,7 @@ function reconnect(){
   boot().then(function(){ S.conn.retrying=false; render(); })
         .catch(function(){ S.conn.retrying=false; render(); });
 }
+restoreDraft();   /* 하던 기록이 있으면 첫 화면부터 그 자리로 */
 render();
 gate();
 })();
