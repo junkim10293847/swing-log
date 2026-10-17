@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v24">
+<meta name="app-version" content="v25">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -395,7 +395,8 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"", verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
+  askOpen:"", askDraft:"", askAns:{}, askAsked:{}, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -999,6 +1000,7 @@ function viewClubs(){
   var h='<div class="stack">';
   h+='<div class="spread"><div><h2 class="sec-title">내 클럽</h2><p class="tiny">사진을 올리면 모델과 스펙을 읽어 채워 넣습니다</p></div>'
    +'<button class="btn primary sm" data-act="addClub">클럽 추가</button></div>';
+  h+=askBar("clubs");
 
   /* 같은 분류에 구입 시기를 한 번에 — 세트로 산 클럽은 하나하나 넣을 일이 없다 */
   if(S.clubs.length){
@@ -1083,6 +1085,7 @@ function viewPractice(){
   var h='<div class="stack">';
   h+='<div class="spread"><div><h2 class="sec-title">연습 기록</h2><p class="tiny">준비운동과 마무리 운동까지 한 세트입니다</p></div>'
    +'<button class="btn primary sm" data-act="newSession">연습 시작</button></div>';
+  h+=askBar("practice");
   h+=planCard();
   if(!S.sessions.length){
     h+= connOK()
@@ -1338,6 +1341,7 @@ function viewRounds(){
   var h='<div class="stack">';
   h+='<div class="spread"><div><h2 class="sec-title">라운드</h2><p class="tiny">스크린·필드 점수에서 약한 곳을 찾습니다</p></div>'
    +'<button class="btn primary sm" data-act="newRound">점수 입력</button></div>';
+  h+=askBar("rounds");
   if(!S.rounds.length){
     h+= connOK()
       ? '<div class="card empty"><h3>라운드 기록이 없습니다</h3><p>점수와 퍼팅 수만 넣어도 분석이 나옵니다.</p></div>'
@@ -1700,6 +1704,24 @@ function sheetRound(){
 }
 
 /* ====================== 동작 ====================== */
+function askScope(scope){
+  var k="ab_"+scope;
+  var q=String(S.askDraft||"").trim();
+  if(!q){ S.msg[k]="무엇을 물어볼지 적거나 위의 질문을 눌러 주세요."; render(); return; }
+  if(!ready.ai){ S.msg[k]="AI 키가 아직 없습니다."; render(); return; }
+  S.msg[k]=null;
+  var p=profileText()+"\n\n"+askContext(scope)
+   +"\n\n질문: "+q
+   +"\n\n위 기록만 근거로 답하세요. 없는 숫자는 만들지 말고 '측정이 없다'고 쓰세요.\n"
+   +"답: 결론 한 문장. 한쪽을 고르세요.\n"
+   +"근거: 위 숫자를 직접 인용해 두세 문장.\n"
+   +"할 일: 다음에 바꿀 것 한 가지만.\n"
+   +"500자 이내, 머리말 없이 바로 시작.";
+  ask(k,p,{modelTier:"default"}).then(function(t){
+    S.askAns[scope]=t; S.askAsked[scope]=q; S.askDraft=""; render();
+  }).catch(function(){});
+}
+
 function askClubNow(){
   var c=S.sheet&&S.sheet.data; if(!c) return;
   var q=String(S.qDraft||"").trim();
@@ -1947,6 +1969,75 @@ function sheetChangelog(){
    +(S.busy.srv?'<span class="spin"></span> 확인 중':'확인')+'</button></div>';
   if(S.srv) h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px">'+esc(S.srv.msg)+'</div>';
   return h+'</div>';
+}
+
+/* ───────── 화면마다 물어보기 ─────────
+   그 화면이 보고 있는 기록이 그대로 근거가 된다.
+   평소에는 한 줄이고, 누르면 열린다. */
+var ASKBAR={
+  practice:{t:"연습 기록에 물어보기",
+    q:["최근 연습에서 나아진 게 있나","다음 연습에 뭘 바꿔야 하나","연습량이 충분한가","제자리걸음인 채가 있나"]},
+  rounds:{t:"라운드 기록에 물어보기",
+    q:["어디서 타수를 가장 많이 잃나","라운드마다 점수 차이가 왜 큰가","다음 라운드 목표는","초반에 무너지는 편인가"]},
+  clubs:{t:"가방 전체에 물어보기",
+    q:["거리 간격에 빈 곳이 있나","가장 약한 채는","지금 빼도 되는 채가 있나","채가 너무 많지 않나"]}
+};
+
+function askBar(scope){
+  var C=ASKBAR[scope]; if(!C) return "";
+  var open=(S.askOpen===scope);
+  if(!open){
+    return '<button class="btn ghost sm full" style="justify-content:flex-start;color:var(--fg3)" '
+     +'data-act="askOpen" data-s="'+scope+'">'+esc(C.t)+'</button>';
+  }
+  var k="ab_"+scope;
+  var h='<div class="card"><div class="spread"><div class="eyebrow">'+esc(C.t)+'</div>'
+   +'<button class="btn ghost sm" data-act="askOpen" data-s="'+scope+'">닫기</button></div>';
+  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'
+   + C.q.map(function(q){ return '<button class="chip acc" style="border:0;cursor:pointer;padding:7px 12px" '
+      +'data-act="askPick" data-s="'+scope+'" data-q="'+esc(q)+'">'+esc(q)+'</button>'; }).join("")
+   +'</div>';
+  h+='<textarea id="ab_q" style="min-height:52px;margin-top:10px" placeholder="직접 물어도 됩니다">'+esc(S.askDraft||"")+'</textarea>';
+  h+='<button class="btn full" style="margin-top:8px" data-act="askGo" data-s="'+scope+'"'+(S.busy[k]?" disabled":"")+'>'
+   +(S.busy[k]?('<span class="spin"></span> 답 만드는 중 <span data-tick="'+k+'">'+(S.asksec[k]||0)+'초</span>'):'물어보기')+'</button>';
+  if(S.msg[k]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg[k])+'</div>';
+  if(S.askAns[scope]) h+='<div class="ai" style="margin-top:12px"><div class="hd">'+esc(S.askAsked[scope]||"답")+'</div>'+esc(S.askAns[scope])+'</div>';
+  return h+'</div>';
+}
+
+/* 화면마다 무엇을 근거로 넘길지 */
+function askContext(scope){
+  if(scope==="rounds"){
+    var rs=S.rounds.filter(function(r){ return r.score!=null; }).slice(0,8);
+    if(!rs.length) return "라운드 기록이 없습니다.";
+    return "라운드 기록 "+rs.length+"회\n"+rs.map(function(r){
+      var t=holeTally(r);
+      return "· "+fmtDate(r.date)+" "+(r.type==="field"?"필드":"스크린")+(r.course?(" "+r.course):"")
+        +" "+r.score+"타"+(r.par?("(파 "+r.par+", "+(r.score-r.par>0?"+":"")+(r.score-r.par)+")"):"")
+        +(r.putts!=null?(" 퍼팅"+r.putts):"")+(r.fw!=null?(" 페어웨이"+r.fw+"/14"):"")
+        +(r.gir!=null?(" 그린"+r.gir+"/18"):"")+(r.ob!=null?(" OB"+r.ob):"")+(r.penalty!=null?(" 벌타"+r.penalty):"")
+        +(t.n>=18?(" 전반"+t.out+"/후반"+t.inn+" 더블이상"+t.dbl+"홀"):"")
+        +(r.note?(" 메모: "+String(r.note).slice(0,60)):"");
+    }).join("\n");
+  }
+  if(scope==="clubs"){
+    var rows=S.clubs.filter(function(c){ return c.cat!=="putter"; }).map(function(c){
+      var b=lastBlockFor(c.id), T=TARGET[tkey(c)];
+      return "· "+c.name+(c.loft!=null?(" "+c.loft+"도"):"")+(c.spare?" (예비)":"")
+        +(b?(" — "+metricSummary(b.m)):" — 측정 없음")
+        +(T&&b&&b.m.carry!=null&&b.m.carry<T.carry[0]?(" / 목표 "+T.carry[0]+"~"+T.carry[1]+"m 미달"):"");
+    });
+    return "가방 "+S.clubs.length+"개\n"+rows.join("\n");
+  }
+  var ss=S.sessions.slice(0,6);
+  if(!ss.length) return "연습 기록이 없습니다.";
+  return "연습 기록 "+S.sessions.length+"회 중 최근 "+ss.length+"회\n"+ss.map(function(x){
+    return "· "+fmtDate(x.date)+" — "+((x.blocks||[]).map(function(b){
+      return b.clubName+(b.mode==="섞어"?"(섞어)":"")+" "+(b.m&&b.m.carry!=null?r1(b.m.carry)+"m":"—")
+        +(b.m&&b.m.grade?("/"+b.m.grade):"");
+    }).join(", ")||"세트 없음")
+      +(x.feeling?(" / 느낀점: "+String(x.feeling).slice(0,70)):"");
+  }).join("\n");
 }
 
 function planCard(){
@@ -2809,6 +2900,18 @@ document.addEventListener("click",function(ev){
     var rid2=el.getAttribute("data-id");
     S.openRound = (S.openRound===rid2) ? "" : rid2;
     render(); return;
+  }
+  if(a==="askOpen"){
+    var sc=el.getAttribute("data-s");
+    S.askOpen=(S.askOpen===sc)?"":sc; S.askDraft=""; render(); return;
+  }
+  if(a==="askPick"){
+    S.askDraft=el.getAttribute("data-q")||"";
+    askScope(el.getAttribute("data-s")); return;
+  }
+  if(a==="askGo"){
+    var qe=document.getElementById("ab_q"); if(qe) S.askDraft=qe.value;
+    askScope(el.getAttribute("data-s")); return;
   }
   if(a==="planOpen"){ S.planOpen=!S.planOpen; render(); return; }
   if(a==="planMin"){ setPlanMin(+el.getAttribute("data-m")); S.planText=null; render(); return; }
