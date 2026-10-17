@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v23">
+<meta name="app-version" content="v24">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -395,7 +395,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"", verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -1465,7 +1465,7 @@ function sheetHTML(){
   var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
   S.sheetShown=s.kind;
   var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -1806,6 +1806,10 @@ function planMin(){
 function setPlanMin(v){ try{ localStorage.setItem("swinglog.min",String(v)); }catch(e){} }
 /* 9홀을 같이 도는 날이 있다. 그 시간을 빼지 않으면 배분이 전부 틀어진다. */
 var HOLE9=45;
+var BODY=[{k:"fresh",n:"가뿐함",w:8},{k:"ok",n:"보통",w:10},{k:"stiff",n:"뻐근함",w:16}];
+function preBody(){ try{ return localStorage.getItem("swinglog.body")||"ok"; }catch(e){ return "ok"; } }
+function setPreBody(v){ try{ localStorage.setItem("swinglog.body",v); }catch(e){} }
+function bodyOf(k){ for(var i=0;i<BODY.length;i++) if(BODY[i].k===k) return BODY[i]; return BODY[1]; }
 function planHoles(){ try{ return localStorage.getItem("swinglog.holes9")==="1"; }catch(e){ return false; } }
 function setPlanHoles(on){ try{ localStorage.setItem("swinglog.holes9",on?"1":"0"); }catch(e){} }
 
@@ -1872,6 +1876,53 @@ function verRow(){
    +'<div class="spread">'
    +'<span class="tiny">'+esc(APP_VER)+(S.verNew?'':' · 최신')+'</span>'
    +'<button class="btn ghost sm" data-act="openChangelog">변경 내역</button></div></div>';
+  return h;
+}
+
+/* 시작 전에 묻는다. 세 줄이면 끝난다.
+   몸 상태에 따라 몸풀기 시간이 달라지고, 중점을 직접 고르면 그 채가 중심이 된다. */
+function sheetPre(){
+  var P=prescribe();
+  var bk=preBody(), b=bodyOf(bk);
+  var h='<div class="spread"><h3 style="font-size:19px">시작 전에</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+
+  h+='<div class="segWrap"><span class="lab">오늘 몸은 어떻습니까</span>'
+   +'<div class="seg" role="group" aria-label="몸 상태">'
+   + BODY.map(function(x){
+       return '<button type="button" aria-pressed="'+(bk===x.k?"true":"false")+'" '
+        +'data-act="preBody" data-b="'+x.k+'">'+x.n+'</button>'; }).join("")
+   +'</div>'
+   +'<p class="tiny" style="margin-top:6px">몸풀기 '+b.w+'분으로 잡습니다.'
+   +(bk==="stiff"?' 찬 몸에 드라이버부터 치면 그 자세가 남습니다. 오늘은 짧은 채부터.':'')
+   +'</p></div>';
+
+  h+='<div class="segWrap"><span class="lab">무엇을 중점으로 할까요</span>';
+  if(P){
+    h+='<div class="note" style="margin-top:8px;background:var(--surface2)">'
+     +'<b>'+esc(P.primary.head)+'</b>\n'+esc(P.primary.why)+'</div>';
+  }
+  var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; });
+  h+='<p class="tiny" style="margin-top:10px">다른 채로 하시려면 눌러 주세요. 안 누르면 위 제안대로 갑니다.</p>'
+   +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'
+   + live.map(function(c){
+       return '<button class="chip '+(S.preFocus===c.id?"acc":"neutral")+'" style="border:0;cursor:pointer;padding:7px 12px" '
+        +'data-act="preFocus" data-c="'+esc(c.id)+'">'+esc(c.name)+'</button>'; }).join("")
+   +'</div></div>';
+
+  h+='<div class="segWrap"><span class="lab">시간</span>'
+   +'<div class="seg" role="group" aria-label="연습 시간">'
+   + MINS.map(function(m){
+       return '<button type="button" aria-pressed="'+((P?P.min:120)===m?"true":"false")+'" '
+        +'data-act="planMin" data-m="'+m+'">'+(m===60?'1시간':(m===90?'1시간 반':'2시간'))+'</button>'; }).join("")
+   +'</div></div>';
+  h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
+   +'<div class="seg" role="group" aria-label="9홀 포함">'
+   +'<button type="button" aria-pressed="'+((P&&P.holes9)?"false":"true")+'" data-act="planHoles" data-h="0">연습만</button>'
+   +'<button type="button" aria-pressed="'+((P&&P.holes9)?"true":"false")+'" data-act="planHoles" data-h="1">9홀 포함</button>'
+   +'</div></div>';
+
+  h+='<button class="btn primary full" style="margin-top:16px" data-act="preGo">시작</button>';
   return h;
 }
 
@@ -1970,6 +2021,16 @@ function prescribe(){
             grade:(b&&b.m.grade)||null, carry:(b&&b.m.carry!=null)?b.m.carry:null};
   });
 
+  /* 내가 직접 고른 채가 있으면 그것이 오늘의 중심이다. 앱 판단보다 앞선다. */
+  var picked=S.preFocus ? info.filter(function(x){ return x.c.id===S.preFocus; })[0] : null;
+  if(picked){
+    P.primary={x:picked, kind:"picked", head:picked.c.name+" 집중",
+      why:"오늘은 이 채로 가기로 하셨습니다."
+         +(picked.off.length?(" 지금 "+picked.off.map(function(o){ return o.k+" "+o.v; }).join(", ")+"가 기준 밖입니다."):"")};
+    P.test=picked.off.length ? ("성공 판정: "+picked.off[0].k+"가 "+picked.off[0].want+" 안으로")
+                             : "성공 판정: 10발 평균이 기록된다";
+  }
+
   /* A. 거리 역전 — 로프트가 큰 채가 더 멀리 간다. 코스에서 클럽을 고를 수 없게 된다 */
   var byLoft=info.filter(function(x){ return x.carry!=null && x.c.loft!=null; })
                  .sort(function(a,b){ return a.c.loft-b.c.loft; });
@@ -1979,7 +2040,7 @@ function prescribe(){
       if(byLoft[j].carry >= byLoft[i].carry - 1){ flip={lo:byLoft[i], hi:byLoft[j]}; break; }
     }
   }
-  if(flip){
+  if(flip && !picked){
     P.primary={x:flip.hi, kind:"flip",
       head:flip.hi.c.name+" 거리 다시 재기",
       why:flip.hi.c.name+"("+flip.hi.c.loft+"도)가 "+r1(flip.hi.carry)+"m, "
@@ -2064,7 +2125,7 @@ function prescribe(){
   }
 
   /* 시간 배분 */
-  var m=P.min, warm=10;
+  var m=P.min, warm=bodyOf(preBody()).w;
   /* 9홀을 돌면 그 자체가 쉬는 구간이 된다. 따로 쉬는 시간을 또 두지 않는다 */
   var h9=P.holes9?HOLE9:0;
   var rest=(!P.holes9 && m>=100)?10:0;
@@ -2074,7 +2135,10 @@ function prescribe(){
   var r5=function(v){ return Math.max(5,Math.round(v/5)*5); };
   var mainShare = n>1 ? r5(left*0.55) : left;
   var each = n>1 ? r5((left-mainShare)/(n-1)) : 0;
-  P.plan.push({m:warm, t:"몸풀기", d:"어깨·허리·손목. 첫 10발은 반스윙"});
+  P.plan.push({m:warm, t:"몸풀기",
+    d:(preBody()==="stiff")
+      ? "체온부터 올립니다 — 제자리 걷기 1분 뒤에 늘리세요. 찬 몸은 늘리면 다칩니다. 첫 10발은 웨지 반스윙."
+      : "어깨·허리·손목. 첫 10발은 반스윙"});
   P.plan.push({m:mainShare, t:P.primary.x.c.name,
     d:(P.primary.kind==="short")?"풀스윙 10발 → 시계 9시 하프 10발 → 시계 8시 쿼터 10발. 각 10발의 캐리 평균을 적습니다"
       :"10발씩 나눠 치고 평균을 적습니다"});
@@ -2807,7 +2871,17 @@ document.addEventListener("click",function(ev){
   }
 
   /* --- 연습 세션 --- */
-  if(a==="newSession"){ S.tab="practice"; S.draft=newDraft(); S.jump=true; render(); window.scrollTo(0,0); return; }
+  if(a==="newSession"){ S.tab="practice"; S.sheet={kind:"pre",data:{}}; render(); return; }
+  if(a==="preBody"){ setPreBody(el.getAttribute("data-b")); render(); return; }
+  if(a==="preFocus"){
+    var fid=el.getAttribute("data-c")||"";
+    S.preFocus = (S.preFocus===fid) ? "" : fid;
+    render(); return;
+  }
+  if(a==="preGo"){
+    S.sheet=null; S.sheetShown=null;
+    S.draft=newDraft(); S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0); return;
+  }
   if(a==="cancelDraft"){ S.draft=null; S.resumed=false; dropDraft(); render(); return; }
   if(a==="step"){
     var s=+el.getAttribute("data-s");
