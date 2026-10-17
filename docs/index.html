@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
+<meta name="app-version" content="2026.10.17.2">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -369,7 +370,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false,
+  stripOpen:false, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -852,7 +853,7 @@ function renderLock(){
 /* ---------- 홈 ---------- */
 function viewHome(){
   if(!S.loaded) return '<div class="empty"><h3>불러오는 중</h3><p>잠시만 기다려 주세요.</p></div>';
-  var h="";
+  var h=verBar();
   var last=S.sessions[0], lastR=S.rounds[0];
   var drv=S.clubs.filter(function(c){return c.cat==="driver"&&!c.spare;})[0];
 
@@ -908,6 +909,7 @@ function viewHome(){
   }
   h+='</div>';
 
+  h+=verRow();
   h+='</div>';
   return h;
 }
@@ -1354,7 +1356,7 @@ function drawSparks(){
 /* ====================== 시트(모달) ====================== */
 function sheetHTML(){
   var s=S.sheet, h='<div class="sheet" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -1713,6 +1715,62 @@ function pickBlockClub(i,cid){
   b.clubId=c.id; b.clubName=c.name;
   b.good=ev.good; b.bad=ev.bad; b.deltas=ev.deltas; b.needClub=false;
   render();
+}
+
+/* ───────── 버전 ─────────
+   앱은 자기 버전을 품고 열리고, version.json 을 주기적으로 읽어 다르면 알린다.
+   깃허브 페이지는 파일을 캐시하므로 읽을 때마다 꼬리표를 붙여 새로 받는다. */
+var APP_VER=(function(){
+  var m=document.querySelector('meta[name="app-version"]');
+  return (m&&m.getAttribute("content"))||"개발 중";
+})();
+
+function checkVersion(quiet){
+  return fetch("version.json?t="+Date.now(),{cache:"no-store"})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      S.verLog=d.log||[];
+      S.verLatest=d.v||"";
+      if(d.v && APP_VER!=="개발 중" && d.v!==APP_VER) S.verNew=d.v;
+      else S.verNew=null;
+      if(!quiet) render();
+      return d;
+    })
+    .catch(function(){ return null; });
+}
+
+function verBar(){
+  if(!S.verNew) return "";
+  var note=(S.verLog[0]&&S.verLog[0].note)||"";
+  return '<div class="card" style="margin-bottom:14px;background:var(--accentSoft)">'
+   +'<div class="spread"><div style="min-width:0"><b style="font-size:15px">새 버전이 있습니다</b>'
+   +'<div class="tiny" style="white-space:normal;margin-top:2px">'+esc(S.verNew)+(note?(' · '+esc(note)):'')+'</div></div>'
+   +'<button class="btn primary sm" style="flex:none" data-act="reloadApp">새로고침</button></div></div>';
+}
+
+function verRow(){
+  var h='<div class="card" style="background:transparent;box-shadow:none;padding:4px 0">'
+   +'<div class="spread">'
+   +'<span class="tiny">버전 '+esc(APP_VER)+(S.verNew?'':' · 최신')+'</span>'
+   +'<button class="btn ghost sm" data-act="openChangelog">변경 내역</button></div></div>';
+  return h;
+}
+
+function sheetChangelog(){
+  var h='<div class="spread"><h3 style="font-size:19px">변경 내역</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+  h+='<p class="muted" style="margin-top:8px">지금 쓰시는 버전은 <b>'+esc(APP_VER)+'</b> 입니다.</p>';
+  var log=S.verLog||[];
+  if(!log.length){ h+='<div class="card empty" style="margin-top:14px"><h3>내역을 불러오지 못했습니다</h3><p>잠시 뒤 다시 열어 주세요.</p></div>'; return h; }
+  h+='<div style="margin-top:14px">';
+  log.forEach(function(e){
+    var now=(e.v===APP_VER);
+    h+='<div class="listrow" style="cursor:default;align-items:flex-start">'
+     +'<span class="chip '+(now?'acc':'neutral')+'" style="margin-top:2px">'+esc(e.v)+'</span>'
+     +'<div class="bd"><span style="white-space:normal;color:var(--fg);font-size:14px">'+esc(e.note||"")+'</span>'
+     +'<span class="tiny">'+esc(e.date||"")+(now?' · 지금 이 버전':'')+'</span></div></div>';
+  });
+  return h+'</div>';
 }
 
 function planCard(){
@@ -2168,7 +2226,11 @@ function fileField(id,title,hint){
 /* 파일 창이 실제로 열렸는지는 화면이 가려지는지로 본다 */
 var pickLeft=false;
 window.addEventListener("blur",function(){ pickLeft=true; });
-document.addEventListener("visibilitychange",function(){ if(document.hidden) pickLeft=true; });
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ pickLeft=true; return; }
+  /* 다시 들여다볼 때 새 버전이 올라왔는지 본다. 하루에 몇 번 되지 않는 가벼운 호출이다 */
+  if(S.loaded) checkVersion(true).then(function(){ if(S.verNew) render(); });
+});
 function pickBlockedMsg(){
   return "파일 창이 열리지 않았습니다. 사진을 복사해 아래 칸에 붙여넣거나, 아래 칸에 끌어다 놓아 주세요.";
 }
@@ -2418,6 +2480,8 @@ document.addEventListener("click",function(ev){
 
   if(a==="setBlockClub"){ return; }   /* 고르기는 change 에서 처리한다 */
   if(a==="stripToggle"){ S.stripOpen=!S.stripOpen; render(); return; }
+  if(a==="reloadApp"){ try{ dropCache(); }catch(e){} location.reload(); return; }
+  if(a==="openChangelog"){ S.sheet={kind:"changelog",data:{}}; checkVersion(true).then(render); render(); return; }
   if(a==="stripDone"){
     var si2=+el.getAttribute("data-i");
     if(!S.draft) return;
@@ -3164,6 +3228,7 @@ function gate(){
 
 function boot(){
   S.conn.tried=true;
+  checkVersion(true).then(function(){ if(S.verNew) render(); });
   var had=showCached();
   if(had) render();              /* 기다리지 않고 바로 보여준다 */
   /* 잠금을 푼 뒤부터 센다. 페이지가 열린 시각부터 재면 잠금 화면에 머문 시간까지 포함돼
