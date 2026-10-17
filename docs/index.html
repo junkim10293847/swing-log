@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v20">
+<meta name="app-version" content="v21">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -930,17 +930,6 @@ function viewHome(){
     h+='</div>';
   }
 
-  /* 서버에 새 코드가 붙었는지 확인한다. 붙여넣기만 하고 재배포를 빠뜨리기 쉽다. */
-  h+='<div class="card"><div class="spread"><div class="eyebrow">서버 점검</div>'
-   +'<button class="btn ghost sm" data-act="checkServer"'+(S.busy.srv?" disabled":"")+'>'
-   +(S.busy.srv?'<span class="spin"></span> 확인 중':'지금 확인')+'</button></div>';
-  if(S.srv){
-    h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px">'+esc(S.srv.msg)+'</div>';
-  } else {
-    h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">앱스 스크립트를 새로 배포한 뒤 눌러 보세요. 라운드 사진 읽기와 문답 저장이 붙었는지 알려 줍니다.</p>';
-  }
-  h+='</div>';
-
   h+=verRow();
   h+='</div>';
   return h;
@@ -1861,6 +1850,12 @@ function sheetChangelog(){
      +'<div class="bd"><span style="white-space:normal;color:var(--fg);font-size:14px">'+esc(e.note||"")+'</span>'
      +'<span class="tiny">'+esc(e.date||"")+(now?' · 지금 이 버전':'')+'</span></div></div>';
   });
+  h+='</div>';
+  /* 서버 점검은 앱스 스크립트를 새로 배포했을 때만 쓰므로 홈이 아닌 여기 맨 아래에 둔다 */
+  h+='<div style="margin-top:18px;border-top:1px solid var(--line);padding-top:12px"><div class="spread"><span class="tiny">서버 점검 (서버 코드를 새로 배포했을 때만)</span>'
+   +'<button class="btn ghost sm" data-act="checkServer"'+(S.busy.srv?" disabled":"")+'>'
+   +(S.busy.srv?'<span class="spin"></span> 확인 중':'확인')+'</button></div>';
+  if(S.srv) h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px">'+esc(S.srv.msg)+'</div>';
   return h+'</div>';
 }
 
