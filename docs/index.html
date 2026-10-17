@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v16">
+<meta name="app-version" content="v17">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -381,7 +381,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
-  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:null, verNew:null, verLog:[], verLatest:"",
+  stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -1311,9 +1311,9 @@ function viewRounds(){
       ? '<div class="card empty"><h3>라운드 기록이 없습니다</h3><p>점수와 퍼팅 수만 넣어도 분석이 나옵니다.</p></div>'
       : '<div class="card empty"><h3>라운드 기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
   } else {
-    /* 기록이 쌓이면 다 펼쳐 둘 수 없다. 가장 최근 것만 열어 두고 나머지는 접는다. */
-    S.rounds.forEach(function(r,idx){
-      var open=(S.openRound==null) ? (idx===0) : (S.openRound===r.id);
+    /* 들어오면 전부 접혀 있다. 보고 싶은 것만 눌러서 연다. */
+    S.rounds.forEach(function(r){
+      var open=(S.openRound===r.id);
       var over=(r.score!=null&&r.par)?((r.score-r.par>0?"+":"")+(r.score-r.par)):null;
       h+='<div class="card">';
       h+='<div class="listrow" style="padding:0;border:0" data-act="openRound" data-id="'+esc(r.id)+'">'
@@ -2628,9 +2628,7 @@ document.addEventListener("click",function(ev){
   }
   if(a==="openRound"){
     var rid2=el.getAttribute("data-id");
-    var first=(S.rounds[0]||{}).id;
-    var nowOpen=(S.openRound==null) ? (rid2===first) : (S.openRound===rid2);
-    S.openRound = nowOpen ? "" : rid2;    /* 빈 값이면 전부 접힌 상태 */
+    S.openRound = (S.openRound===rid2) ? "" : rid2;
     render(); return;
   }
   if(a==="planOpen"){ S.planOpen=!S.planOpen; render(); return; }
