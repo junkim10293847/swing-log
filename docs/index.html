@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v30">
+<meta name="app-version" content="v31">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -2775,14 +2775,25 @@ function blockDetail(b){
    한 세트를 치면 → 코치가 판정·진단·다음 한 가지·질문을 준다 → 답을 고르면 다시 좁혀 준다
    → 같은 채로 다음 세트를 치면 지난 지시가 효과가 있었는지 숫자로 먼저 판정한다. */
 function lcParse(t){
-  var o={raw:t||""}, keys={"판정":"verdict","진단":"diag","다음":"next","질문":"q","보기":"opts"};
+  var o={raw:t||""}, keys={"판정":"verdict","진단":"diag","다음":"next","질문":"q","보기":"opts","답":"ans"};
   String(t||"").split(/\n+/).forEach(function(line){
-    var m=line.match(/^\s*[-*·]?\s*(판정|진단|다음|질문|보기)\s*[:：]\s*(.*)$/);
+    var m=line.match(/^\s*[-*·]?\s*(판정|진단|다음|질문|보기|답)\s*[:：]\s*(.*)$/);
     if(m) o[keys[m[1]]]=m[2].trim();
   });
   o.opts=o.opts?o.opts.split(/\s*[|｜\/]\s*/).filter(Boolean).slice(0,4):[];
-  if(!o.diag&&!o.next) o.diag=String(t||"").trim();
+  if(!o.diag&&!o.next&&!o.ans) o.diag=String(t||"").trim();
   return o;
+}
+
+/* 보낸 것이 답인지 되묻는 것인지 가린다.
+   되묻는 것을 답으로 받아 버리면, 하지도 않은 동작을 했다고 쓰고
+   방금 물어본 것을 또 묻는다. */
+function lcIsQuestion(t){
+  var s=String(t||"").trim();
+  if(!s) return false;
+  if(/[?？]/.test(s)) return true;
+  /* '뒤땅이 나요' 같은 설명을 질문으로 보지 않도록 어미만으로는 가르지 않는다 */
+  return /(어디에|어디를|어디다|어디가|어디쯤|어떻게|어째서|무엇|뭐야|뭐지|뭔가|맞나|맞는지|인가|할까|물어|알려\s*줘|설명해|궁금|왜\s|^왜)/.test(s);
 }
 function liveChat(b,i){
   if(!b.clubId) return "";
@@ -2797,14 +2808,18 @@ function liveChat(b,i){
     var o=x.o||lcParse(x.t), last=(k===chat.length-1);
     h+='<div class="lc-ai">'
       +(o.verdict?'<div class="lc-v">'+esc(o.verdict)+'</div>':'')
+      +(o.ans?'<p>'+esc(o.ans)+'</p>':'')
       +(o.diag?'<p>'+esc(o.diag)+'</p>':'')
       +(o.next?'<div class="lc-next"><b>다음 세트</b> '+esc(o.next)+'</div>':'')
       +(o.q?'<p class="lc-q">❓ '+esc(o.q)+'</p>':'')
       +'</div>';
-    if(last&&o.q&&!busy){
-      h+='<div class="lc-opts">'+(o.opts||[]).map(function(v){
-          return '<button class="btn ghost sm" data-act="lcAns" data-i="'+i+'" data-v="'+esc(v)+'">'+esc(v)+'</button>'; }).join("")
-        +'</div><div class="lc-in"><input id="lcIn'+i+'" placeholder="직접 답하기 (예: 공이 처음부터 오른쪽으로 나가요)">'
+    /* 코치가 더 묻지 않아도 되묻는 칸은 늘 열어 둔다 */
+    if(last&&!busy){
+      if(o.q&&(o.opts||[]).length)
+        h+='<div class="lc-opts">'+o.opts.map(function(v){
+          return '<button class="btn ghost sm" data-act="lcAns" data-i="'+i+'" data-v="'+esc(v)+'">'+esc(v)+'</button>'; }).join("")+'</div>';
+      h+='<div class="lc-in"><input id="lcIn'+i+'" placeholder="'
+        +(o.q?'답하거나 되물어도 됩니다':'되묻기 (예: 공은 어디에 두어야 하나요?)')+'">'
         +'<button class="btn sm" data-act="lcSend" data-i="'+i+'">보내기</button></div>';
     }
   });
@@ -2813,7 +2828,7 @@ function liveChat(b,i){
   if(chat.length&&!busy) h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">지시대로 같은 채로 한 세트 더 치고 사진을 올리면, 효과가 있었는지 먼저 판정해 드립니다.</p>';
   return h+'</div>';
 }
-function liveCoach(i,answer){
+function liveCoach(i,answer,fromChip){
   var d=S.draft; if(!d) return; var b=d.blocks[i]; if(!b||!b.clubId) return;
   if(!ready.ai){ S.msg["lc"+i]="AI 키가 아직 없습니다."; render(); return; }
   var cl=S.clubs.filter(function(x){return x.id===b.clubId;})[0], T=cl?TARGET[tkey(cl)]:null;
@@ -2836,13 +2851,33 @@ function liveCoach(i,answer){
     +(earlier.length?("\n오늘 같은 채 앞 세트:\n"+earlier.join("\n")):"")
     +(prevS?("\n지난 연습("+fmtDate(prevS.date)+"): "+metricSummary(prevS.m)):"")
     +(talk?("\n\n이 세트에서 나눈 대화:\n"+talk):"")
-    +"\n\n규칙: 고칠 것은 한 번에 하나만. 근거는 숫자로. 원인이 둘 이상일 수 있으면 질문으로 좁힌다(공이 처음부터 어느 쪽으로 출발하는지, 어느 쪽으로 휘는지, 맞는 위치, 손맛 등). "
-    +(earlier.length?"앞 세트에서 준 지시가 있으면 '판정'에 그 효과를 숫자로 먼저 적는다(좋아짐/그대로/나빠짐). ":"")
-    +(answer?"본인의 답을 반영해 진단과 다음 지시를 더 구체적으로 고친다. 원인이 확실해졌으면 질문은 생략해도 된다. ":"")
-    +"\n아래 형식 그대로, 줄마다 한 문장, 전체 220자 이내로 답하세요.\n판정: \n진단: \n다음: (다음 세트에서 바꿀 동작 하나 + 성공 판정 숫자)\n질문: (원인을 좁히는 짧은 질문 하나)\n보기: 짧은 답1 | 짧은 답2 | 짧은 답3";
+    /* 지어내지 못하게 못을 박는다. 앞 화면에서 '공을 오른발 쪽에 두어도…'처럼
+       본인이 하지도 않은 동작을 했다고 쓴 적이 있다. */
+    +"\n\n절대 규칙: 위에 적힌 숫자와 본인이 실제로 말한 것만 쓰세요. "
+    +"본인이 하지 않은 동작을 했다고 쓰지 마세요. 재지 않은 숫자를 만들지 마세요. "
+    +"같은 세트의 숫자를 두 번 판정하지 마세요.";
+
+  var isQ = !fromChip && answer && lcIsQuestion(answer);
+  var asked = b.chat.filter(function(c){ return c.r==="ai"&&c.o&&c.o.q; }).map(function(c){ return c.o.q; });
+
+  if(isQ){
+    /* 되물은 것이다. 세트를 다시 판정할 자리가 아니라 답할 자리다. */
+    p+="\n\n방금 본인이 보낸 것은 답이 아니라 질문입니다: \""+answer+"\""
+      +"\n이 질문에 먼저 답하세요. 세트를 다시 판정하지 말고, 숫자를 다시 늘어놓지 마세요."
+      +"\n정답이 하나로 정해지지 않는 것이면 '이 채는 이렇게, 저 채는 이렇게'처럼 기준을 말해 주세요."
+      +(asked.length?("\n이미 물어본 것(다시 묻지 마세요): "+asked.join(" / ")):"")
+      +"\n\n아래 형식 그대로, 전체 220자 이내로 답하세요.\n답: (질문에 대한 답. 이 채 기준으로 구체적으로)\n다음: (그래서 다음 세트에서 할 것 한 가지)";
+  } else {
+    p+="\n\n규칙: 고칠 것은 한 번에 하나만. 근거는 숫자로. 원인이 둘 이상일 수 있으면 질문으로 좁힌다(공이 처음부터 어느 쪽으로 출발하는지, 어느 쪽으로 휘는지, 맞는 위치, 손맛 등). "
+      +(earlier.length?"앞 세트에서 준 지시가 있으면 '판정'에 그 효과를 숫자로 먼저 적는다(좋아짐/그대로/나빠짐). ":"")
+      +(answer?"본인의 답을 반영해 진단과 다음 지시를 더 구체적으로 고친다. 원인이 확실해졌으면 질문은 생략해도 된다. ":"")
+      +(asked.length?("\n이미 물어본 것은 다시 묻지 마세요: "+asked.join(" / ")+". 더 물을 것이 없으면 '질문'과 '보기' 줄을 빼세요. "):"")
+      +"\n아래 형식 그대로, 줄마다 한 문장, 전체 220자 이내로 답하세요.\n판정: \n진단: \n다음: (다음 세트에서 바꿀 동작 하나 + 성공 판정 숫자)\n질문: (원인을 좁히는 짧은 질문 하나)\n보기: 짧은 답1 | 짧은 답2 | 짧은 답3";
+  }
+
   ask("lc"+i,p,{modelTier:"default",cache:false}).then(function(t){
     var o=lcParse(t); b.chat.push({r:"ai",t:t,o:o});
-    if(o.next) b.coaching=[o.verdict,o.diag,"다음: "+o.next].filter(Boolean).join("\n");
+    if(o.next) b.coaching=[o.verdict,o.diag||o.ans,"다음: "+o.next].filter(Boolean).join("\n");
     render();
   }).catch(function(){ if(answer&&b.chat.length&&b.chat[b.chat.length-1].r==="me") b.chat.pop(); render(); });
 }
@@ -3169,7 +3204,7 @@ document.addEventListener("click",function(ev){
     render(); return;
   }
   if(a==="lcStart"){ liveCoach(+el.getAttribute("data-i")); return; }
-  if(a==="lcAns"){ liveCoach(+el.getAttribute("data-i"),el.getAttribute("data-v")); return; }
+  if(a==="lcAns"){ liveCoach(+el.getAttribute("data-i"),el.getAttribute("data-v"),true); return; }
   if(a==="lcSend"){ var li=+el.getAttribute("data-i"), inp=document.getElementById("lcIn"+li), tx=inp?inp.value.trim():"";
     if(!tx){ if(inp) inp.focus(); return; } liveCoach(li,tx); return; }
   if(a==="openBlockRow"){
