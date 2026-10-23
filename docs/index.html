@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v32">
+<meta name="app-version" content="v33">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1339,6 +1339,8 @@ function draftView(){
       h+='<div class="banner'+(S.multi.bad?' warn':' ok')+'" style="margin-top:10px">'+S.multi.log.map(esc).join('<br>')+'</div>';
     }
     h+='</div>';
+
+    h+=vidCard();
 
     h+='<button class="btn full" style="margin-top:12px" data-act="addBlock">사진 없이 한 세트 직접 넣기</button>';
     h+='<button class="btn primary full" style="margin-top:8px" data-act="step" data-s="2"'+(d.blocks.length?"":" disabled")+'>'
@@ -2833,6 +2835,34 @@ function liveChat(b,i){
   if(chat.length&&!busy) h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">지시대로 같은 채로 한 세트 더 치고 사진을 올리면, 효과가 있었는지 먼저 판정해 드립니다.</p>';
   return h+'</div>';
 }
+/* 세트와 상관없이 영상 하나만 봐 달라고 할 수 있는 자리.
+   '사진 여러 장 고르기'에서 영상을 고르면 여기로 들어온다. */
+function vidCard(){
+  var d=S.draft; if(!d) return "";
+  var v=d.vidB, chat=(v&&v.chat)||[], busy=S.busy.lcv;
+  var h='<div class="card" style="margin-top:12px"><div class="eyebrow">스윙 영상</div>'
+   +'<p class="muted" style="margin:6px 0">스윙 한 번을 10초 안으로 찍어 올리면 여덟 컷으로 잘라 코치가 봅니다. 숫자가 아니라 자세를 봅니다.</p>'
+   +'<input type="file" accept="video/*" id="lcVid-1" style="display:none" aria-hidden="true">'
+   +'<button class="btn full" data-act="lcVidPick" data-i="-1"'+(busy?" disabled":"")+'>'
+   +(busy?'<span class="spin"></span> 보는 중':'🎬 스윙 영상 고르기')+'</button>';
+  if(chat.length){
+    h+='<div class="lc">';
+    chat.forEach(function(x){
+      if(x.r==="me"){ h+='<div class="lc-me">'+esc(x.t)+'</div>'; return; }
+      var o=x.o||lcParse(x.t);
+      h+='<div class="lc-ai">'
+       +(o.verdict?'<div class="lc-v">'+esc(o.verdict)+'</div>':'')
+       +(o.ans?'<p>'+esc(o.ans)+'</p>':'')
+       +(o.diag?'<p>'+esc(o.diag)+'</p>':'')
+       +(o.next?'<div class="lc-next"><b>다음 세트</b> '+esc(o.next)+'</div>':'')+'</div>';
+    });
+    h+='</div>';
+  }
+  if(S.vmsg.lcv) h+='<div class="note" style="margin-top:8px"><span class="spin"></span> '+esc(S.vmsg.lcv)+'</div>';
+  if(S.msg.lcv) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg.lcv)+'</div>';
+  return h+'</div>';
+}
+
 /* ---------- 스윙 영상 ----------
    영상을 통째로 보내면 너무 크고, 한 컷만 보내면 스윙이 안 보인다.
    고르게 여덟 컷을 뽑아 한 장으로 붙여 보낸다. */
@@ -2886,8 +2916,11 @@ function videoSheet(file,cb){
 
 /* 스윙 영상 여덟 컷을 코치에게 보인다. */
 function lcVideo(i,file){
-  var d=S.draft; if(!d) return; var b=d.blocks[i]; if(!b) return;
-  var key="lc"+i;
+  var d=S.draft; if(!d) return;
+  /* i 가 -1 이면 어느 세트에도 붙지 않은 영상이다. 세트를 만들기 전에도 봐 준다. */
+  var b = (i>=0) ? d.blocks[i] : (d.vidB = d.vidB || {clubId:"",clubName:"",m:{},chat:[]});
+  if(!b) return;
+  var key = (i>=0) ? ("lc"+i) : "lcv";
   if(!ready.ai){ S.msg[key]="AI 키가 아직 없습니다."; render(); return; }
   S.vmsg[key]="영상에서 여덟 컷을 꺼내는 중입니다."; S.msg[key]=null; S.busy[key]=true; render();
   videoSheet(file,function(url,err){
@@ -2898,7 +2931,8 @@ function lcVideo(i,file){
     var p=profileText()
      +"\n\n스윙 한 번을 처음부터 끝까지 여덟 컷으로 잘라 한 장에 붙인 그림입니다. "
      +"왼쪽 위 1번부터 오른쪽 아래 8번까지가 시간 순서입니다."
-     +(cl?("\n친 채: "+b.clubName+" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")"):"")
+     +(cl?("\n친 채: "+b.clubName+" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")")
+         :(b.clubName?("\n친 채: "+b.clubName):""))
      +(b.m&&Object.keys(b.m).length?("\n이 세트에서 잰 값: "+metricSummary(b.m)):"")
      +"\n\n보이는 것만 말하세요. 흐리거나 가려서 안 보이면 안 보인다고 하세요. 없는 것을 지어내지 마세요."
      +"\n고칠 것은 한 가지만 고르세요. 숫자가 같이 있으면 그 숫자와 맞물리는 것으로 고르세요."
@@ -3700,14 +3734,21 @@ document.addEventListener("change",function(ev){
     pickBlockClub(+t.getAttribute("data-i"), t.value); return;
   }
   if(t && t.type==="file" && String(t.id||"").indexOf("multiPhoto")===0){
-    var fl=t.files||[];
+    var fl=t.files||[], vidPick=null;
     multiReset();
     for(var mi=0;mi<fl.length;mi++){
+      /* 영상을 골랐으면 버리지 않고 영상 코치로 넘긴다 */
+      if(fl[mi].type && /^video\//.test(fl[mi].type)){ if(!vidPick) vidPick=fl[mi]; continue; }
       if(fl[mi].type && !/^image\//.test(fl[mi].type)) continue;
       S.multi.files.push(fl[mi]);
       S.multi.names.push(fl[mi].name||("사진"+(mi+1)));
       S.multi.urls.push(makeUrl(fl[mi]));
       S.multi.marks.push("");
+    }
+    if(vidPick){
+      S.multi.log=["영상은 세트로 만들지 않습니다. 아래 '스윙 영상'에서 자세를 봐 드립니다."];
+      S.multi.bad=true;
+      render(); lcVideo(-1,vidPick); return;
     }
     render(); return;
   }
