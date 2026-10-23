@@ -94,7 +94,7 @@ function dispatch_(fn) {
     apiSaveRound: apiSaveRound, apiDeleteRound: apiDeleteRound,
     apiSetKey: apiSetKey, apiClearKey: apiClearKey,
     apiAsk: apiAsk, apiReadShot: apiReadShot, apiReadClub: apiReadClub,
-    apiReadRound: apiReadRound
+    apiReadRound: apiReadRound, apiAskImg: apiAskImg
   };
   return map[fn] || null;
 }
@@ -1127,7 +1127,9 @@ function errMsg_(body) {
  * 혼잡(429·500·503)은 흔하다. 같은 모델을 한 번 더 두드려 보고,
  * 그래도 안 되면 다음 모델로 넘어간다. 한 모델이 막혔다고 멈추지 않는다.
  */
-function gemini_(parts) {
+/* preferBig — 그림이 붙어도 큰 모델부터 쓴다.
+   숫자만 읽을 때는 가벼운 것이 낫지만, 스윙을 봐 달라는 것은 큰 것이 낫다. */
+function gemini_(parts, preferBig) {
   var key = key_();
   if (!key) {
     throw new Error('AI 키가 아직 없습니다. 앱 화면의 키 입력란에 제미나이 키를 넣어 주세요. ' +
@@ -1150,7 +1152,7 @@ function gemini_(parts) {
   for (var hp = 0; hp < parts.length; hp++) if (parts[hp] && parts[hp].inline_data) wantHeavy = true;
   function rank_(n) {
     var s = String(n).toLowerCase();
-    if (wantHeavy) {                                  /* 사진 — 가벼운 것부터 */
+    if (wantHeavy && !preferBig) {                    /* 사진 — 가벼운 것부터 */
       if (s.indexOf('lite') >= 0) return 0;
       if (s.indexOf('flash') >= 0) return 1;
       return 2;
@@ -1329,6 +1331,17 @@ function testAI() {
 /** 글로 답을 받는다. */
 function apiAsk(prompt) {
   return gemini_([{ text: prompt }]);
+}
+
+/** 그림 한 장을 같이 보고 글로 답을 받는다.
+    스윙 영상에서 뽑은 여덟 컷을 한 장으로 붙여 보낼 때 쓴다. */
+function apiAskImg(prompt, dataUrl) {
+  var m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
+  if (!m) throw new Error('그림을 읽을 수 없는 형식입니다.');
+  return gemini_([
+    { text: String(prompt || '') },
+    { inline_data: { mime_type: m[1], data: m[2] } }
+  ], true);
 }
 
 /** 측정 화면 사진에서 숫자를 읽는다. dataUrl 은 "data:image/jpeg;base64,..." */

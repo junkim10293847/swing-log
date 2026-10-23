@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v31">
+<meta name="app-version" content="v32">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -394,7 +394,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  vmsg:{}, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
@@ -2803,6 +2803,10 @@ function liveChat(b,i){
     h+='<button class="btn primary full" data-act="lcStart" data-i="'+i+'"'+(busy?" disabled":"")+'>'
       +(busy?'<span class="spin"></span> 코치가 보는 중 <span data-tick="'+key+'">'+(S.asksec[key]||0)+'초</span>':'🎯 이 세트 코칭 받기')+'</button>';
   }
+  /* 숫자 말고 자세를 봐 달라고 할 때 — 스윙 한 번을 10초 안으로 찍어 올린다 */
+  h+='<input type="file" accept="video/*" id="lcVid'+i+'" style="display:none" aria-hidden="true">'
+   +'<button class="btn ghost sm full" style="margin-top:6px" data-act="lcVidPick" data-i="'+i+'"'+(busy?" disabled":"")+'>'
+   +'🎬 스윙 영상 봐 주기</button>';
   chat.forEach(function(x,k){
     if(x.r==="me"){ h+='<div class="lc-me">'+esc(x.t)+'</div>'; return; }
     var o=x.o||lcParse(x.t), last=(k===chat.length-1);
@@ -2824,10 +2828,101 @@ function liveChat(b,i){
     }
   });
   if(chat.length&&busy) h+='<div class="lc-ai"><span class="spin"></span> 코치가 생각하는 중 <span data-tick="'+key+'">'+(S.asksec[key]||0)+'초</span></div>';
+  if(S.vmsg[key]) h+='<div class="note" style="margin-top:8px"><span class="spin"></span> '+esc(S.vmsg[key])+'</div>';
   if(S.msg[key]) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg[key])+'</div>';
   if(chat.length&&!busy) h+='<p class="tiny" style="margin-top:8px;color:var(--fg3)">지시대로 같은 채로 한 세트 더 치고 사진을 올리면, 효과가 있었는지 먼저 판정해 드립니다.</p>';
   return h+'</div>';
 }
+/* ---------- 스윙 영상 ----------
+   영상을 통째로 보내면 너무 크고, 한 컷만 보내면 스윙이 안 보인다.
+   고르게 여덟 컷을 뽑아 한 장으로 붙여 보낸다. */
+function videoSheet(file,cb){
+  var v=document.createElement("video");
+  v.preload="auto"; v.muted=true; v.playsInline=true; v.setAttribute("playsinline","");
+  var url; try{ url=URL.createObjectURL(file); }catch(e){ cb(null,"영상을 열지 못했습니다."); return; }
+  var done=false;
+  function fail(m){ if(done) return; done=true; try{URL.revokeObjectURL(url);}catch(e){} cb(null,m); }
+  var guard=setTimeout(function(){ fail("영상을 읽는 데 너무 오래 걸립니다. 더 짧게 찍어 주세요."); },45000);
+  v.onerror=function(){ clearTimeout(guard); fail("이 형식의 영상은 읽지 못합니다. 휴대폰 기본 카메라로 찍은 것을 올려 주세요."); };
+  v.onloadedmetadata=function(){
+    var dur=v.duration;
+    if(!isFinite(dur)||dur<=0){ clearTimeout(guard); fail("영상 길이를 알 수 없습니다."); return; }
+    if(dur>20){ clearTimeout(guard); fail("영상이 "+Math.round(dur)+"초입니다. 스윙 한 번만 10초 안으로 찍어 주세요."); return; }
+    var N=8, cols=4;
+    var vw=v.videoWidth||360, vh=v.videoHeight||640;
+    var cw=Math.min(300,vw), ch=Math.round(vh*(cw/vw));
+    var cv=document.createElement("canvas");
+    cv.width=cw*cols; cv.height=ch*Math.ceil(N/cols);
+    var cx=cv.getContext("2d");
+    cx.fillStyle="#000"; cx.fillRect(0,0,cv.width,cv.height);
+    var k=0;
+    function step(){
+      if(k>=N){
+        clearTimeout(guard); done=true;
+        try{URL.revokeObjectURL(url);}catch(e){}
+        var out=null;
+        try{ out=cv.toDataURL("image/jpeg",0.7); }catch(e){}
+        cb(out, out?null:"영상에서 그림을 꺼내지 못했습니다.");
+        return;
+      }
+      var t=dur*(k+0.5)/N;
+      try{ v.currentTime=Math.min(Math.max(t,0), Math.max(dur-0.05,0)); }
+      catch(e){ clearTimeout(guard); fail("영상을 넘기지 못했습니다."); }
+    }
+    v.onseeked=function(){
+      if(done) return;
+      var x=(k%cols)*cw, y=Math.floor(k/cols)*ch;
+      try{ cx.drawImage(v,x,y,cw,ch); }
+      catch(e){ clearTimeout(guard); fail("영상에서 그림을 꺼내지 못했습니다."); return; }
+      cx.fillStyle="rgba(0,0,0,.6)"; cx.fillRect(x,y,30,24);
+      cx.fillStyle="#fff"; cx.font="bold 16px sans-serif";
+      cx.fillText(String(k+1), x+9, y+18);
+      k++; step();
+    };
+    step();
+  };
+  v.src=url;
+}
+
+/* 스윙 영상 여덟 컷을 코치에게 보인다. */
+function lcVideo(i,file){
+  var d=S.draft; if(!d) return; var b=d.blocks[i]; if(!b) return;
+  var key="lc"+i;
+  if(!ready.ai){ S.msg[key]="AI 키가 아직 없습니다."; render(); return; }
+  S.vmsg[key]="영상에서 여덟 컷을 꺼내는 중입니다."; S.msg[key]=null; S.busy[key]=true; render();
+  videoSheet(file,function(url,err){
+    if(err||!url){ S.busy[key]=false; S.vmsg[key]=null; S.msg[key]=err||"영상을 읽지 못했습니다."; render(); return; }
+    var cl=S.clubs.filter(function(x){return x.id===b.clubId;})[0];
+    b.chat=b.chat||[];
+    b.chat.push({r:"me",t:"스윙 영상을 올렸습니다."});
+    var p=profileText()
+     +"\n\n스윙 한 번을 처음부터 끝까지 여덟 컷으로 잘라 한 장에 붙인 그림입니다. "
+     +"왼쪽 위 1번부터 오른쪽 아래 8번까지가 시간 순서입니다."
+     +(cl?("\n친 채: "+b.clubName+" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")"):"")
+     +(b.m&&Object.keys(b.m).length?("\n이 세트에서 잰 값: "+metricSummary(b.m)):"")
+     +"\n\n보이는 것만 말하세요. 흐리거나 가려서 안 보이면 안 보인다고 하세요. 없는 것을 지어내지 마세요."
+     +"\n고칠 것은 한 가지만 고르세요. 숫자가 같이 있으면 그 숫자와 맞물리는 것으로 고르세요."
+     +"\n\n아래 형식 그대로, 전체 240자 이내로 답하세요."
+     +"\n판정: (몇 번 컷에서 무엇이 보이는지 한 문장)"
+     +"\n진단: (그래서 무엇이 문제인지 한 문장)"
+     +"\n다음: (다음 세트에서 바꿀 동작 하나 + 성공 판정 숫자)";
+    S.vmsg[key]="코치가 영상을 보는 중입니다. 20초쯤 걸립니다.";
+    render();
+    call("apiAskImg",p,url).then(function(t){
+      S.busy[key]=false; S.msg[key]=null; S.vmsg[key]=null;
+      var o=lcParse(t); b.chat.push({r:"ai",t:t,o:o});
+      if(o.next) b.coaching=[o.verdict,o.diag,"다음: "+o.next].filter(Boolean).join("\n");
+      render();
+    }).catch(function(e){
+      S.busy[key]=false; S.vmsg[key]=null;
+      b.chat.pop();
+      var m=(e&&e.message)||"영상을 보지 못했습니다.";
+      if(/알 수 없는 요청/.test(m)) m="서버에 영상 보기 기능이 아직 없습니다. 앱스 스크립트에 새 Code.gs 를 붙여 넣고 배포 관리에서 연필 → 새 버전 → 배포 하세요.";
+      S.msg[key]=m; render();
+    });
+  });
+}
+
 function liveCoach(i,answer,fromChip){
   var d=S.draft; if(!d) return; var b=d.blocks[i]; if(!b||!b.clubId) return;
   if(!ready.ai){ S.msg["lc"+i]="AI 키가 아직 없습니다."; render(); return; }
@@ -3204,6 +3299,13 @@ document.addEventListener("click",function(ev){
     render(); return;
   }
   if(a==="lcStart"){ liveCoach(+el.getAttribute("data-i")); return; }
+  if(a==="lcVidPick"){
+    var vi=+el.getAttribute("data-i"), ve=document.getElementById("lcVid"+vi);
+    if(!ve) return;
+    ve.onchange=function(){ var f=ve.files&&ve.files[0]; ve.value=""; if(f) lcVideo(vi,f); };
+    try{ ve.click(); }catch(e){}
+    return;
+  }
   if(a==="lcAns"){ liveCoach(+el.getAttribute("data-i"),el.getAttribute("data-v"),true); return; }
   if(a==="lcSend"){ var li=+el.getAttribute("data-i"), inp=document.getElementById("lcIn"+li), tx=inp?inp.value.trim():"";
     if(!tx){ if(inp) inp.focus(); return; } liveCoach(li,tx); return; }
