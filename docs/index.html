@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v27">
+<meta name="app-version" content="v28">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -396,6 +396,7 @@ var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
   openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
+  earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
@@ -1143,11 +1144,14 @@ function newDraft(){
   try{
     var p0=prescribe();
     if(p0){
+      var D=S.preDiag;
       P={head:p0.primary.head,
-         cue:p0.cue?p0.cue.t:null, cueWhy:p0.cue?p0.cue.d:null,
+         goal:String(S.preGoal||"").trim()||null,
+         diag:(D&&D.diag)||null,
+         cue:(D&&D.cue)||(p0.cue?p0.cue.t:null), cueWhy:p0.cue?p0.cue.d:null,
          plan:p0.plan.map(function(x){ return {m:x.m,t:x.t,d:x.d}; }),
          skip:p0.skip.length?(p0.skip[0].x.c.name+"은 오늘 빼십시오 — "+p0.skip[0].why):null,
-         test:p0.test||null};
+         test:(D&&D.test)||p0.test||null};
     }
   }catch(e){}
   return {id:uuid(),date:today(),step:0,warmup:[],cooldown:[],blocks:[],feeling:"",coaching:"",
@@ -1175,6 +1179,7 @@ function todayStrip(d){
    +'<button class="btn ghost sm" data-act="stripToggle">'+(S.stripOpen?'접기':'펼치기')+'</button></div>';
 
   h+='<h3 style="font-size:19px;margin:6px 0 2px">'+esc(P.head)+'</h3>';
+  if(P.goal) h+='<p class="tiny" style="margin-top:2px;white-space:normal">내가 적은 것 — '+esc(P.goal)+'</p>';
   if(P.cue){
     h+='<p style="margin-top:4px;font-size:15px"><b>생각 하나 — '+esc(P.cue)+'</b></p>';
     if(S.stripOpen&&P.cueWhy) h+='<p class="tiny" style="margin-top:2px;white-space:normal">'+esc(P.cueWhy)+'</p>';
@@ -1204,6 +1209,7 @@ function todayStrip(d){
        +'<span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
     });
     h+='</div>';
+    if(P.diag) h+='<div class="note" style="margin-top:8px;background:var(--surface)">'+esc(P.diag)+'</div>';
     if(P.skip) h+='<div class="banner warn" style="margin-top:8px">'+esc(P.skip)+'</div>';
     if(P.test) h+='<div class="note" style="margin-top:8px;background:var(--surface)">'+esc(P.test)+'</div>';
   }
@@ -1932,6 +1938,49 @@ function verRow(){
 
 /* 시작 전에 묻는다. 세 줄이면 끝난다.
    몸 상태에 따라 몸풀기 시간이 달라지고, 중점을 직접 고르면 그 채가 중심이 된다. */
+function readPreGoal(){
+  var e=document.getElementById("pre_goal"); if(e) S.preGoal=e.value;
+}
+
+/* 쓴 목표를 기록에 비추어 본다. 하고 싶은 것과 지금 새는 곳이 다를 수 있다. */
+function diagnoseGoal(){
+  var g=String(S.preGoal||"").trim();
+  if(!g){ S.msg.pdx="오늘 하고 싶은 것을 한 줄 적어 주세요."; render(); return; }
+  if(!ready.ai){ S.msg.pdx="AI 키가 아직 없습니다."; render(); return; }
+  S.msg.pdx=null;
+  var names=S.clubs.filter(function(c){ return !c.spare; }).map(function(c){ return c.name; });
+  var P=null; try{ P=prescribe(); }catch(e){}
+  var p=profileText()
+   +"\n\n본인이 오늘 하고 싶다고 적은 것: "+g
+   +(P?("\n기록만 보고 앱이 고른 중심: "+P.primary.head+" — "+P.primary.why):"")
+   +"\n가방에 있는 클럽 이름: "+names.join(", ")
+   +"\n\n네 줄로만 답하세요. 각 줄은 아래 머리말로 시작합니다.\n"
+   +"진단: 하고 싶다는 것이 지금 기록에서 타당한지 2~3문장. 기록이 다른 곳을 가리키면 그렇게 말하고 이유를 숫자로 대세요. 비위를 맞추지 마세요.\n"
+   +"중심: 오늘 중심으로 삼을 클럽 이름 하나만. 위 클럽 이름 목록에 있는 그대로 쓰세요.\n"
+   +"생각: 오늘 들고 갈 스윙 생각 한 가지. 짧게.\n"
+   +"판정: 오늘 성공인지 가를 숫자와 세는 방법.\n"
+   +"기록에 없는 숫자는 만들지 마세요.";
+  ask("pdx",p,{modelTier:"default"}).then(function(t){
+    var o={diag:"",clubName:"",cue:"",test:""};
+    String(t).split("\n").forEach(function(line){
+      var m=/^\s*(진단|중심|생각|판정)\s*[:：]\s*(.+)$/.exec(line);
+      if(!m) return;
+      if(m[1]==="진단") o.diag=m[2].trim();
+      else if(m[1]==="중심") o.clubName=m[2].trim();
+      else if(m[1]==="생각") o.cue=m[2].trim();
+      else o.test=m[2].trim();
+    });
+    if(!o.diag) o.diag=String(t).trim();
+    S.preDiag=o;
+    if(o.clubName){
+      var hit=S.clubs.filter(function(c){ return c.name===o.clubName; })[0] || guessClub(o.clubName);
+      if(hit){ S.preFocus=hit.id; o.clubName=hit.name; }
+      else o.clubName="";
+    }
+    render();
+  }).catch(function(){});
+}
+
 function sheetPre(){
   var P=prescribe();
   var bk=preBody(), b=bodyOf(bk);
@@ -1948,6 +1997,22 @@ function sheetPre(){
    +(bk==="stiff"?' 찬 몸에 드라이버부터 치면 그 자세가 남습니다. 오늘은 짧은 채부터.':'')
    +'</p></div>';
 
+  h+='<div class="segWrap"><span class="lab">오늘 하고 싶은 것</span>'
+   +'<textarea id="pre_goal" style="min-height:58px;margin-top:8px" '
+   +'placeholder="예) 드라이버 방향이 자꾸 왼쪽으로 간다. 오늘 그걸 잡고 싶다">'+esc(S.preGoal||"")+'</textarea>'
+   +'<button class="btn full" style="margin-top:8px" data-act="preDiag"'+(S.busy.pdx?" disabled":"")+'>'
+   +(S.busy.pdx?('<span class="spin"></span> 진단 중 <span data-tick="pdx">'+(S.asksec.pdx||0)+'초</span>')
+               :'이걸로 진단받기')+'</button>';
+  if(S.msg.pdx) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.pdx)+'</div>';
+  if(S.preDiag){
+    h+='<div class="ai" style="margin-top:10px"><div class="hd">진단</div>'+esc(S.preDiag.diag)
+     +(S.preDiag.cue?('\n\n오늘 생각 하나 — '+esc(S.preDiag.cue)):'')
+     +(S.preDiag.test?('\n성공 판정 — '+esc(S.preDiag.test)):'')+'</div>';
+    if(S.preDiag.clubName)
+      h+='<p class="tiny" style="margin-top:6px">중심을 <b>'+esc(S.preDiag.clubName)+'</b>로 잡았습니다. 아래에서 바꿀 수 있습니다.</p>';
+  }
+  h+='</div>';
+
   h+='<div class="segWrap"><span class="lab">무엇을 중점으로 할까요</span>';
   if(P){
     h+='<div class="note" style="margin-top:8px;background:var(--surface2)">'
@@ -1957,8 +2022,9 @@ function sheetPre(){
   h+='<p class="tiny" style="margin-top:10px">다른 채로 하시려면 눌러 주세요. 안 누르면 위 제안대로 갑니다.</p>'
    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">'
    + live.map(function(c){
-       return '<button class="chip '+(S.preFocus===c.id?"acc":"neutral")+'" style="border:0;cursor:pointer;padding:7px 12px" '
-        +'data-act="preFocus" data-c="'+esc(c.id)+'">'+esc(c.name)+'</button>'; }).join("")
+       var on=(S.preFocus===c.id);
+       return '<button class="chip '+(on?"acc":"neutral")+'" style="border:0;cursor:pointer;padding:7px 12px" '
+        +'data-act="preFocus" data-c="'+esc(c.id)+'">'+(on?'✓ ':'')+esc(c.name)+'</button>'; }).join("")
    +'</div></div>';
 
   h+='<div class="segWrap"><span class="lab">시간</span>'
@@ -3004,13 +3070,16 @@ document.addEventListener("click",function(ev){
 
   /* --- 연습 세션 --- */
   if(a==="newSession"){ S.tab="practice"; S.sheet={kind:"pre",data:{}}; render(); return; }
-  if(a==="preBody"){ setPreBody(el.getAttribute("data-b")); render(); return; }
+  if(a==="preBody"){ readPreGoal(); setPreBody(el.getAttribute("data-b")); render(); return; }
+  if(a==="preDiag"){ readPreGoal(); diagnoseGoal(); return; }
   if(a==="preFocus"){
+    readPreGoal();
     var fid=el.getAttribute("data-c")||"";
     S.preFocus = (S.preFocus===fid) ? "" : fid;
     render(); return;
   }
   if(a==="preGo"){
+    readPreGoal();
     S.sheet=null; S.sheetShown=null;
     S.draft=newDraft(); S.tab="practice"; S.jump=true; render(); window.scrollTo(0,0); return;
   }
@@ -3664,14 +3733,25 @@ function tickWait(){
 }
 
 /* 화면을 그리기 전에 잠금 상태부터 묻는다. */
+/* 사진을 찍고 돌아오면 앱이 처음부터 다시 열린다.
+   그때마다 "여는 중"을 보여 주면 연습이 끊긴다.
+   기기에 사본이나 하던 기록이 있으면 묻기 전에 바로 띄우고, 확인은 뒤에서 한다. */
+function openEarly(){
+  if(!apiUrl()) return false;
+  var had = getCache() ? showCached() : false;
+  if(!had && !S.draft) return false;
+  S.lock.need=false; S.lock.checking=false; S.loaded=true; S.earlyShown=true;
+  return true;
+}
+
 function gate(){
   if(!S.lock.id && pref("remember",true)) S.lock.id=savedName();
   if(!apiUrl()){ S.lock.need=true; S.lock.needUrl=true; S.lock.checking=false; render(); return Promise.resolve(); }
 
   /* 이 기기에 사본이 있으면 묻는 동안 기다리게 하지 않는다.
      서버가 "잠겼다"고 답하면 그때 사본을 지우고 잠금 화면으로 돌린다. */
-  var early=false;
-  if(getCache()){
+  var early=S.earlyShown;
+  if(!early && getCache()){
     early=showCached();
     if(early){ S.lock.need=false; S.lock.checking=false; render(); }
   }
@@ -3725,6 +3805,7 @@ function reconnect(){
 }
 restoreTab();     /* 보던 탭으로 돌아온다 */
 restoreDraft();   /* 하던 기록이 있으면 그보다 먼저 그 자리로 */
+openEarly();      /* 사본이나 하던 기록이 있으면 묻기 전에 먼저 띄운다 */
 render();
 gate();
 })();
