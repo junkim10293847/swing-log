@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v29">
+<meta name="app-version" content="v30">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -902,9 +902,13 @@ function renderLock(){
   if(L.needUrl){
     h+='<h2>서버 주소 넣기</h2>'
      +'<p class="muted" style="margin:8px 0 18px">앱스 스크립트에서 배포할 때 나온 <b>/exec</b> 주소를 넣어 주세요.</p>'
-     +'<label class="f">웹 앱 주소<input type="url" id="lk_url" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off"></label>'
+     +'<label class="f">웹 앱 주소<input type="url" id="lk_url" value="'+esc(apiUrl())+'" placeholder="https://script.google.com/macros/s/..../exec" autocomplete="off"></label>'
      +'<button class="btn primary full" style="margin-top:14px" data-act="saveUrl">저장하고 연결</button>';
     if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
+    h+='<p class="tiny" style="margin-top:14px;white-space:normal;color:var(--fg3)">'
+     +'앱스 스크립트 편집기 → <b>배포</b> → <b>배포 관리</b> → 활성 배포의 <b>웹 앱 URL</b>을 통째로 복사해 넣으세요. '
+     +'거기에 살아 있는 배포가 없으면 <b>연필</b>을 눌러 버전을 <b>새 버전</b>으로 바꾸고 <b>배포</b>를 누르면 됩니다.</p>'
+     +'<p class="tiny" style="margin-top:10px"><a href="#" data-act="toLogin" style="color:var(--accent);font-weight:600">돌아가기</a></p>';
   } else if(L.mode==="signup"){
     h+='<h2>처음 오셨습니다</h2>'
      +'<p class="muted" style="margin:8px 0 18px">이름과 비밀번호만 정하면 됩니다. 기록은 사람마다 따로 쌓이고, 다른 사람 기록은 보이지 않습니다.</p>'
@@ -939,6 +943,7 @@ function renderLock(){
      +'<button class="btn ghost sm full" data-act="probeServer"'+(L.probing?" disabled":"")+'>'
      +(L.probing?'<span class="spin"></span> 확인 중':'서버 점검')+'</button>';
     if(L.probe) h+='<div class="banner '+((L.probe.code==="new"||L.probe.code==="newopen")?'ok':'bad')+'" style="margin-top:10px;text-align:left">'+esc(L.probe.msg)+'</div>';
+    h+='<p class="tiny" style="margin-top:12px"><a href="#" data-act="toUrl" style="color:var(--accent);font-weight:600">서버 주소 바꾸기</a></p>';
     h+='</div>';
   }
   h+='</div></div>';
@@ -3183,7 +3188,25 @@ document.addEventListener("click",function(ev){
 
   /* ----- 로그인 ----- */
   if(a==="toSignup"){ S.lock.mode="signup"; S.lock.err=null; S.lock.focused=false; render(); return; }
-  if(a==="toLogin"){ S.lock.mode="login"; S.lock.err=null; S.lock.focused=false; render(); return; }
+  if(a==="toLogin"){ S.lock.mode="login"; S.lock.err=null; S.lock.focused=false;
+    if(apiUrl()) S.lock.needUrl=false;
+    render(); return; }
+
+  /* 주소가 바뀌었을 때 — 앱 안에서 직접 갈아 끼운다 */
+  if(a==="toUrl"){ S.lock.needUrl=true; S.lock.err=null; S.lock.probe=null; S.lock.focused=false; render(); return; }
+  if(a==="saveUrl"){
+    var u0=((document.getElementById("lk_url")||{}).value||"").trim();
+    if(!/^https:\/\/script\.google\.com\/macros\/s\/[^\/]+\/exec$/.test(u0)){
+      S.lock.err="주소가 https://script.google.com/macros/s/… /exec 형태여야 합니다. 배포 관리에서 '웹 앱 URL'을 그대로 복사해 주세요.";
+      render(); return;
+    }
+    saveApiUrl(u0);
+    S.lock.err=null; S.lock.probe=null; S.lock.needUrl=false; S.lock.focused=false;
+    S.offline=null; S.conn.err=null;
+    render();
+    gate();
+    return;
+  }
 
   if(a==="doLogin"||a==="doSignup"){
     var L2=S.lock;
