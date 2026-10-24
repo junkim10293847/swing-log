@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v39">
+<meta name="app-version" content="v40">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1921,18 +1921,33 @@ function diagnoseGoal(){
    +"오늘: 오늘 할 연습을 한 줄로. 본인이 적은 것과 기록이 가리키는 것을 합쳐서 하나로 만드세요. 15자 안팎.\n"
    +"진단: 하고 싶다는 것이 지금 기록에서 타당한지 2~3문장. 기록이 다른 곳을 가리키면 그렇게 말하고 이유를 숫자로 대세요. 비위를 맞추지 마세요.\n"
    +"중심: 오늘 중심으로 삼을 클럽 이름 하나만. 위 클럽 이름 목록에 있는 그대로 쓰세요.\n"
+   +"같이: 중심 말고 오늘 더 칠 클럽 한두 개. 이름만 쉼표로. 더 칠 것이 없으면 '없음'. 각 이름 뒤에 괄호로 왜 치는지 다섯 자 안팎.\n"
+   +"뺄것: 오늘은 치지 않을 클럽 이름을 쉼표로. 가방 전체를 다 칠 수는 없습니다. 뺄 것이 없으면 '없음'.\n"
    +"생각: 오늘 들고 갈 스윙 생각 한 가지. 짧게.\n"
    +"판정: 오늘 성공인지 가를 숫자와 세는 방법.\n"
    +"기록에 없는 숫자는 만들지 마세요.";
   ask("pdx",p,{modelTier:"default"}).then(function(t){
-    var o={head:"",diag:"",clubName:"",cue:"",test:""};
+    var o={head:"",diag:"",clubName:"",cue:"",test:"",also:[],skip:[]};
+    function pickList(txt){
+      if(/^\s*없음\s*$/.test(txt)) return [];
+      return String(txt).split(/\s*[,，·/]\s*/).map(function(x){
+        var mm=/^(.+?)\s*[(（](.+?)[)）]\s*$/.exec(x.trim());
+        var nm=(mm?mm[1]:x).trim(), why=mm?mm[2].trim():"";
+        if(!nm||/^없음$/.test(nm)) return null;
+        var c=S.clubs.filter(function(k){ return k.name===nm; })[0] || guessClub(nm);
+        return c ? {id:c.id, name:c.name, why:why} : null;
+      }).filter(Boolean).slice(0,3);
+    }
     String(t).split("\n").forEach(function(line){
-      var m=/^\s*(오늘|진단|중심|생각|판정)\s*[:：]\s*(.+)$/.exec(line);
+      var m=/^\s*(오늘|진단|중심|같이|뺄것|뺄 것|생각|판정)\s*[:：]\s*(.+)$/.exec(line);
       if(!m) return;
-      if(m[1]==="오늘") o.head=m[2].trim();
-      else if(m[1]==="진단") o.diag=m[2].trim();
-      else if(m[1]==="중심") o.clubName=m[2].trim();
-      else if(m[1]==="생각") o.cue=m[2].trim();
+      var k=m[1].replace(/\s+/g,"");
+      if(k==="오늘") o.head=m[2].trim();
+      else if(k==="진단") o.diag=m[2].trim();
+      else if(k==="중심") o.clubName=m[2].trim();
+      else if(k==="같이") o.also=pickList(m[2]);
+      else if(k==="뺄것") o.skip=pickList(m[2]);
+      else if(k==="생각") o.cue=m[2].trim();
       else o.test=m[2].trim();
     });
     if(!o.diag) o.diag=String(t).trim();
@@ -2156,6 +2171,15 @@ function planCard(){
   if(D&&String(S.preGoal||"").trim())
     h+='<p class="tiny" style="margin-top:8px;white-space:normal">내가 적은 것 — '+esc(String(S.preGoal).trim())+'</p>';
 
+  /* 오늘 칠 채와 뺄 채 — 가방을 다 칠 수는 없다 */
+  var todayClubs=[P.primary.x.c.name].concat(P.also.map(function(a){ return a.x.c.name; }));
+  h+='<div class="note" style="margin-top:12px"><b style="font-size:15px">오늘 칠 채 — '+esc(todayClubs.join(' · '))+'</b>';
+  if(P.also.length) h+='<div class="tiny" style="margin-top:4px;white-space:normal;color:var(--fg2)">'
+   + P.also.map(function(a){ return esc(a.x.c.name)+': '+esc(a.why); }).join('<br>')+'</div>';
+  if(P.skip.length) h+='<div class="tiny" style="margin-top:6px;white-space:normal;color:var(--fg3)">오늘 빼는 채 — '
+   + esc(P.skip.map(function(x){ return x.x.c.name; }).join(' · '))+'</div>';
+  h+='</div>';
+
   if(cue) h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 생각은 하나만</div>'
    +'<b style="font-size:16px">'+esc(cue)+'</b></div>';
   if(D&&D.test) h+='<div class="note" style="margin-top:10px"><b>성공 판정</b>\n'+esc(D.test)+'</div>';
@@ -2320,6 +2344,30 @@ function prescribe(){
     return x!==P.primary.x && x!==(ruler||{}) && x.b && x.grade==="A" && clubSeries(x.c.id,"carry").length<=2;
   })[0];
   if(confirm) P.also.push({x:confirm, why:"지난번 좋았지만 기록이 한두 번뿐입니다. 진짜인지 한 번 더 봅니다"});
+
+  /* 내 의견을 넣어 정리한 것이 있으면, 오늘 칠 채는 그쪽이 정한다.
+     가방을 다 칠 수는 없으니 뺄 것도 그쪽이 정한 대로 둔다. */
+  var MD=S.preDiag;
+  if(MD && (MD.also&&MD.also.length || MD.skip&&MD.skip.length)){
+    if(MD.also&&MD.also.length){
+      P.also=[];
+      MD.also.forEach(function(a0){
+        if(a0.id===P.primary.x.c.id) return;
+        var x=info.filter(function(k){ return k.c.id===a0.id; })[0];
+        if(x) P.also.push({x:x, why:a0.why||"오늘 의견에서 같이 치기로 한 채입니다"});
+      });
+    }
+    if(MD.skip&&MD.skip.length){
+      P.skip=[];
+      MD.skip.forEach(function(s0){
+        if(s0.id===P.primary.x.c.id) return;
+        if(P.also.some(function(a1){ return a1.x.c.id===s0.id; })) return;
+        var x2=info.filter(function(k){ return k.c.id===s0.id; })[0];
+        if(x2) P.skip.push({x:x2, why:s0.why||"오늘 의견에 비추어 뺍니다. 하루에 가방을 다 칠 수는 없습니다."});
+      });
+    }
+    P.byMe=true;
+  }
 
   /* 뺄 것 — 정렬이 흔들리는 드라이버는 짧은 날에 득이 없다 */
   var drv=info.filter(function(x){ return x.c.cat==="driver"; })[0];
