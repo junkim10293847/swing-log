@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v41">
+<meta name="app-version" content="v42">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -3113,12 +3113,22 @@ function liveCoach(i,answer,fromChip){
 
   var isQ = !fromChip && answer && lcIsQuestion(answer);
   var asked = b.chat.filter(function(c){ return c.r==="ai"&&c.o&&c.o.q; }).map(function(c){ return c.o.q; });
+  var lastAi = b.chat.filter(function(c){ return c.r==="ai"; }).slice(-1)[0];
+  var lastAiLine = lastAi&&lastAi.o ? [lastAi.o.diag,lastAi.o.next].filter(Boolean).join(" / ") : "";
 
   if(isQ){
-    /* 되물은 것이다. 세트를 다시 판정할 자리가 아니라 답할 자리다. */
+    /* 되물은 것이다. 세트를 다시 판정할 자리가 아니라 답할 자리다.
+       연습장에서 채를 들고 기다리는 중이므로, 앞뒤 기록을 다 넣지 않고 짧게 묻는다.
+       길게 넣을수록 구글 쪽이 오래 생각한다. */
+    p = "골프 코치입니다. 짧고 정확하게 답하세요."
+      + "\n치는 채: " + b.clubName
+      + (cl&&cl.loft?(" ("+cl.loft+"도)"):"")
+      + (b.m&&Object.keys(b.m).length?("\n방금 세트: "+metricSummary(b.m)):"")
+      + (lastAiLine?("\n코치가 방금 한 말: "+lastAiLine):"");
     p+="\n\n방금 본인이 보낸 것은 답이 아니라 질문입니다: \""+answer+"\""
       +"\n이 질문에 먼저 답하세요. 세트를 다시 판정하지 말고, 숫자를 다시 늘어놓지 마세요."
       +"\n정답이 하나로 정해지지 않는 것이면 '이 채는 이렇게, 저 채는 이렇게'처럼 기준을 말해 주세요."
+      +"\n드라이버와 웨지는 셋업이 반대입니다. 치는 채에 맞는 답을 하고, 다른 채 기준을 섞지 마세요."
       +(asked.length?("\n이미 물어본 것(다시 묻지 마세요): "+asked.join(" / ")):"")
       +"\n\n아래 형식 그대로, 전체 220자 이내로 답하세요.\n답: (질문에 대한 답. 이 채 기준으로 구체적으로)\n다음: (그래서 다음 세트에서 할 것 한 가지)";
   } else {
