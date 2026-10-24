@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v36">
+<meta name="app-version" content="v37">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -443,6 +443,15 @@ function apiUrl(){
 }
 /* 이름에서 만드는 고정 열쇠. 사람이 외우지 않는다. */
 function nickPw(id){ return "nick:"+String(id||"").trim().toLowerCase(); }
+
+/* 서버는 비밀번호를 다섯 번 틀리면 이름을 잠근다.
+   그래서 "일단 이름 열쇠로 넣어 보기"를 누를 때마다 하면 안 된다.
+   이 기기에서 한 번 알아낸 것은 적어 두고, 두 번 다시 틀리지 않는다. */
+function nickFlag(id,k){ try{ return localStorage.getItem("swinglog."+k+"."+id)==="1"; }catch(e){ return false; } }
+function setNickFlag(id,k,on){
+  try{ if(on) localStorage.setItem("swinglog."+k+"."+id,"1");
+       else localStorage.removeItem("swinglog."+k+"."+id); }catch(e){}
+}
 
 function saveApiUrl(u){ try{ localStorage.setItem("swinglog.api",u); }catch(e){} }
 
@@ -3400,12 +3409,10 @@ document.addEventListener("click",function(ev){
     if(id.length<2){ L2.err="이름을 두 글자 이상 넣어 주세요."; render(); return; }
     var npw=nickPw(id);
     var oldPw=L2.askPw ? ((document.getElementById("lk_pw")||{}).value||"") : "";
-    if(L2.askPw && oldPw.length<4){ L2.err="쓰시던 비밀번호를 넣어 주세요."; render(); return; }
-
-    L2.busy=true; L2.err=null; render();
 
     function land(r){
       L2.busy=false; L2.need=false; L2.err=null; L2.askPw=false;
+      setNickFlag(id,"pwneed",false); setNickFlag(id,"nick",true);
       L2.name=r.name; L2.id=r.loginId||id;
       saveToken(r.token); rememberName(L2.id); render(); boot();
     }
@@ -3414,8 +3421,18 @@ document.addEventListener("click",function(ev){
       var m=/(\d+)초/.exec(L2.err); L2.wait=m?parseInt(m[1],10):0;
       render(); if(L2.wait>0) tickWait();
     }
+    /* 이 이름은 옛 비밀번호가 필요하다 — 서버를 건드리지 않고 바로 묻는다 */
+    function needPw(){
+      setNickFlag(id,"pwneed",true);
+      L2.busy=false; L2.err=null; L2.askPw=true; L2.focused=false; render();
+    }
+
+    if(!L2.askPw && nickFlag(id,"pwneed")){ needPw(); return; }
+
+    L2.busy=true; L2.err=null; render();
 
     if(L2.askPw){
+      if(oldPw.length<4){ L2.busy=false; L2.err="쓰시던 비밀번호를 넣어 주세요."; render(); return; }
       /* 옛 계정 — 한 번 들어가서 이름 열쇠로 바꿔 둔다. 다음부터는 안 묻는다. */
       call("apiLogin",id,oldPw).then(function(r){
         saveToken(r.token);
@@ -3424,14 +3441,17 @@ document.addEventListener("click",function(ev){
       return;
     }
 
-    call("apiLogin",id,npw).then(land).catch(function(){
-      /* 그 이름이 없으면 만들고, 전에 비밀번호로 만든 이름이면 한 번만 묻는다 */
-      call("apiSignup",id,npw).then(land).catch(function(e2){
+    if(nickFlag(id,"nick")){ call("apiLogin",id,npw).then(land).catch(stop); return; }
+
+    /* 처음 보는 이름 — 만들어 보는 쪽이 먼저다. 이건 실패로 세지 않는다. */
+    call("apiSignup",id,npw).then(land).catch(function(e1){
+      var m1=(e1&&e1.message)||"";
+      if(!/이미 쓰고 있는 이름/.test(m1)){ stop(e1); return; }
+      /* 있는 이름이다. 이름 열쇠인지 한 번만 본다. 아니면 다시는 안 해 본다. */
+      call("apiLogin",id,npw).then(land).catch(function(e2){
         var m2=(e2&&e2.message)||"";
-        if(/이미 쓰고 있는 이름/.test(m2)){
-          L2.busy=false; L2.err=null; L2.askPw=true; L2.focused=false; render(); return;
-        }
-        stop(e2);
+        if(/초 뒤에|분 뒤에|시간 뒤에/.test(m2)){ stop(e2); return; }
+        needPw();
       });
     });
     return;
