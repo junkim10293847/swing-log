@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v34">
+<meta name="app-version" content="v35">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -391,10 +391,10 @@ var METRICS = [
 
 /* ====================== 상태 ====================== */
 var ready={db:false,ai:false,img:false};
-var S = {tab:"home", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
+var S = {tab:"practice", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  vmsg:{}, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  vmsg:{}, coolOpen:false, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
@@ -794,13 +794,15 @@ function profileText(){
 
 /* ====================== 렌더 ====================== */
 /* 자주 쓰는 순서다. 클럽은 한 번 등록하면 거의 들어갈 일이 없어 맨 뒤로 뺐다. */
+/* 화면은 셋이면 된다. 오늘 할 것 / 지나간 것 / 가방.
+   홈과 성장은 따로 둘 만큼 자주 보는 화면이 아니었다. */
 var TABS=[
-  {k:"home",n:"홈",d:"M3 10.5 12 3l9 7.5M5.5 9.5V20h13V9.5"},
   {k:"practice",n:"연습",d:"M4 20 20 4M14 4h6v6M9.5 14.5 4 20"},
-  {k:"rounds",n:"라운드",d:"M4 4v16M4 5h12l-2.5 3.5L16 12H4"},
-  {k:"growth",n:"성장",d:"M3 19h18M6 15l4-5 3.5 3L19 6"},
-  {k:"clubs",n:"내 클럽",d:"M8 3v12M8 15a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M8 6l8 3-8 3"}
+  {k:"log",n:"기록",d:"M4 4v16M4 5h12l-2.5 3.5L16 12H4"},
+  {k:"clubs",n:"클럽",d:"M8 3v12M8 15a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7M8 6l8 3-8 3"}
 ];
+/* 옛 탭 이름으로 저장해 둔 사람이 빈 화면을 보지 않게 옮겨 준다 */
+var TAB_MOVED={home:"practice",rounds:"log",growth:"log"};
 function renderTabs(){
   document.getElementById("tabs").innerHTML = TABS.map(function(t){
     return '<button data-tab="'+t.k+'" aria-current="'+(S.tab===t.k)+'"><svg viewBox="0 0 24 24"><path d="'+t.d+'"/></svg>'+t.n+'</button>';
@@ -816,6 +818,7 @@ function saveTab(t){ try{ localStorage.setItem(TAB_KEY,t); }catch(e){} }
 function restoreTab(){
   try{
     var t=localStorage.getItem(TAB_KEY);
+    if(TAB_MOVED[t]) t=TAB_MOVED[t];
     for(var i=0;i<TABS.length;i++) if(TABS[i].k===t){ S.tab=t; return; }
   }catch(e){}
 }
@@ -857,7 +860,8 @@ function render(){
   if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
   h += offlineBar();
   h += connCard();
-  h += ({home:viewHome,clubs:viewClubs,practice:viewPractice,rounds:viewRounds,growth:viewGrowth}[S.tab]||viewHome)();
+  h += verBar();
+  h += ({clubs:viewClubs,practice:viewPractice,log:viewLog}[S.tab]||viewPractice)();
   var inner=document.querySelector(".sheet .inner");
   var sy=window.pageYOffset||document.documentElement.scrollTop||0;
   var iy=inner?inner.scrollTop:0;
@@ -953,50 +957,6 @@ function renderLock(){
 }
 
 /* ---------- 홈 ---------- */
-function viewHome(){
-  if(!S.loaded) return '<div class="empty"><h3>불러오는 중</h3><p>잠시만 기다려 주세요.</p></div>';
-  var h=verBar();
-  var last=S.sessions[0], lastR=S.rounds[0];
-  var drv=S.clubs.filter(function(c){return c.cat==="driver"&&!c.spare;})[0];
-
-  h+='<div class="stack">';
-
-  h+=planCard();
-
-  /* 최근 연습 */
-  if(last){
-    h+='<div class="card"><div class="spread"><div class="eyebrow">최근 연습</div><span class="tiny">'+esc(fmtDate(last.date))+'</span></div>';
-    var bl=(last.blocks||[]);
-    if(!bl.length) h+='<p class="muted" style="margin-top:8px">기록된 클럽이 없습니다.</p>';
-    bl.slice(0,3).forEach(function(b){
-      var c=S.clubs.filter(function(x){return x.id===b.clubId;})[0];
-      h+='<div class="listrow" data-act="openSession" data-id="'+esc(last.id)+'">'
-       +'<span class="grade '+(b.m&&b.m.grade?esc(b.m.grade):"X")+'">'+esc(b.m&&b.m.grade||"—")+'</span>'
-       +'<div class="bd"><b>'+esc(b.clubName||(c?c.name:"클럽"))+'</b><span>'+(b.m&&b.m.dir!=null?("방향각 "+numToLR(b.m.dir)+"° · "):"")+(b.m&&b.m.width!=null?("좌우 "+r1(b.m.width)+"m"):"")+'</span></div>'
-       +'<div class="rt"><b>'+(b.m&&b.m.carry!=null?r1(b.m.carry):"—")+'</b><span>캐리 m</span></div></div>';
-    });
-    if(bl.length>3) h+='<p class="tiny" style="margin-top:8px">외 '+(bl.length-3)+'개 클럽</p>';
-    if(last.feeling) h+='<div class="note" style="margin-top:12px"><b style="font-size:12px;color:var(--fg3)">느낀점</b>\n'+esc(last.feeling)+'</div>';
-    h+='<button class="btn sm full" style="margin-top:12px" data-act="openSession" data-id="'+esc(last.id)+'">자세히 보기</button></div>';
-  } else {
-    h+= connOK()
-      ? '<div class="card empty"><h3>아직 연습 기록이 없습니다</h3><p>연습 시작을 누르면 준비운동부터 안내합니다.</p></div>'
-      : '<div class="card empty"><h3>연습 기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
-  }
-
-  /* 최근 라운드 */
-  if(lastR){
-    h+='<div class="card"><div class="spread"><div class="eyebrow">최근 라운드</div><span class="tiny">'+esc(fmtDate(lastR.date))+' · '+(lastR.type==="field"?"필드":"스크린")+'</span></div>';
-    h+='<div class="metrics" style="margin-top:10px">'
-      +mTile("스코어",lastR.score,"")+mTile("퍼팅",lastR.putts,"")+mTile("페어웨이",lastR.fw,"/14")+mTile("그린적중",lastR.gir,"/18")+'</div>';
-    if(lastR.analysis) h+='<div class="ai" style="margin-top:12px"><div class="hd">분석</div>'+esc(lastR.analysis)+'</div>';
-    h+='</div>';
-  }
-
-  h+=verRow();
-  h+='</div>';
-  return h;
-}
 function mTile(n,v,suf){ return '<div class="metric"><b>'+(v==null||v===""?"—":esc(String(v))+esc(suf||""))+'</b><span>'+esc(n)+'</span></div>'; }
 
 /* ---------- 연결 상태 ---------- */
@@ -1110,36 +1070,64 @@ function viewClubs(){
       h+='</div>';
     }
   }
+  /* 자주 볼 것이 아닌 것은 전부 여기 한 칸에 넣는다 */
+  h+='<div class="card" style="background:transparent;box-shadow:none;padding:4px 0">'
+   +'<div class="spread"><span class="tiny">'+esc(APP_VER)+(S.verNew?'':' · 최신')+'</span>'
+   +'<button class="btn ghost sm" data-act="moreOpen">'+(S.moreOpen?'접기':'더보기')+'</button></div></div>';
+  if(S.moreOpen){
+    h+='<div class="card">'
+     +'<div class="spread"><span class="tiny">앱이 바뀐 내용</span>'
+     +'<button class="btn ghost sm" data-act="openChangelog">변경 내역</button></div>'
+     +'<div class="spread" style="margin-top:12px"><span class="tiny">서버 코드를 새로 배포했을 때</span>'
+     +'<button class="btn ghost sm" data-act="checkServer"'+(S.busy.srv?" disabled":"")+'>'
+     +(S.busy.srv?'<span class="spin"></span> 확인 중':'서버 점검')+'</button></div>';
+    if(S.srv) h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px">'+esc(S.srv.msg)+'</div>';
+    h+='</div>';
+  }
   h+='</div>';
   return h;
 }
 
 /* ---------- 연습 ---------- */
+/* 앱을 열면 이것만 보인다 — 오늘 뭘 칠지 한 가지와 시작.
+   지나간 것은 아래 세 줄만 두고 나머지는 기록 탭에 있다. */
 function viewPractice(){
   if(S.draft) return draftView();
   var h='<div class="stack">';
-  h+='<div class="spread"><div><h2 class="sec-title">연습 기록</h2><p class="tiny">준비운동과 마무리 운동까지 한 세트입니다</p></div>'
-   +'<button class="btn primary sm" data-act="newSession">연습 시작</button></div>';
-  h+=askBar("practice");
   h+=planCard();
-  if(!S.sessions.length){
-    h+= connOK()
-      ? '<div class="card empty"><h3>기록이 없습니다</h3><p>연습 시작을 누르면 준비운동 체크부터 안내합니다.</p></div>'
-      : '<div class="card empty"><h3>기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
-  } else {
-    h+='<div class="card">';
-    S.sessions.forEach(function(s){
+  if(S.sessions.length){
+    h+='<div class="card"><div class="spread"><div class="eyebrow">지난 연습</div>'
+     +'<button class="btn ghost sm" data-act="toLog">전부 보기</button></div>';
+    S.sessions.slice(0,3).forEach(function(s){
       var bl=(s.blocks||[]).length;
-      var wOk=(s.warmup||[]).length>=countReq(WARMUP), cOk=(s.cooldown||[]).length>=countReq(COOLDOWN);
       h+='<div class="listrow" data-act="openSession" data-id="'+esc(s.id)+'">'
-       +'<div class="bd"><b>'+esc(fmtDate(s.date))+'</b><span>'+bl+'개 클럽 · '
-       +(wOk?'준비운동 ✓':'<span style="color:var(--bad)">준비운동 미완</span>')+' · '
-       +(cOk?'마무리 ✓':'<span style="color:var(--bad)">마무리 미완</span>')+'</span></div>'
+       +'<div class="bd"><b>'+esc(fmtDate(s.date))+'</b><span>'+bl+'개 클럽</span></div>'
        +'<div class="rt"><b>'+bl+'</b><span>세트</span></div></div>';
     });
     h+='</div>';
   }
   h+='</div>';
+  return h;
+}
+
+/* 기록 탭의 연습 목록 */
+function logSessions(){
+  /* 시작은 연습 탭에서 한다. 여기는 지나간 것만. */
+  var h='';
+  if(!S.sessions.length){
+    h+= connOK()
+      ? '<div class="card empty"><h3>기록이 없습니다</h3><p>연습 시작을 누르면 오늘 칠 것부터 보여 드립니다.</p></div>'
+      : '<div class="card empty"><h3>기록을 불러오지 못했습니다</h3><p>위의 다시 연결을 눌러 주세요.</p></div>';
+  } else {
+    h+='<div class="card">';
+    S.sessions.forEach(function(s){
+      var bl=(s.blocks||[]).length;
+      h+='<div class="listrow" data-act="openSession" data-id="'+esc(s.id)+'">'
+       +'<div class="bd"><b>'+esc(fmtDate(s.date))+'</b><span>'+bl+'개 클럽</span></div>'
+       +'<div class="rt"><b>'+bl+'</b><span>세트</span></div></div>';
+    });
+    h+='</div>';
+  }
   return h;
 }
 function countReq(list){ return list.filter(function(x){return x.req;}).length; }
@@ -1196,7 +1184,7 @@ function todayStrip(d){
   if(nextI>=0){
     var nx=P.plan[nextI];
     h+='<div class="note" style="margin-top:10px;background:var(--surface)">'
-     +'<div class="spread"><div><b style="font-size:16px">지금 → '+esc(nx.t)+'</b>'
+     +'<div class="spread"><div><b style="font-size:16px'+(nx.t==="몸풀기"?';text-decoration:underline;cursor:pointer" data-act="openWarm"':'"')+'>지금 → '+esc(nx.t)+'</b>'
      +'<div class="tiny" style="margin-top:2px;color:var(--fg2);white-space:normal">'+esc(nx.d)+'</div></div>'
      +'<button class="btn primary sm" style="flex:none" data-act="stripDone" data-i="'+nextI+'">'+nx.m+'분 끝</button></div></div>';
   } else {
@@ -1223,38 +1211,20 @@ function todayStrip(d){
 
 function draftView(){
   var d=S.draft, h='<div class="stack">';
-  h+='<div class="spread" style="align-items:center;gap:10px">'
-   +'<input type="date" id="dr_date" class="dateTitle" value="'+esc(d.date)+'" max="'+esc(today())+'" aria-label="연습한 날">'
-   +'<button class="btn ghost sm" style="flex:none" data-act="cancelDraft">나가기</button></div>';
+  h+='<div class="spread" style="align-items:center;gap:10px;padding:0 2px">'
+   +'<span class="tiny" style="color:var(--fg3)">'+esc(fmtDate(d.date))+' 연습</span>'
+   +'<button class="btn ghost sm" style="flex:none" data-act="cancelDraft">나가기</button></div>'
+   +'<input type="date" id="dr_date" value="'+esc(d.date)+'" max="'+esc(today())+'" aria-label="연습한 날" style="display:none">';
   if(S.msg.date) h+='<div class="banner bad">'+esc(S.msg.date)+'</div>';
 
-  h+='<div class="steps">'+[0,1,2,3].map(function(i){
-      return '<div class="'+(i<d.step?"done":(i===d.step?"on":""))+'"></div>'; }).join("")+'</div>';
 
   if(S.resumed) h+='<div class="banner ok">하던 기록을 그대로 이어서 보고 있습니다. '
    +'세트 '+((d.blocks||[]).length)+'개가 남아 있습니다.</div>';
   h+=todayStrip(d);
 
-  if(d.step===0){
-    var reqN=countReq(WARMUP), doneN=WARMUP.filter(function(x,i){return x.req&&d.warmup.indexOf(i)>=0;}).length;
-    h+='<div class="card"><div class="eyebrow">1단계 · 준비운동</div>'
-     +'<h3 style="font-size:17px;margin:4px 0 2px">몸을 먼저 열어야 숫자가 나옵니다</h3>'
-     +'<p class="muted" style="margin-bottom:6px">몸을 다 풀었으면 <b>다 했어요</b> 한 번만 누르면 됩니다. 약 8분.</p>'
-     +'<div class="row" style="margin:4px 0 10px;gap:8px">'
-     +'<button class="btn primary sm" data-act="allWarm">다 했어요</button>'
-     +'<button class="btn ghost sm" data-act="noneWarm"'+(d.warmup.length?"":" disabled")+'>전부 해제</button>'
-     +'<span class="tiny" style="color:var(--fg3);margin-left:auto">'+d.warmup.length+'/'+WARMUP.length+'</span></div>';
-    WARMUP.forEach(function(x,i){
-      h+='<label class="check"><input type="checkbox" data-act="toggleWarm" data-i="'+i+'"'+(d.warmup.indexOf(i)>=0?" checked":"")+'>'
-       +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
-    });
-    h+='<button class="btn primary full" style="margin-top:14px" data-act="step" data-s="1"'+(doneN<reqN?" disabled":"")+'>'
-     +(doneN<reqN?('필수 '+(reqN-doneN)+'개 남음'):'클럽 기록 시작')+'</button></div>';
-  }
-
-  if(d.step===1){
+  {
     var SZ=d.setSize||10, MD=d.mode||"집중";
-    h+='<div class="card"><div class="eyebrow">2단계 · 세트 기록</div>'
+    h+='<div class="card"><div class="eyebrow">세트 기록</div>'
      +'<h3 style="font-size:17px;margin:4px 0 2px">한 세트씩 평균을 남깁니다</h3>'
      +'<p class="muted">측정 화면 사진을 올리면 숫자를 읽어 채웁니다.</p>';
     /* 평소에는 지금 설정만 한 줄로 보인다. 바꿀 일이 있을 때만 펼친다.
@@ -1343,47 +1313,36 @@ function draftView(){
     h+=vidCard();
 
     h+='<button class="btn full" style="margin-top:12px" data-act="addBlock">사진 없이 한 세트 직접 넣기</button>';
-    h+='<button class="btn primary full" style="margin-top:8px" data-act="step" data-s="2"'+(d.blocks.length?"":" disabled")+'>'
-      +(d.blocks.length?'느낀점 쓰기':'클럽을 하나 이상 기록하세요')+'</button></div>';
+    h+='<button class="btn primary full" style="margin-top:8px" data-act="finish"'+(d.blocks.length?"":" disabled")+'>'
+      +(d.blocks.length?'연습 마치기':'클럽을 하나 이상 기록하세요')+'</button></div>';
   }
 
-  if(d.step===2){
-    h+='<div class="card"><div class="eyebrow">3단계 · 느낀점</div>'
-     +'<h3 style="font-size:17px;margin:4px 0 2px">오늘 몸으로 느낀 것을 적으세요</h3>'
-     +'<p class="muted" style="margin-bottom:10px">잘된 감각, 안 된 동작, 떠오른 생각. 문장이 아니어도 됩니다.</p>'
-     +'<textarea id="feelBox" placeholder="예) 톱에서 멈추니 공이 가운데로 모였다. 5번은 여전히 얇게 맞는 느낌.">'+esc(d.feeling)+'</textarea>';
-    h+='<button class="btn full" style="margin-top:10px" data-act="coachFeel">'+(S.busy.feel?'<span class="spin"></span> 코칭 받는 중':'느낀점으로 코칭 받기')+'</button>';
-    if(S.msg.feel) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.feel)+'</div>';
-    if(d.coaching) h+='<div class="ai" style="margin-top:12px"><div class="hd">코칭</div>'+esc(d.coaching)+'</div>';
-    h+='<button class="btn primary full" style="margin-top:12px" data-act="step" data-s="3">마무리 운동으로</button></div>';
-  }
-
-  if(d.step===3){
-    var reqC=countReq(COOLDOWN), doneC=COOLDOWN.filter(function(x,i){return x.req&&d.cooldown.indexOf(i)>=0;}).length;
-    h+='<div class="card"><div class="eyebrow">4단계 · 마무리 운동</div>'
-     +'<h3 style="font-size:17px;margin:4px 0 2px">여기까지가 한 번의 연습입니다</h3>'
-     +'<p class="muted" style="margin-bottom:6px">마무리까지 했으면 <b>다 했어요</b>를 누르고 저장하세요. 약 5분.</p>'
-     +'<div class="row" style="margin:4px 0 10px;gap:8px">'
-     +'<button class="btn primary sm" data-act="allCool">다 했어요</button>'
-     +'<button class="btn ghost sm" data-act="noneCool"'+(d.cooldown.length?"":" disabled")+'>전부 해제</button>'
-     +'<span class="tiny" style="color:var(--fg3);margin-left:auto">'+d.cooldown.length+'/'+COOLDOWN.length+'</span></div>';
-    COOLDOWN.forEach(function(x,i){
-      h+='<label class="check"><input type="checkbox" data-act="toggleCool" data-i="'+i+'"'+(d.cooldown.indexOf(i)>=0?" checked":"")+'>'
-       +'<span class="ct"><b>'+esc(x.t)+(x.req?'':' <span class="chip neutral">선택</span>')+'</b><span>'+esc(x.d)+'</span></span></label>';
-    });
-    h+='<button class="btn primary full" style="margin-top:14px" data-act="saveSession"'+(doneC<reqC?" disabled":"")+'>'
-     +(doneC<reqC?('필수 '+(reqC-doneC)+'개 남음'):'연습 저장')+'</button></div>';
-  }
   h+='</div>';
   return h;
 }
 
 /* ---------- 라운드 ---------- */
-function viewRounds(){
+/* 지나간 것은 다 여기 있다. 연습·라운드·성장 셋을 한 화면에 두고,
+   보고 싶은 것만 눌러서 연다. 들어오면 연습만 펼쳐져 있다. */
+var LOGSEC=[{k:"sessions",n:"연습"},{k:"rounds",n:"라운드"},{k:"growth",n:"성장"}];
+function viewLog(){
+  var cur=S.logSec||"sessions";
   var h='<div class="stack">';
-  h+='<div class="spread"><div><h2 class="sec-title">라운드</h2><p class="tiny">스크린·필드 점수에서 약한 곳을 찾습니다</p></div>'
-   +'<button class="btn primary sm" data-act="newRound">점수 입력</button></div>';
-  h+=askBar("rounds");
+  h+='<div class="seg oneline" role="group" aria-label="기록 종류">'
+   + LOGSEC.map(function(x){
+       var n=(x.k==="sessions"?S.sessions.length:(x.k==="rounds"?S.rounds.length:0));
+       return '<button type="button" aria-pressed="'+(cur===x.k?"true":"false")+'" '
+        +'data-act="logSec" data-k="'+x.k+'">'+x.n+(x.k!=="growth"&&n?(' '+n):'')+'</button>'; }).join("")
+   +'</div>';
+  if(cur==="sessions") h+=askBar("practice")+logSessions();
+  else if(cur==="rounds") h+=askBar("rounds")+logRounds();
+  else h+=logGrowth();
+  return h+'</div>';
+}
+
+function logRounds(){
+  var h='';
+  h+='<button class="btn primary full" data-act="newRound">점수 입력</button>';
   if(!S.rounds.length){
     h+= connOK()
       ? '<div class="card empty"><h3>라운드 기록이 없습니다</h3><p>점수와 퍼팅 수만 넣어도 분석이 나옵니다.</p></div>'
@@ -1426,13 +1385,12 @@ function viewRounds(){
       h+='</div>';
     });
   }
-  h+='</div>';
   return h;
 }
 
 /* ---------- 성장 ---------- */
-function viewGrowth(){
-  var h='<div class="stack"><h2 class="sec-title">성장</h2>';
+function logGrowth(){
+  var h='';
   var tracked=S.clubs.filter(function(c){ return clubSeries(c.id,"carry").length>=1; });
   if(!tracked.length){
     h+='<div class="card empty"><h3>그래프를 그릴 기록이 없습니다</h3><p>클럽별로 두 번 이상 측정하면 추이가 보입니다.</p></div>';
@@ -1463,7 +1421,6 @@ function viewGrowth(){
        +'<p class="tiny" style="margin-top:6px">아래로 내려갈수록 좋은 기록입니다.</p></div>';
     }
   }
-  h+='</div>';
   return h;
 }
 function drawSparks(){
@@ -1511,7 +1468,7 @@ function sheetHTML(){
   var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
   S.sheetShown=s.kind;
   var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,warm:sheetWarm,finish:sheetFinish}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -1988,6 +1945,53 @@ function diagnoseGoal(){
   }).catch(function(){});
 }
 
+/* 준비운동 — 막는 단계가 아니라 펼쳐 보는 목록이다.
+   몸풀기 줄을 누르면 열린다. 안 열어도 연습은 시작된다. */
+function readFeel(){ var fb=document.getElementById("feelBox"); if(fb&&S.draft) S.draft.feeling=fb.value; }
+
+function sheetWarm(){
+  var d=S.draft; if(!d) return "";
+  var h='<div class="spread"><h3 style="font-size:19px">준비운동</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>'
+   +'<p class="muted" style="margin:8px 0 10px">다 풀었으면 <b>다 했어요</b> 한 번이면 됩니다.</p>'
+   +'<div class="row" style="margin-bottom:10px;gap:8px">'
+   +'<button class="btn primary sm" data-act="allWarm">다 했어요</button>'
+   +'<button class="btn ghost sm" data-act="noneWarm"'+(d.warmup.length?"":" disabled")+'>전부 해제</button>'
+   +'<span class="tiny" style="color:var(--fg3);margin-left:auto">'+d.warmup.length+'/'+WARMUP.length+'</span></div>';
+  WARMUP.forEach(function(x,i){
+    h+='<label class="check"><input type="checkbox" data-act="toggleWarm" data-i="'+i+'"'+(d.warmup.indexOf(i)>=0?" checked":"")+'>'
+     +'<span class="ct"><b>'+esc(x.t)+'</b><span>'+esc(x.d)+'</span></span></label>';
+  });
+  return h+'<button class="btn primary full" style="margin-top:14px" data-act="closeSheet">연습으로</button>';
+}
+
+/* 마치기 — 느낀점과 마무리 운동을 한 장에 모았다.
+   예전에는 화면 둘을 더 지나야 저장이 됐다. */
+function sheetFinish(){
+  var d=S.draft; if(!d) return "";
+  var h='<div class="spread"><h3 style="font-size:19px">연습 마치기</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+  h+='<p class="muted" style="margin:8px 0 6px">오늘 몸으로 느낀 것을 한 줄만 적어 두세요. 안 적어도 저장됩니다.</p>'
+   +'<textarea id="feelBox" placeholder="예) 톱에서 멈추니 공이 가운데로 모였다">'+esc(d.feeling||"")+'</textarea>';
+  h+='<button class="btn full" style="margin-top:8px" data-act="coachFeel"'+(S.busy.feel?" disabled":"")+'>'
+   +(S.busy.feel?'<span class="spin"></span> 코칭 받는 중':'느낀점으로 코칭 받기')+'</button>';
+  if(S.msg.feel) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg.feel)+'</div>';
+  if(d.coaching) h+='<div class="ai" style="margin-top:10px"><div class="hd">코칭</div>'+esc(d.coaching)+'</div>';
+
+  h+='<div class="spread" style="margin-top:16px"><span class="tiny">마무리 운동 '+d.cooldown.length+'/'+COOLDOWN.length+'</span>'
+   +'<button class="btn ghost sm" data-act="coolOpen">'+(S.coolOpen?'접기':'펼치기')+'</button></div>';
+  if(S.coolOpen){
+    h+='<div class="row" style="margin:8px 0;gap:8px">'
+     +'<button class="btn primary sm" data-act="allCool">다 했어요</button>'
+     +'<button class="btn ghost sm" data-act="noneCool"'+(d.cooldown.length?"":" disabled")+'>전부 해제</button></div>';
+    COOLDOWN.forEach(function(x,i){
+      h+='<label class="check"><input type="checkbox" data-act="toggleCool" data-i="'+i+'"'+(d.cooldown.indexOf(i)>=0?" checked":"")+'>'
+       +'<span class="ct"><b>'+esc(x.t)+'</b><span>'+esc(x.d)+'</span></span></label>';
+    });
+  }
+  return h+'<button class="btn primary full" style="margin-top:16px" data-act="saveSession">저장하고 끝내기</button>';
+}
+
 function sheetPre(){
   var P=prescribe();
   var bk=preBody(), b=bodyOf(bk);
@@ -2034,17 +2038,7 @@ function sheetPre(){
         +'data-act="preFocus" data-c="'+esc(c.id)+'">'+(on?'✓ ':'')+esc(c.name)+'</button>'; }).join("")
    +'</div></div>';
 
-  h+='<div class="segWrap"><span class="lab">시간</span>'
-   +'<div class="seg" role="group" aria-label="연습 시간">'
-   + MINS.map(function(m){
-       return '<button type="button" aria-pressed="'+((P?P.min:120)===m?"true":"false")+'" '
-        +'data-act="planMin" data-m="'+m+'">'+(m===60?'1시간':(m===90?'1시간 반':'2시간'))+'</button>'; }).join("")
-   +'</div></div>';
-  h+='<div class="segWrap"><span class="lab">9홀도 도나요</span>'
-   +'<div class="seg" role="group" aria-label="9홀 포함">'
-   +'<button type="button" aria-pressed="'+((P&&P.holes9)?"false":"true")+'" data-act="planHoles" data-h="0">연습만</button>'
-   +'<button type="button" aria-pressed="'+((P&&P.holes9)?"true":"false")+'" data-act="planHoles" data-h="1">9홀 포함</button>'
-   +'</div></div>';
+  /* 시간과 9홀은 앞 화면에서 이미 골랐다. 여기서 또 묻지 않는다. */
 
   /* 몸·중심·시간을 다 고른 끝에, 그래서 무엇부터 잡는지 한 줄로 답한다 */
   if(P){
@@ -2188,8 +2182,10 @@ function planCard(){
 
   if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
    +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
-  h+='<button class="btn primary full" style="margin-top:12px" data-act="newSession">이대로 연습 시작</button>';
-  h+='<button class="btn ghost sm full" style="margin-top:6px" data-act="planOpen">'+(S.planOpen?'접기':'자세히')+'</button>';
+  h+='<button class="btn primary full" style="margin-top:12px" data-act="startNow">이대로 연습 시작</button>';
+  h+='<div class="row" style="margin-top:6px;gap:8px">'
+   +'<button class="btn ghost sm" style="flex:1" data-act="newSession">몸 상태·목표 적고</button>'
+   +'<button class="btn ghost sm" style="flex:1" data-act="planOpen">'+(S.planOpen?'접기':'자세히')+'</button></div>';
 
   if(S.planOpen){
 
@@ -3321,6 +3317,11 @@ document.addEventListener("click",function(ev){
   }
 
   /* --- 연습 세션 --- */
+  /* 묻지 않고 바로 — 몸 상태도 시간도 이미 화면에서 고른 그대로 쓴다 */
+  if(a==="startNow"){
+    S.tab="practice"; S.sheet=null; S.sheetShown=null;
+    S.draft=newDraft(); S.jump=true; render(); window.scrollTo(0,0); return;
+  }
   if(a==="newSession"){ S.tab="practice"; S.sheet={kind:"pre",data:{}}; render(); return; }
   if(a==="preBody"){ readPreGoal(); setPreBody(el.getAttribute("data-b")); render(); return; }
   if(a==="preDiag"){ readPreGoal(); diagnoseGoal(); return; }
@@ -3348,6 +3349,12 @@ document.addEventListener("click",function(ev){
     S.draft[key2]=on ? list.map(function(x,i){ return i; }) : [];
     render(); return;
   }
+  if(a==="moreOpen"){ S.moreOpen=!S.moreOpen; render(); return; }
+  if(a==="logSec"){ S.logSec=el.getAttribute("data-k"); render(); window.scrollTo(0,0); return; }
+  if(a==="toLog"){ S.tab="log"; saveTab("log"); S.logSec="sessions"; S.jump=true; render(); window.scrollTo(0,0); return; }
+  if(a==="finish"){ readFeel(); S.sheet={kind:"finish"}; render(); return; }
+  if(a==="coolOpen"){ readFeel(); S.coolOpen=!S.coolOpen; render(); return; }
+  if(a==="openWarm"){ S.sheet={kind:"warm"}; render(); return; }
   if(a==="lcStart"){ liveCoach(+el.getAttribute("data-i")); return; }
   if(a==="lcVidPick"){
     var vi=+el.getAttribute("data-i"), ve=document.getElementById("lcVid"+vi);
@@ -3631,6 +3638,7 @@ document.addEventListener("click",function(ev){
   }
 
   if(a==="saveSession"){
+    readFeel();
     var d2=S.draft;
     var rec={id:d2.id,date:d2.date,warmup:d2.warmup,cooldown:d2.cooldown,blocks:d2.blocks,
       feeling:d2.feeling,coaching:d2.coaching,createdAt:new Date().toISOString()};
