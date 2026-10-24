@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v37">
+<meta name="app-version" content="v38">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -933,7 +933,8 @@ function renderLock(){
     /* 예전에 비밀번호로 만든 이름은 딱 한 번만 더 묻는다 */
     if(L.askPw){
       h+='<div class="banner warn" style="margin-top:12px">이 이름은 전에 비밀번호로 만든 것입니다. 한 번만 넣어 주시면 다음부터는 이름만으로 들어갑니다.</div>'
-       +'<label class="f" style="margin-top:10px">지금 비밀번호<input type="password" id="lk_pw" placeholder="쓰시던 비밀번호" autocomplete="current-password"></label>';
+       +'<label class="f" style="margin-top:10px">지금 비밀번호<input type="password" id="lk_pw" placeholder="쓰시던 비밀번호" autocomplete="current-password"></label>'
+       +'<p class="tiny" style="margin-top:10px"><a href="#" data-act="noPw" style="color:var(--accent);font-weight:600">서버에서 비밀번호를 없앴습니다 — 이름만으로 다시</a></p>';
     }
     h+='<button class="btn primary full" style="margin-top:14px" data-act="doEnter"'+(L.busy?" disabled":"")+'>'
      +(L.busy?'<span class="spin"></span> 들어가는 중':'들어가기')+'</button>';
@@ -3402,6 +3403,12 @@ document.addEventListener("click",function(ev){
   /* 이름만으로 들어간다.
      비밀번호 자리에는 이름에서 만든 고정 값을 쓴다. 사람이 외울 것이 없다.
      보호 수준은 "이름을 아는 사람은 들어온다" 그 이상도 이하도 아니다. */
+  /* 서버에서 열쇠를 바꿔 둔 뒤라면, 기기에 적어 둔 "비밀번호 필요" 표시를 지운다 */
+  if(a==="noPw"){
+    var nid=((document.getElementById("lk_id")||{}).value||S.lock.id||"").trim().replace(/\s+/g," ");
+    setNickFlag(nid,"pwneed",false); setNickFlag(nid,"nick",true);
+    S.lock.askPw=false; S.lock.err=null; S.lock.focused=false; render(); return;
+  }
   if(a==="doEnter"){
     var L2=S.lock;
     var id=((document.getElementById("lk_id")||{}).value||"").trim().replace(/\s+/g," ");

@@ -453,6 +453,52 @@ function whoHasWhat() {
  * 1) who  — 사용자 시트 B열에 적힌 이름을 그대로
  * 2) newPw — 쓰고 싶은 비밀번호. 비워 두면 임시 숫자 6자리를 만들어 준다
  */
+/* ── 편집기에서 한 번만 돌리면 되는 함수 ──
+   고칠 것이 없다. 함수 목록에서 useNicknames 를 고르고 실행만 하면 된다.
+   1) 모든 이름의 잠금을 푼다
+   2) 모든 이름의 열쇠를 "이름에서 만든 값"으로 바꾼다 → 앱에서 이름만 넣으면 들어간다
+   저장(Ctrl+S)만 하면 돌아간다. 배포는 하지 않아도 된다. */
+function useNicknames() {
+  var props = PropertiesService.getScriptProperties();
+
+  /* 1) 쌓인 실패와 잠금을 전부 지운다 */
+  var all = props.getProperties(), cleared = 0;
+  for (var k in all) {
+    if (k.indexOf('FAIL_N_') === 0 || k.indexOf('FAIL_UNTIL_') === 0) {
+      props.deleteProperty(k); cleared++;
+    }
+  }
+
+  /* 2) 이름마다 열쇠를 이름에서 만든 값으로 바꾼다 */
+  var sh = sheet_(SH.user), last = sh.getLastRow();
+  if (last < 2) {
+    var none = '잠금 ' + cleared + '건을 지웠습니다. 등록된 이름은 없습니다.';
+    Logger.log(none); return none;
+  }
+  var head = HEAD[SH.user];
+  var vals = sh.getRange(2, 1, last - 1, head.length).getValues();
+  var saved = CUR_UID, names = [];
+  CUR_UID = '';
+  for (var i = 0; i < vals.length; i++) {
+    var o = {};
+    for (var j = 0; j < head.length; j++) o[head[j]] = vals[i][j];
+    var nm = String(o['이름'] || '').trim();
+    if (!nm) continue;
+    var key = 'nick:' + nm.replace(/\s+/g, ' ').toLowerCase();
+    var salt = rand_(24);
+    writeRow_(SH.user, {
+      id: o.id, '이름': o['이름'], '솔트': salt, '해시': pinHash_(salt, key),
+      '표시이름': o['표시이름'] || o['이름'], '가입일': o['가입일']
+    });
+    names.push(nm);
+  }
+  CUR_UID = saved;
+
+  var txt = '잠금 ' + cleared + '건을 지웠습니다. 이제 비밀번호 없이 이름만으로 들어갑니다: ' + names.join(', ');
+  Logger.log(txt);
+  return txt;
+}
+
 function resetPassword() {
   var who   = '여기에_이름';
   var newPw = '';
