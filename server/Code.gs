@@ -1384,10 +1384,13 @@ function apiAsk(prompt) {
 function apiAskImg(prompt, dataUrl) {
   var m = /^data:([^;]+);base64,(.+)$/.exec(dataUrl || '');
   if (!m) throw new Error('그림을 읽을 수 없는 형식입니다.');
+  /* 큰 모델을 쓰면 답이 깊어지지만 오래 걸린다.
+     구글은 오래 끄는 요청의 응답 주소를 잃어버려 404 를 돌려주기도 한다.
+     사진 읽기와 같은 길로 보낸다 — 그쪽은 잘 돈다. */
   return gemini_([
     { text: String(prompt || '') },
     { inline_data: { mime_type: m[1], data: m[2] } }
-  ], true);
+  ]);
 }
 
 /** 측정 화면 사진에서 숫자를 읽는다. dataUrl 은 "data:image/jpeg;base64,..." */

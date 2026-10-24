@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v42">
+<meta name="app-version" content="v43">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -3005,7 +3005,7 @@ function videoSheet(file,cb){
     if(dur>20){ clearTimeout(guard); fail("영상이 "+Math.round(dur)+"초입니다. 스윙 한 번만 10초 안으로 찍어 주세요."); return; }
     var N=8, cols=4;
     var vw=v.videoWidth||360, vh=v.videoHeight||640;
-    var cw=Math.min(300,vw), ch=Math.round(vh*(cw/vw));
+    var cw=Math.min(220,vw), ch=Math.round(vh*(cw/vw));
     var cv=document.createElement("canvas");
     cv.width=cw*cols; cv.height=ch*Math.ceil(N/cols);
     var cx=cv.getContext("2d");
@@ -3016,7 +3016,7 @@ function videoSheet(file,cb){
         clearTimeout(guard); done=true;
         try{URL.revokeObjectURL(url);}catch(e){}
         var out=null;
-        try{ out=cv.toDataURL("image/jpeg",0.7); }catch(e){}
+        try{ out=cv.toDataURL("image/jpeg",0.62); }catch(e){}
         cb(out, out?null:"영상에서 그림을 꺼내지 못했습니다.");
         return;
       }
@@ -3077,6 +3077,7 @@ function lcVideo(i,file){
       b.chat.pop();
       var m=(e&&e.message)||"영상을 보지 못했습니다.";
       if(/알 수 없는 요청/.test(m)) m="서버에 영상 보기 기능이 아직 없습니다. 앱스 스크립트에 새 Code.gs 를 붙여 넣고 배포 관리에서 연필 → 새 버전 → 배포 하세요.";
+      else if(e&&e.dead) m="영상을 보내는 중에 구글이 응답을 놓쳤습니다. 주소가 바뀐 것은 아닙니다(사진 읽기는 됩니다). 영상을 더 짧게 찍어 다시 올려 보세요.";
       S.msg[key]=m; render();
     });
   });
