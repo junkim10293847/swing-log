@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v40">
+<meta name="app-version" content="v41">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -722,8 +722,8 @@ function ask(key,prompt,opts){
     setTimeout(tick,1000);
   })();
   /* 끝나지 않는 일은 없어야 한다. 서버가 침묵하면 2분에 끊는다. */
-  return withTimeout(sample(prompt,opts||{}),120000,
-      "서버가 120초 동안 답하지 않았습니다. 잠시 뒤 다시 눌러 주세요.")
+  return withTimeout(sample(prompt,opts||{}), (opts&&opts.ms)||75000,
+      "서버가 답하지 않았습니다. 구글 쪽이 몰릴 때 생깁니다. 다시 눌러 주세요.")
     .then(function(r){ S.busy[key]=false; render(); return r.text; })
     .catch(function(e){ S.busy[key]=false;
       var c=e&&e.code;
@@ -1906,11 +1906,69 @@ function readPreGoal(){
 }
 
 /* 쓴 목표를 기록에 비추어 본다. 하고 싶은 것과 지금 새는 곳이 다를 수 있다. */
+/* 적으신 글에서 채 이름을 바로 집어낸다. AI를 기다리지 않는다.
+   "웨지 퍼터 점검" 이라고 쓰면 그 자리에서 웨지와 퍼터가 잡힌다. */
+function clubsFromText(txt){
+  var t=String(txt||"");
+  if(!t.trim()) return [];
+  var live=S.clubs.filter(function(c){ return !c.spare; });
+  var out=[], seen={};
+  function take(c){ if(c&&!seen[c.id]){ seen[c.id]=1; out.push(c); } }
+
+  var byCat=[
+    {re:/드라이버|드라이브|티샷|티 샷/, cat:"driver"},
+    {re:/우드|페어웨이/,                 cat:"wood"},
+    {re:/하이브리드|유틸/,               cat:"hybrid"},
+    {re:/웨지|어프로치|피칭|갭웨지|샌드|로브|숏게임|쇼트게임/, cat:"wedge"},
+    {re:/퍼터|퍼팅/,                     cat:"putter"},
+    {re:/아이언/,                        cat:"iron"}
+  ];
+  /* 말로 쓴 것을 먼저 본다 — "드라이브"처럼 이름과 조금 달라도 잡힌다 */
+  byCat.forEach(function(k){
+    if(!k.re.test(t)) return;
+    live.filter(function(c){ return c.cat===k.cat; }).slice(0,2).forEach(take);
+  });
+  /* 이름 그대로 적은 것 */
+  live.forEach(function(c){ if(t.indexOf(c.name)>=0) take(c); });
+  /* "7번", "52도" 처럼 숫자로 부른 것 */
+  (t.match(/\d+\s*(번|도)/g)||[]).forEach(function(w){ take(guessClub(w.replace(/\s+/g,""))); });
+
+  return out.slice(0,4);
+}
+
+/* 적은 글만 보고 그 자리에서 오늘 칠 채를 세운다. AI가 오면 이것을 다듬는다. */
+function roughFromGoal(){
+  try{
+    var g=String(S.preGoal||"").trim();
+    var picks=clubsFromText(g);
+    if(!picks.length) return false;
+    var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; });
+    var first=picks.filter(function(c){ return c.cat!=="putter"; })[0] || picks[0];
+    S.preFocus=first.id;
+    S.preDiag={
+      head:"", rough:true,
+      diag:"적어 주신 글에서 채만 먼저 골랐습니다. 정리가 끝나면 이유와 순서까지 채워집니다.",
+      clubName:first.name,
+      also:picks.filter(function(c){ return c.id!==first.id; })
+                .map(function(c){ return {id:c.id,name:c.name,why:"적으신 글에 있음"}; }),
+      skip:live.filter(function(c){ return !picks.some(function(k){ return k.id===c.id; }); })
+               .map(function(c){ return {id:c.id,name:c.name,why:""}; }),
+      cue:"", test:""
+    };
+    return true;
+  }catch(e){ return false; }
+}
+
 function diagnoseGoal(){
   var g=String(S.preGoal||"").trim();
   if(!g){ S.msg.pdx="오늘 하고 싶은 것을 한 줄 적어 주세요."; render(); return; }
-  if(!ready.ai){ S.msg.pdx="AI 키가 아직 없습니다."; render(); return; }
   S.msg.pdx=null;
+  var hadRough=roughFromGoal();        /* 기다리지 않고 먼저 답을 보여 준다 */
+  if(!ready.ai){
+    S.msg.pdx = hadRough ? "AI 키가 없어 글에서 채만 골랐습니다." : "AI 키가 아직 없습니다.";
+    render(); return;
+  }
+  render();
   var names=S.clubs.filter(function(c){ return !c.spare; }).map(function(c){ return c.name; });
   var P=null; try{ P=prescribe(); }catch(e){}
   var p=profileText()
@@ -1951,6 +2009,8 @@ function diagnoseGoal(){
       else o.test=m[2].trim();
     });
     if(!o.diag) o.diag=String(t).trim();
+    if(!o.also.length && S.preDiag && S.preDiag.rough) o.also=S.preDiag.also;
+    if(!o.skip.length && S.preDiag && S.preDiag.rough) o.skip=S.preDiag.skip;
     S.preDiag=o;
     if(o.clubName){
       var hit=S.clubs.filter(function(c){ return c.name===o.clubName; })[0] || guessClub(o.clubName);
@@ -1958,7 +2018,14 @@ function diagnoseGoal(){
       else o.clubName="";
     }
     render();
-  }).catch(function(){});
+  }).catch(function(){
+    /* 실패해도 글에서 고른 것은 그대로 둔다. 빈손으로 돌려보내지 않는다. */
+    if(S.preDiag&&S.preDiag.rough){
+      S.preDiag.diag="적어 주신 글에서 채만 골랐습니다. 이유와 순서는 아직 못 채웠습니다.";
+      S.msg.pdx="정리는 실패했지만 고른 채는 그대로 두었습니다. 다시 눌러 보셔도 됩니다.";
+    }
+    render();
+  });
 }
 
 /* 준비운동 — 막는 단계가 아니라 펼쳐 보는 목록이다.
