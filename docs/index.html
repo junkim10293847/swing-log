@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v35">
+<meta name="app-version" content="v36">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -441,6 +441,9 @@ function apiUrl(){
   }catch(e){}
   return (window.SWINGLOG_API||"");
 }
+/* 이름에서 만드는 고정 열쇠. 사람이 외우지 않는다. */
+function nickPw(id){ return "nick:"+String(id||"").trim().toLowerCase(); }
+
 function saveApiUrl(u){ try{ localStorage.setItem("swinglog.api",u); }catch(e){} }
 
 /* 점검 전용. 잠겼다는 답이 와도 열쇠를 지우지 않는다.
@@ -913,36 +916,22 @@ function renderLock(){
      +'앱스 스크립트 편집기 → <b>배포</b> → <b>배포 관리</b> → 활성 배포의 <b>웹 앱 URL</b>을 통째로 복사해 넣으세요. '
      +'거기에 살아 있는 배포가 없으면 <b>연필</b>을 눌러 버전을 <b>새 버전</b>으로 바꾸고 <b>배포</b>를 누르면 됩니다.</p>'
      +'<p class="tiny" style="margin-top:10px"><a href="#" data-act="toLogin" style="color:var(--accent);font-weight:600">돌아가기</a></p>';
-  } else if(L.mode==="signup"){
-    h+='<h2>처음 오셨습니다</h2>'
-     +'<p class="muted" style="margin:8px 0 18px">이름과 비밀번호만 정하면 됩니다. 기록은 사람마다 따로 쌓이고, 다른 사람 기록은 보이지 않습니다.</p>'
-     +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||"")+'" placeholder="예) 홍길동" autocomplete="username" autocapitalize="none"></label>'
-     +'<label class="f" style="margin-top:10px">비밀번호<input type="password" id="lk_pw" placeholder="4자 이상" autocomplete="new-password"></label>'
-     +'<label class="f" style="margin-top:10px">비밀번호 한 번 더<input type="password" id="lk_pw2" placeholder="4자 이상" autocomplete="new-password"></label>'
-     +'<button class="btn primary full" style="margin-top:14px" data-act="doSignup"'+(L.busy?" disabled":"")+'>'
-     +(L.busy?'<span class="spin"></span> 만드는 중':'만들고 시작')+'</button>';
-    if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
-    h+='<p class="tiny" style="margin-top:14px"><a href="#" data-act="toLogin" style="color:var(--accent);font-weight:600">이미 등록했습니다</a></p>'
-     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">비밀번호는 저장되지 않습니다. 알아볼 수 없는 형태로 바꾼 값만 보관합니다.</p>';
   } else {
+    /* 이름 한 칸이면 들어간다. 처음 쓰는 이름이면 그 자리에서 만들어진다. */
     h+='<h2>스윙 로그</h2>'
-     +'<p class="muted" style="margin:8px 0 18px">이름과 비밀번호를 넣어 주세요.</p>'
-     +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||savedName()||"")+'" placeholder="등록한 이름" autocomplete="username" autocapitalize="none"></label>'
-     +'<label class="f" style="margin-top:10px">비밀번호<input type="password" id="lk_pw" placeholder="비밀번호" autocomplete="current-password"></label>'
-     +'<button class="btn primary full" style="margin-top:14px" data-act="doLogin"'+(L.busy?" disabled":"")+'>'
-     +(L.busy?'<span class="spin"></span> 확인하는 중':'들어가기')+'</button>';
-    h+='<div class="optrow">'
-     +'<label class="opt"><input type="checkbox" id="lk_remember"'+(pref("remember",true)?" checked":"")+'><span>이름 기억</span></label>'
-     +'<label class="opt"><input type="checkbox" id="lk_auto"'+(pref("auto",true)?" checked":"")+'><span>자동 로그인</span></label>'
-     +'</div>';
+     +'<p class="muted" style="margin:8px 0 18px">이름만 넣으면 됩니다.</p>'
+     +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||savedName()||"")+'" placeholder="예) 홍길동" autocomplete="username" autocapitalize="none"></label>';
+    /* 예전에 비밀번호로 만든 이름은 딱 한 번만 더 묻는다 */
+    if(L.askPw){
+      h+='<div class="banner warn" style="margin-top:12px">이 이름은 전에 비밀번호로 만든 것입니다. 한 번만 넣어 주시면 다음부터는 이름만으로 들어갑니다.</div>'
+       +'<label class="f" style="margin-top:10px">지금 비밀번호<input type="password" id="lk_pw" placeholder="쓰시던 비밀번호" autocomplete="current-password"></label>';
+    }
+    h+='<button class="btn primary full" style="margin-top:14px" data-act="doEnter"'+(L.busy?" disabled":"")+'>'
+     +(L.busy?'<span class="spin"></span> 들어가는 중':'들어가기')+'</button>';
     if(L.err) h+='<div class="banner bad" style="margin-top:12px">'+esc(L.err)+'</div>';
     if(L.wait>0) h+='<p class="tiny" style="margin-top:10px;color:var(--fg3)">'+L.wait+'초 뒤에 다시 넣을 수 있습니다.</p>';
-    h+='<p class="tiny" style="margin-top:16px"><a href="#" data-act="toSignup" style="color:var(--accent);font-weight:600">처음이신가요? 등록하기</a></p>'
-     +'<p class="tiny" style="margin-top:10px;color:var(--fg3)">'
-     +(pref("auto",true)
-        ? '자동 로그인을 켜 두면 이 기기에서 30일 동안 다시 묻지 않습니다.'
-        : '자동 로그인이 꺼져 있습니다. 창이나 탭을 새로 열 때마다 다시 묻습니다.')
-     +' 비밀번호는 기기에 저장되지 않습니다.</p>';
+    h+='<p class="tiny" style="margin-top:16px;color:var(--fg3)">처음 쓰는 이름이면 그 자리에서 만들어집니다. '
+     +'기록은 이름마다 따로 쌓이고, 다른 이름의 기록은 보이지 않습니다.</p>';
     h+='<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">'
      +'<button class="btn ghost sm full" data-act="probeServer"'+(L.probing?" disabled":"")+'>'
      +(L.probing?'<span class="spin"></span> 확인 중':'서버 점검')+'</button>';
@@ -3381,7 +3370,6 @@ document.addEventListener("click",function(ev){
   if(a==="rmBlock"){ S.draft.blocks.splice(+el.getAttribute("data-i"),1); render(); return; }
 
   /* ----- 로그인 ----- */
-  if(a==="toSignup"){ S.lock.mode="signup"; S.lock.err=null; S.lock.focused=false; render(); return; }
   if(a==="toLogin"){ S.lock.mode="login"; S.lock.err=null; S.lock.focused=false;
     if(apiUrl()) S.lock.needUrl=false;
     render(); return; }
@@ -3402,31 +3390,49 @@ document.addEventListener("click",function(ev){
     return;
   }
 
-  if(a==="doLogin"||a==="doSignup"){
+  /* 이름만으로 들어간다.
+     비밀번호 자리에는 이름에서 만든 고정 값을 쓴다. 사람이 외울 것이 없다.
+     보호 수준은 "이름을 아는 사람은 들어온다" 그 이상도 이하도 아니다. */
+  if(a==="doEnter"){
     var L2=S.lock;
-    var id=((document.getElementById("lk_id")||{}).value||"").trim();
-    var pw=(document.getElementById("lk_pw")||{}).value||"";
+    var id=((document.getElementById("lk_id")||{}).value||"").trim().replace(/\s+/g," ");
     L2.id=id;
-    if(!id){ L2.err="이름을 넣어 주세요."; render(); return; }
-    if(pw.length<4){ L2.err="비밀번호는 4자 이상입니다."; render(); return; }
+    if(id.length<2){ L2.err="이름을 두 글자 이상 넣어 주세요."; render(); return; }
+    var npw=nickPw(id);
+    var oldPw=L2.askPw ? ((document.getElementById("lk_pw")||{}).value||"") : "";
+    if(L2.askPw && oldPw.length<4){ L2.err="쓰시던 비밀번호를 넣어 주세요."; render(); return; }
 
-    var fn="apiLogin", args=[id,pw];
-    if(a==="doSignup"){
-      var pw2=(document.getElementById("lk_pw2")||{}).value||"";
-      if(id.length<2){ L2.err="이름은 2자 이상으로 넣어 주세요."; render(); return; }
-      if(pw!==pw2){ L2.err="두 번 넣은 비밀번호가 다릅니다."; render(); return; }
-      L2.name=id;
-      fn="apiSignup"; args=[id,pw];
-    }
     L2.busy=true; L2.err=null; render();
-    call.apply(null,[fn].concat(args)).then(function(r){
-      L2.busy=false; L2.need=false; L2.err=null; L2.name=r.name; L2.id=r.loginId||id;
+
+    function land(r){
+      L2.busy=false; L2.need=false; L2.err=null; L2.askPw=false;
+      L2.name=r.name; L2.id=r.loginId||id;
       saveToken(r.token); rememberName(L2.id); render(); boot();
-    }).catch(function(e){
+    }
+    function stop(e){
       L2.busy=false; L2.err=(e&&e.message)||"들어가지 못했습니다.";
       var m=/(\d+)초/.exec(L2.err); L2.wait=m?parseInt(m[1],10):0;
-      render();
-      if(L2.wait>0) tickWait();
+      render(); if(L2.wait>0) tickWait();
+    }
+
+    if(L2.askPw){
+      /* 옛 계정 — 한 번 들어가서 이름 열쇠로 바꿔 둔다. 다음부터는 안 묻는다. */
+      call("apiLogin",id,oldPw).then(function(r){
+        saveToken(r.token);
+        return call("apiChangePin",oldPw,npw).then(function(){ return r; },function(){ return r; });
+      }).then(land).catch(stop);
+      return;
+    }
+
+    call("apiLogin",id,npw).then(land).catch(function(){
+      /* 그 이름이 없으면 만들고, 전에 비밀번호로 만든 이름이면 한 번만 묻는다 */
+      call("apiSignup",id,npw).then(land).catch(function(e2){
+        var m2=(e2&&e2.message)||"";
+        if(/이미 쓰고 있는 이름/.test(m2)){
+          L2.busy=false; L2.err=null; L2.askPw=true; L2.focused=false; render(); return;
+        }
+        stop(e2);
+      });
     });
     return;
   }
@@ -3731,7 +3737,7 @@ document.addEventListener("keydown",function(ev){
   var L=S.lock; if(!L||!L.need||L.busy) return;
   if(ev.key==="Enter"){
     ev.preventDefault();
-    var want = L.needUrl ? "saveUrl" : (L.mode==="signup" ? "doSignup" : "doLogin");
+    var want = L.needUrl ? "saveUrl" : "doEnter";
     var btn=document.querySelector('[data-act="'+want+'"]'); if(btn) btn.click();
   }
   return;
