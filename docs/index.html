@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v46">
+<meta name="app-version" content="v47">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -535,7 +535,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"practice", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  vmsg:{}, coolOpen:false, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  vmsg:{}, coolOpen:false, pendingVid:null, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
@@ -1413,7 +1413,8 @@ function draftView(){
   if(P&&P.cue) h+='<div class="bayCue">'+esc(P.cue)+'</div>';
 
   /* 큰 버튼 하나 */
-  h+='<input type="file" multiple accept="'+PICK_ACCEPT+'" id="multiPhoto" style="display:none" aria-hidden="true">'
+  /* 사진이든 영상이든 이 한 칸으로 받는다. 파일에서 고르는 칸은 거르지 않는다. */
+  h+='<input type="file" multiple accept="'+PICK_ACCEPT+',video/*" id="multiPhoto" style="display:none" aria-hidden="true">'
    +'<input type="file" multiple id="multiPhoto_file" style="display:none" aria-hidden="true">';
   h+='<button class="bayShot" data-act="shootNow"'+((S.multi.busy||!ready.img)?" disabled":"")+'>'
    + (S.multi.busy
@@ -1428,8 +1429,22 @@ function draftView(){
     h+='<div class="banner'+(S.multi.bad?' warn':' ok')+'" style="margin:0 0 10px">'+S.multi.log.map(esc).join('<br>')+'</div>';
   if(S.msg.bay) h+='<div class="banner bad" style="margin:0 0 10px">'+esc(S.msg.bay)+'</div>';
 
+  /* 영상을 올렸으면 그 답을 여기서 바로 보여 준다. '더' 안에 숨기지 않는다. */
+  if(S.vmsg.lcv) h+='<div class="note"><span class="spin"></span> '+esc(S.vmsg.lcv)+'</div>';
+  if(S.msg.lcv) h+='<div class="banner bad">'+esc(S.msg.lcv)+'</div>';
+  var vb=d.vidB&&d.vidB.chat?d.vidB.chat.filter(function(c){ return c.r==="ai"; }).slice(-1)[0]:null;
+  if(vb){
+    var vo=vb.o||lcParse(vb.t);
+    h+='<div class="note"><div class="eyebrow">스윙 영상</div>'
+     +(vo.verdict?'<p style="margin-top:4px">'+esc(vo.verdict)+'</p>':'')
+     +(vo.diag?'<p style="margin-top:4px">'+esc(vo.diag)+'</p>':'')
+     +(vo.next?'<p style="margin-top:6px"><b>다음 — '+esc(vo.next)+'</b></p>':'')
+     +'</div>';
+  }
+
   if(d.blocks.length)
     h+='<button class="bayCount" data-act="openSets">오늘 '+d.blocks.length+'세트 · 보기</button>';
+  h+='<button class="btn ghost sm full" style="border:0;color:var(--fg3)" data-act="pickFile" data-for="multiPhoto">파일에서 고르기</button>';
 
   h+='<div class="bayFoot">'
    +'<button class="btn ghost" data-act="finish"'+(d.blocks.length?"":" disabled")+'>끝내기</button>'
@@ -2908,7 +2923,10 @@ function runMulti(i){
     var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length;
     M.log.push(made ? ("세트 "+made+"개를 만들었습니다.") : "만들어진 세트가 없습니다.");
     M.files=[];                /* 다시 읽지 않도록 비우되, 사진과 결과는 남겨 둔다 */
-    render(); return;
+    render();
+    /* 사진과 영상을 같이 골랐으면, 사진을 다 읽은 뒤에 영상을 본다. 둘 다 버리지 않는다. */
+    if(S.pendingVid){ var pv=S.pendingVid; S.pendingVid=null; lcVideo(-1,pv); }
+    return;
   }
   M.at=i+1; render();
   var f=M.files[i], label=(f.name||("사진"+(i+1)));
@@ -4131,14 +4149,15 @@ document.addEventListener("change",function(ev){
       S.multi.urls.push(makeUrl(fl[mi]));
       S.multi.marks.push("");
     }
-    if(vidPick){
-      S.multi.log=["영상은 세트로 만들지 않습니다. '더'의 스윙 영상에서 자세를 봐 드립니다."];
-      S.multi.bad=true;
-      render(); lcVideo(-1,vidPick); return;
+    var canRead = S.draft && S.multi.names.length && ready.img && !S.multi.busy;
+    if(vidPick && canRead){
+      /* 둘 다 골랐다 — 사진 먼저 읽고, 끝나면 영상을 본다 */
+      S.pendingVid=vidPick; render(); readMulti(); return;
     }
+    if(vidPick){ render(); lcVideo(-1,vidPick); return; }
     render();
     /* 연습장에서는 고르자마자 읽는다. 한 번 더 누를 일을 없앤다. */
-    if(S.draft && S.multi.names.length && ready.img && !S.multi.busy) readMulti();
+    if(canRead) readMulti();
     return;
   }
   if(t && t.type==="file"){
