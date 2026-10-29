@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v49">
+<meta name="app-version" content="v50">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -533,6 +533,70 @@ nav.tabs button[aria-current="true"]{color:var(--fg)}
 .banner.ok{border-left-color:var(--ok)}
 .mark{background:var(--accent)}
 .mark::after{background:radial-gradient(circle at 50% 50%,rgba(21,21,15,.9) 0 2.5px,transparent 3px)}
+
+
+/* ══════════════ 측정기 ══════════════
+   연습장은 어둡다. 그 속에서 흰 화면은 눈이 부시다.
+   검은 바탕에 형광 그린 하나 — 옆의 측정기와 같은 결로 둔다.
+   기본은 어두운 쪽이고, ◐ 를 누르면 밝은 쪽으로 간다. */
+:root{
+  --bg:#0D0F0E; --surface:#0D0F0E; --surface2:#171A18; --line:#262B28;
+  --fg:#ECF1EE; --fg2:#93A099; --fg3:#5E6B65;
+  --accent:#39D98A; --accentSoft:#102318; --onAccent:#05140C; --ink:#ECF1EE;
+  --ok:#39D98A; --okSoft:#102318;
+  --warn:#E8C06A; --warnSoft:#231D10;
+  --bad:#FF8A8A; --badSoft:#241414;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0D0F0E; --surface:#0D0F0E; --surface2:#171A18; --line:#262B28;
+  --fg:#ECF1EE; --fg2:#93A099; --fg3:#5E6B65;
+  --accent:#39D98A; --accentSoft:#102318; --onAccent:#05140C; --ink:#ECF1EE;
+  --ok:#39D98A; --okSoft:#102318;
+  --warn:#E8C06A; --warnSoft:#231D10;
+  --bad:#FF8A8A; --badSoft:#241414;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0D0F0E; --surface:#0D0F0E; --surface2:#171A18; --line:#262B28;
+  --fg:#ECF1EE; --fg2:#93A099; --fg3:#5E6B65;
+  --accent:#39D98A; --accentSoft:#102318; --onAccent:#05140C; --ink:#ECF1EE;
+  --ok:#39D98A; --okSoft:#102318;
+  --warn:#E8C06A; --warnSoft:#231D10;
+  --bad:#FF8A8A; --badSoft:#241414;
+  color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#F4F6F4; --surface:#F4F6F4; --surface2:#E7ECE8; --line:#D6DED9;
+  --fg:#0F1512; --fg2:#4D5A53; --fg3:#8A968F;
+  --accent:#0E7A4A; --accentSoft:#DEF0E6; --onAccent:#FFFFFF; --ink:#0F1512;
+  --ok:#0E7A4A; --okSoft:#DEF0E6;
+  --warn:#8A5A00; --warnSoft:#F6EEDA;
+  --bad:#A33A3A; --badSoft:#F7E8E8;
+  color-scheme:light;
+}
+
+/* 노랑 때 쓰던 모양을 이 색에 맞게 다시 잡는다 */
+.bayNow{background:var(--surface2);color:var(--fg);border:0;border-left:4px solid var(--accent)}
+.bayNow b{color:var(--accent)}
+.bayNow span{color:var(--fg3);opacity:1}
+.cueLine,.bayCue{color:var(--fg);border-left:3px solid var(--accent)}
+.btn{border-color:var(--line)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:800}
+.bayShot{border:2px dashed var(--accent);color:var(--fg)}
+.bayShot:hover{background:var(--accentSoft)}
+.bayShot .ic{color:var(--accent)}
+.eyebrow{border-bottom:2px solid var(--accent)}
+.seg button[aria-pressed="true"],.seg .tog[aria-pressed="true"]{background:var(--accent);color:var(--onAccent);font-weight:800}
+.mark{background:var(--accent)}
+.mark::after{background:radial-gradient(circle at 50% 50%,rgba(5,20,12,.9) 0 2.5px,transparent 3px)}
+.grade.A{color:var(--accent)}
+.grade.B{color:var(--fg)}
+.grade.C,.grade.D{color:var(--bad)}
+.planLine .chg{color:var(--accent);text-decoration:none;font-weight:800}
+.rt b{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+/* 어두운 바탕에서는 카드 테두리를 다시 넣지 않는다 — 선만으로 충분하다 */
+:root[data-theme="dark"] .card,:root .card{border:0}
 
 </style>
 
