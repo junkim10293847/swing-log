@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v47">
+<meta name="app-version" content="v48">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -445,6 +445,16 @@ input:focus,select:focus,textarea:focus{background:transparent;box-shadow:none;b
 .sheet{border-radius:16px 16px 0 0;box-shadow:0 -1px 0 var(--line)}
 .filebtn{background:transparent;border:2px dashed var(--line);border-radius:12px}
 .verLine{color:var(--fg3)}
+.planLine{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;
+  border:0;background:transparent;cursor:pointer;padding:14px 0 0;text-align:left;color:var(--fg2);font-size:14.5px}
+.planLine b{color:var(--fg);font-weight:700}
+.planLine .chg{flex:none;color:var(--accent);font-weight:700;font-size:13px}
+.cueLine{margin-top:8px;padding-left:14px;border-left:2px solid var(--accent);
+  font-size:16px;font-weight:700;color:var(--accent)}
+/* 연습 중에는 탭도 감춘다 — 나갈 길은 끝내기와 더, 둘뿐이다 */
+body.bayMode nav.tabs{display:none}
+body.bayMode #app{padding-bottom:24px}
+body.bayMode .bay{min-height:calc(100vh - 40px)}
 
 </style>
 
@@ -1233,20 +1243,49 @@ function viewClubs(){
 /* ---------- 연습 ---------- */
 /* 앱을 열면 숫자 한 장. 글은 없다.
    오늘 뭘 칠지는 '연습 시작'을 누를 때 나온다. */
+/* 앱을 열면 할 일이 맨 위에 있다. 숫자를 지나쳐 내려갈 일이 없다.
+   계획은 창을 띄우지 않고 버튼 밑 한 줄로 보여 준다 — 바꿀 때만 연다. */
 function viewPractice(){
   if(S.draft) return draftView();
   var h='<div class="stack">';
 
+  /* ① 할 일 */
+  h+='<div class="card">';
+  h+='<button class="btn primary bigStart" data-act="startNow">연습 시작</button>';
+  var P=null; try{ P=prescribe(); }catch(e){}
+  if(P){
+    var D=S.preDiag;
+    var names=[P.primary.x.c.name].concat(P.also.map(function(a){ return a.x.c.name; }));
+    var mins=(P.min===60?'1시간':(P.min===90?'1시간 반':'2시간'))+(P.holes9?' · 9홀':'');
+    h+='<button class="planLine" data-act="openPlan">'
+     +'<span><b>'+esc(names.join(' · '))+'</b> · '+esc(mins)+'</span>'
+     +'<span class="chg">바꾸기</span></button>';
+    var cue=(D&&D.cue)||(P.cue?P.cue.t:"");
+    if(cue) h+='<p class="cueLine">'+esc(cue)+'</p>';
+  }
+  h+='</div>';
+
+  /* ② 지난번에 어디까지 했는지 */
+  var ls=S.sessions[0];
+  if(ls){
+    var bl=(ls.blocks||[]), nm=[];
+    bl.forEach(function(b){ if(b.clubName&&nm.indexOf(b.clubName)<0) nm.push(b.clubName); });
+    h+='<div class="card"><div class="spread">'
+     +'<div class="eyebrow">지난 연습</div>'
+     +'<button class="btn ghost sm" data-act="openSession" data-id="'+esc(ls.id)+'">보기</button></div>'
+     +'<p style="margin-top:6px;font-size:15px">'+esc(fmtDate(ls.date))+' · '
+     + (nm.length?esc(nm.slice(0,3).join(' · ')+(nm.length>3?(' 외 '+(nm.length-3)):'')):(bl.length+'세트'))+'</p>';
+    if(ls.feeling) h+='<p class="tiny" style="margin-top:4px;white-space:normal">'+esc(String(ls.feeling).slice(0,60))+'</p>';
+    h+='</div>';
+  }
+
+  /* ③ 클럽 상태 — 보기만 하는 것이라 아래에 둔다 */
   var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; })
     .sort(function(a,b){ return (a.loft==null?99:a.loft)-(b.loft==null?99:b.loft); });
-
-  if(!live.length){
-    h+='<div class="card empty"><h3>클럽이 없습니다</h3><p>클럽 탭에서 하나 넣으면 여기에 상태가 보입니다.</p></div>';
-  } else {
+  if(live.length){
     h+='<div class="card"><div class="eyebrow">지금 내 클럽</div><div style="margin-top:4px">';
     live.forEach(function(c){
-      var bb=lastBlockFor(c.id);
-      var se=clubSeries(c.id,"carry");
+      var bb=lastBlockFor(c.id), se=clubSeries(c.id,"carry");
       var g=(bb&&bb.m&&bb.m.grade)||null;
       var carry=(bb&&bb.m&&bb.m.carry!=null)?r1(bb.m.carry):null;
       var ar="", arc="var(--fg3)";
@@ -1268,15 +1307,13 @@ function viewPractice(){
   var r0=S.rounds[0];
   if(r0){
     var over=(r0.score!=null&&r0.par)?((r0.score-r0.par>0?"+":"")+(r0.score-r0.par)):null;
-    h+='<div class="card" style="padding:14px 16px"><div class="spread">'
+    h+='<div class="card"><div class="spread">'
      +'<div><div class="eyebrow">마지막 라운드</div>'
      +'<div class="tiny" style="margin-top:2px">'+esc(fmtDate(r0.date))+' \u00b7 '+(r0.type==="field"?"필드":"스크린")+'</div></div>'
      +'<div class="rt"><b style="font-size:22px">'+(r0.score!=null?r0.score:"\u2014")+'</b>'
      +'<span>'+(over||"타")+'</span></div></div></div>';
   }
 
-  h+='<button class="btn primary bigStart" data-act="openPlan">연습 시작</button>';
-  /* 버전은 맨 아래 한 줄. 누르면 뭐가 바뀌었는지 나온다. */
   h+='<button class="verLine" data-act="openChangelog">'+esc(APP_VER)
    +(S.verNew?' · 새 버전 있음':' · 최신')+'</button>';
   h+='</div>';
@@ -1455,7 +1492,7 @@ function draftView(){
 /* 오늘 친 세트 — '더'에서 연다. 예전 연습 화면 본문이 그대로 여기로 왔다. */
 /* 연습 시작을 누르면 나오는 한 장 — 오늘 뭘 칠지 정하고 바로 들어간다 */
 function sheetPlan(){
-  var h='<div class="spread"><h3 style="font-size:19px">오늘 연습</h3>'
+  var h='<div class="spread"><h3 style="font-size:19px">오늘 뭘 칠까</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
   h+='<div style="margin-top:10px">'+planCard()+'</div>';
   return h;
@@ -2469,7 +2506,9 @@ function planCard(){
    +'<button type="button" class="tog" aria-pressed="'+(P.holes9?"true":"false")+'" data-act="planHoles" data-h="'+(P.holes9?"0":"1")+'">'+(P.holes9?'✓ 9홀':'+ 9홀')+'</button>'
    +'</div>';
 
-  h+='<button class="btn primary bigStart" style="margin-top:16px" data-act="startNow">이대로 시작</button>';
+  h+='<button class="btn primary bigStart" style="margin-top:16px" data-act="'
+   +(S.sheet&&S.sheet.kind==="plan"?'closeSheet':'startNow')+'">'
+   +(S.sheet&&S.sheet.kind==="plan"?'이걸로 하기':'연습 시작')+'</button>';
   h+='<button class="btn ghost sm full" style="margin-top:8px" data-act="planOpen">'
    +(S.planOpen?'접기':'다르게 할래요')+'</button>';
 
