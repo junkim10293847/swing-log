@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v45">
+<meta name="app-version" content="v46">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -320,7 +320,7 @@ ul.plain li.bad{color:var(--bad)}
   color:var(--accent);transition:transform .08s ease}
 .bayShot:active{transform:scale(.985)}
 .bayShot[disabled]{opacity:.5}
-.bayShot .ic{font-size:54px;line-height:1}
+.bayShot .ic{width:46px;height:46px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linejoin:round}
 .bayShot em{font-style:normal;font-family:var(--fDisp);font-size:26px;font-weight:800;letter-spacing:-.02em}
 .spin.big{width:34px;height:34px;border-width:4px}
 .bayCount{width:100%;border:0;cursor:pointer;background:var(--surface2);color:var(--fg2);
@@ -335,6 +335,116 @@ body.bayMode .topbar{display:none}
 body.bayMode .bay{min-height:calc(100vh - 120px)}
 .bayFoot .btn{background:var(--surface2);color:var(--fg2);font-weight:800}
 .bayFoot .btn[disabled]{opacity:.45}
+
+
+/* ══════════════ 종이 ══════════════
+   어수선한 까닭은 한 화면에 바탕이 네 겹이었기 때문이다 —
+   연보라 배경 위에 흰 카드, 그 안에 또 연보라 상자, 그 안에 색깔 알약.
+   여기서는 바탕을 하나로 두고, 선과 여백과 글자 크기로만 나눈다.
+   색은 한 화면에 한 번, 지금 눌러야 할 것에만 쓴다. */
+:root{
+  --bg:#FAFAF8; --surface:#FAFAF8; --surface2:#F1F1ED; --line:#E4E4DE;
+  --fg:#16161A; --fg2:#5C5C62; --fg3:#9B9BA1;
+  --accent:#2F3275; --accentSoft:#EDEDF5; --onAccent:#FFFFFF;
+  --ok:#2A6B4F; --okSoft:#ECF3EF;
+  --warn:#7A5512; --warnSoft:#F7F0DE;
+  --bad:#9B3F4B; --badSoft:#F8EDEE;
+  --shadow:none; --r:0px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0F0F12; --surface:#0F0F12; --surface2:#1A1A1E; --line:#2A2A30;
+  --fg:#EDEDEF; --fg2:#9B9BA3; --fg3:#6A6A72;
+  --accent:#AEB0EC; --accentSoft:#1B1B26; --onAccent:#12121A;
+  --ok:#86C9A8; --okSoft:#15211B;
+  --warn:#D9B36C; --warnSoft:#231E12;
+  --bad:#E08A97; --badSoft:#241619;
+  --shadow:none;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F0F12; --surface:#0F0F12; --surface2:#1A1A1E; --line:#2A2A30;
+  --fg:#EDEDEF; --fg2:#9B9BA3; --fg3:#6A6A72;
+  --accent:#AEB0EC; --accentSoft:#1B1B26; --onAccent:#12121A;
+  --ok:#86C9A8; --okSoft:#15211B;
+  --warn:#D9B36C; --warnSoft:#231E12;
+  --bad:#E08A97; --badSoft:#241619;
+  --shadow:none;
+}
+
+/* 카드는 더 이상 떠 있는 판이 아니다. 그냥 글 덩어리다. */
+.card{background:transparent;border:0;border-radius:0;padding:0;box-shadow:none}
+:root[data-theme="dark"] .card,
+.card[style*="accentSoft"]{border:0}
+.stack{gap:30px}
+.stack > .card + .card{border-top:1px solid var(--line);padding-top:26px}
+.card.empty{padding:34px 0;text-align:center}
+
+/* 머리띠 — 가라앉힌다 */
+.topbar{background:var(--bg);backdrop-filter:none;padding:18px 0 14px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+.mark{width:26px;height:26px;border-radius:7px;box-shadow:none}
+.mark::after{background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.95) 0 2.5px,transparent 3px)}
+.brand{font-size:16px}
+.topbar .btn.ghost{background:transparent;color:var(--fg3);padding:6px 8px;font-size:12px}
+.topbar .btn.ghost:hover{background:transparent;color:var(--fg)}
+
+/* 탭 — 유리판을 걷고 선 하나 */
+nav.tabs{background:var(--bg);backdrop-filter:none;box-shadow:none;border-top:1px solid var(--line);
+  grid-template-columns:repeat(3,minmax(0,1fr));padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+nav.tabs button{border-radius:0;gap:3px;font-size:10.5px}
+nav.tabs button[aria-current="true"]{background:transparent;color:var(--fg)}
+nav.tabs button[aria-current="true"] svg{stroke-width:2.1}
+
+/* 단추 — 모서리를 줄이고 그림자를 없앤다 */
+.btn{border-radius:10px;box-shadow:none;background:transparent;border:1px solid var(--line);color:var(--fg)}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onAccent);box-shadow:none}
+.btn.ghost{border-color:transparent;color:var(--fg2)}
+.btn.sm{border-radius:8px}
+.bigStart{border-radius:12px;padding:18px;font-size:18px}
+
+/* 입력 — 채우지 않고 밑줄 하나 */
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=tel],select,textarea{
+  background:transparent;border:1px solid var(--line);border-radius:10px}
+input:focus,select:focus,textarea:focus{background:transparent;box-shadow:none;border-color:var(--accent)}
+
+/* 알약·등급 — 색면을 빼고 글자만 */
+.chip{background:transparent;border:1px solid var(--line);color:var(--fg2);font-weight:600;padding:3px 9px}
+.chip.acc{border-color:var(--accent);color:var(--accent);background:transparent}
+.grade{background:transparent;box-shadow:none;border:0;font-family:var(--fDisp);font-weight:800;
+  color:var(--fg3);width:auto;min-width:18px}
+.grade.A,.grade.B,.grade.C,.grade.D,.grade.X{background:transparent;border:0;box-shadow:none}
+.grade.A{color:var(--ok)} .grade.B{color:var(--fg)} .grade.C,.grade.D{color:var(--bad)}
+
+/* 안쪽 상자들 — 채우지 않고 왼쪽에 선 하나 */
+.note,.ai{background:transparent;border:0;border-left:2px solid var(--line);border-radius:0;
+  padding:2px 0 2px 14px}
+.ai .hd{color:var(--fg3)}
+.banner{background:transparent;border:0;border-left:2px solid var(--line);border-radius:0;padding:4px 0 4px 14px;color:var(--fg2)}
+.banner.ok{border-left-color:var(--ok);color:var(--ok)}
+.banner.warn{border-left-color:var(--warn);color:var(--warn)}
+.banner.bad{border-left-color:var(--bad);color:var(--bad)}
+
+/* 줄 — 선으로만 나눈다 */
+.listrow{border-bottom:1px solid var(--line);padding:14px 0}
+.listrow:last-child{border-bottom:0}
+
+/* 고르는 줄 */
+.seg{background:transparent;border:1px solid var(--line);border-radius:10px;padding:3px;gap:0}
+.seg button{border-radius:7px;font-weight:600;color:var(--fg2)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);box-shadow:none}
+
+/* 연습장 화면 */
+.bayNow{border-radius:12px;box-shadow:none}
+.bayCue{background:transparent;border:0;border-left:2px solid var(--accent);border-radius:0;
+  text-align:left;padding:2px 0 2px 14px;font-size:17px}
+.bayShot{background:transparent;border:2px dashed var(--line);border-radius:14px;box-shadow:none}
+.bayShot:hover{border-color:var(--accent)}
+.bayCount{background:transparent;border:1px solid var(--line);border-radius:10px;color:var(--fg2)}
+.bayFoot .btn{background:transparent;border:1px solid var(--line)}
+
+/* 시트 */
+.sheet{border-radius:16px 16px 0 0;box-shadow:0 -1px 0 var(--line)}
+.filebtn{background:transparent;border:2px dashed var(--line);border-radius:12px}
+.verLine{color:var(--fg3)}
 
 </style>
 
@@ -1308,7 +1418,10 @@ function draftView(){
   h+='<button class="bayShot" data-act="shootNow"'+((S.multi.busy||!ready.img)?" disabled":"")+'>'
    + (S.multi.busy
        ? '<span class="spin big"></span><em>'+esc(S.multi.at+'/'+S.multi.names.length)+'장째 읽는 중</em>'
-       : '<span class="ic">\uD83D\uDCF7</span><em>'+(ready.img?'사진 올리기':'AI 키가 없습니다')+'</em>')
+       : '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true">'
+         +'<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.6l1.2-2h7.4l1.2 2h2.6A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z"/>'
+         +'<circle cx="12" cy="13" r="3.6"/></svg>'
+         +'<em>'+(ready.img?'사진 올리기':'AI 키가 없습니다')+'</em>')
    +'</button>';
 
   if(S.multi.log.length)
