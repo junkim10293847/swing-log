@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v50">
+<meta name="app-version" content="v51">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -597,6 +597,128 @@ nav.tabs button[aria-current="true"]{color:var(--fg)}
 .rt b{font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 /* 어두운 바탕에서는 카드 테두리를 다시 넣지 않는다 — 선만으로 충분하다 */
 :root[data-theme="dark"] .card,:root .card{border:0}
+
+
+/* ══════════════ 흰 바탕 · 테두리 카드 ══════════════
+   채우지 않고 테두리로만 두른 카드, 검은 알약 버튼, 큰 섹션 제목.
+   색은 작은 뱃지에만 쓴다. 기본은 밝은 쪽. */
+:root{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface2:#F4F5F7; --line:#E7E9EC;
+  --fg:#111315; --fg2:#6A7076; --fg3:#A6ACB3;
+  --accent:#111315; --accentSoft:#F4F5F7; --onAccent:#FFFFFF; --ink:#111315;
+  --mark:#2C6ECB; --markSoft:#EDF3FC;
+  --ok:#1A7F4A; --okSoft:#EAF6F0;
+  --warn:#8A5A00; --warnSoft:#FAF2E2;
+  --bad:#C0392B; --badSoft:#FBEDEB;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface2:#F4F5F7; --line:#E7E9EC;
+  --fg:#111315; --fg2:#6A7076; --fg3:#A6ACB3;
+  --accent:#111315; --accentSoft:#F4F5F7; --onAccent:#FFFFFF; --ink:#111315;
+  --mark:#2C6ECB; --markSoft:#EDF3FC;
+  --ok:#1A7F4A; --okSoft:#EAF6F0;
+  --warn:#8A5A00; --warnSoft:#FAF2E2;
+  --bad:#C0392B; --badSoft:#FBEDEB;
+  color-scheme:light;
+}}
+:root[data-theme="light"]{
+  --bg:#FFFFFF; --surface:#FFFFFF; --surface2:#F4F5F7; --line:#E7E9EC;
+  --fg:#111315; --fg2:#6A7076; --fg3:#A6ACB3;
+  --accent:#111315; --accentSoft:#F4F5F7; --onAccent:#FFFFFF; --ink:#111315;
+  --mark:#2C6ECB; --markSoft:#EDF3FC;
+  --ok:#1A7F4A; --okSoft:#EAF6F0;
+  --warn:#8A5A00; --warnSoft:#FAF2E2;
+  --bad:#C0392B; --badSoft:#FBEDEB;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0F1113; --surface:#15181A; --surface2:#1C2023; --line:#272C30;
+  --fg:#F2F4F5; --fg2:#9BA2A8; --fg3:#6B7279;
+  --accent:#F2F4F5; --accentSoft:#1C2023; --onAccent:#0F1113; --ink:#F2F4F5;
+  --mark:#7FB0F2; --markSoft:#16202C;
+  --ok:#6FCB9A; --okSoft:#14211B;
+  --warn:#D9B36C; --warnSoft:#231D12;
+  --bad:#E78B82; --badSoft:#241715;
+  color-scheme:dark;
+}
+
+/* 카드를 되살린다 — 다만 채우지 않고 테두리만 */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px 18px;box-shadow:none}
+.stack{gap:12px}
+.stack > .card + .card{padding-top:18px}   /* 테두리가 이미 있으니 줄을 또 긋지 않는다 */
+.card.empty{padding:40px 18px;text-align:center}
+
+/* 섹션 제목 — 작은 눈썹이 아니라 큰 제목 */
+.eyebrow{display:block;border:0;padding:0;margin:0 0 10px;
+  font-family:var(--fDisp);font-size:17px;font-weight:800;color:var(--fg);letter-spacing:-.02em}
+.spread > .eyebrow{margin-bottom:0}
+
+/* 검은 알약 버튼 */
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;font-weight:700}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--onAccent);font-weight:800}
+.btn.primary:hover{background:var(--fg2);border-color:var(--fg2)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--fg2)}
+.bigStart{border-radius:12px;padding:19px;font-size:18px}
+
+/* 뱃지 — 유일하게 색이 들어가는 자리 */
+.chip{background:var(--surface2);border:0;color:var(--fg2);border-radius:8px;padding:5px 10px;font-weight:700;font-size:12px}
+.chip.acc{background:var(--markSoft);color:var(--mark)}
+
+/* 머리띠 */
+.topbar{border-bottom:0;padding:16px 0 10px;margin-bottom:6px;background:var(--bg)}
+.brand{font-family:var(--fDisp);font-weight:900;font-size:19px;letter-spacing:-.03em}
+.mark{display:none}
+.topbar .btn.ghost{color:var(--fg2);font-weight:600}
+
+/* 탭 — 알약 없이, 선택된 것만 검정 */
+nav.tabs{background:var(--bg);border-top:1px solid var(--line);box-shadow:none;padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px))}
+nav.tabs button{background:transparent;border-radius:0;color:var(--fg3);font-size:11px;font-weight:600;gap:5px}
+nav.tabs button svg{width:22px;height:22px;stroke-width:1.7}
+nav.tabs button[aria-current="true"]{background:transparent;color:var(--fg);font-weight:700}
+nav.tabs button[aria-current="true"] svg{stroke-width:2.2}
+
+/* 줄 */
+.listrow{border-bottom:1px solid var(--line);padding:15px 0}
+.listrow:last-child{border-bottom:0}
+.rt b{font-size:18px;font-variant-numeric:tabular-nums}
+.grade{background:transparent;border:0;color:var(--fg3);font-weight:800;font-size:13px}
+.grade.A{color:var(--ok)} .grade.B{color:var(--fg)} .grade.C,.grade.D{color:var(--bad)}
+
+/* 안쪽 상자 — 선 대신 옅은 면 */
+.note,.ai{background:var(--surface2);border:0;border-radius:12px;padding:14px}
+.banner{background:var(--surface2);border:0;border-radius:12px;padding:12px 14px;color:var(--fg2)}
+.banner.ok{background:var(--okSoft);color:var(--ok)}
+.banner.warn{background:var(--warnSoft);color:var(--warn)}
+.banner.bad{background:var(--badSoft);color:var(--bad)}
+
+/* 고르는 줄 */
+.seg{background:var(--surface2);border:0;border-radius:12px;padding:4px}
+.seg button{border-radius:9px;color:var(--fg2);font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:800;
+  box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* 입력 */
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=tel],select,textarea{
+  background:var(--surface2);border:1px solid transparent;border-radius:12px}
+input:focus,select:focus,textarea:focus{background:var(--surface);border-color:var(--fg);box-shadow:none}
+
+/* 연습장 화면 */
+.bayNow{background:var(--ink);color:var(--onAccent);border:0;border-radius:16px;padding:20px}
+.bayNow b{color:var(--onAccent)}
+.bayNow span{color:var(--onAccent);opacity:.6}
+.bayCue,.cueLine{background:var(--surface2);border:0;border-radius:12px;padding:14px;color:var(--fg)}
+.bayShot{background:var(--surface);border:1px solid var(--line);border-radius:16px;color:var(--fg)}
+.bayShot:hover{background:var(--surface2)}
+.bayShot .ic{color:var(--fg)}
+.bayCount{background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--fg)}
+.bayFoot .btn{background:var(--surface);border:1px solid var(--line)}
+.planLine{padding:12px 0 0}
+.planLine .chg{color:var(--mark);font-weight:700;text-decoration:none}
+.filebtn{background:var(--surface2);border:1px dashed var(--line);border-radius:12px}
+.sheet{border-radius:20px 20px 0 0}
+.verLine{color:var(--fg3)}
 
 </style>
 
