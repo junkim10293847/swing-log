@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v48">
+<meta name="app-version" content="v49">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -455,6 +455,84 @@ input:focus,select:focus,textarea:focus{background:transparent;box-shadow:none;b
 body.bayMode nav.tabs{display:none}
 body.bayMode #app{padding-bottom:24px}
 body.bayMode .bay{min-height:calc(100vh - 40px)}
+
+
+/* ══════════════ 노랑 ══════════════
+   노랑은 글자색으로 못 쓴다 — 흰 바탕에서 읽히지 않는다.
+   그래서 채우는 데만 쓰고, 글자는 먹색으로 간다.
+   한 화면에 노란 덩어리는 하나. 그게 지금 누를 것이다. */
+:root{
+  --bg:#FCFBF5; --surface:#FCFBF5; --surface2:#F2EFE2; --line:#E6E1CE;
+  --fg:#15150F; --fg2:#5B5848; --fg3:#9B9684;
+  --accent:#F5C400; --accentSoft:#FBF2C4; --onAccent:#15150F;
+  --ink:#15150F;
+  --ok:#2F6B3A; --okSoft:#EDF3EC;
+  --warn:#8A5A00; --warnSoft:#FBF1D8;
+  --bad:#9B3F3F; --badSoft:#F8EDED;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E0E0A; --surface:#0E0E0A; --surface2:#1B1A13; --line:#2E2C20;
+  --fg:#F2F0E6; --fg2:#9C9887; --fg3:#6B6859;
+  --accent:#FFD60A; --accentSoft:#241F08; --onAccent:#15150F;
+  --ink:#F2F0E6;
+  --ok:#8CC89A; --okSoft:#141C15;
+  --warn:#E0B75E; --warnSoft:#241D0E;
+  --bad:#E09090; --badSoft:#241616;
+}}
+:root[data-theme="dark"]{
+  --bg:#0E0E0A; --surface:#0E0E0A; --surface2:#1B1A13; --line:#2E2C20;
+  --fg:#F2F0E6; --fg2:#9C9887; --fg3:#6B6859;
+  --accent:#FFD60A; --accentSoft:#241F08; --onAccent:#15150F;
+  --ink:#F2F0E6;
+  --ok:#8CC89A; --okSoft:#141C15;
+  --warn:#E0B75E; --warnSoft:#241D0E;
+  --bad:#E09090; --badSoft:#241616;
+}
+
+/* 노랑이 글자로 새어 나가지 않도록 막는다 */
+.cueLine{color:var(--fg);border-left:3px solid var(--accent)}
+.bayCue{color:var(--fg);border-left:3px solid var(--accent)}
+.planLine .chg{color:var(--fg);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px}
+.chip.acc{border-color:var(--fg);color:var(--fg);background:var(--accent)}
+nav.tabs button[aria-current="true"]{color:var(--fg)}
+.ai .hd,.eyebrow{color:var(--fg2)}
+.btn.ghost{color:var(--fg2)}
+.verLine{color:var(--fg3)}
+.grade.A{color:var(--ok)}
+
+/* 표제 밑에 노란 밑줄 한 줄 — 색을 글자가 아니라 선으로 쓴다 */
+.eyebrow{display:inline-block;padding-bottom:5px;border-bottom:2px solid var(--accent);margin-bottom:4px}
+.spread > .eyebrow{margin-bottom:0}
+
+/* 지금 누를 것 — 노란 덩어리 하나 */
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onAccent);font-weight:800}
+.btn.primary:hover{background:color-mix(in srgb,var(--accent) 88%,var(--ink))}
+.bigStart{padding:20px;font-size:19px;letter-spacing:-.01em}
+
+/* 연습 중 띠 — 먹색 판에 노란 글씨. 뒤집으면 눈이 바로 간다 */
+.bayNow{background:var(--ink);color:var(--bg);border:0}
+.bayNow b{color:var(--accent)}
+.bayNow span{color:var(--bg);opacity:.6}
+
+/* 사진 칸 — 눌러야 할 것이므로 테두리를 노랗게 */
+.bayShot{border:2px dashed var(--accent);color:var(--fg);flex:0 0 auto;min-height:230px;max-height:280px}
+.bayFoot{margin-top:auto}
+.bayShot:hover{background:var(--accentSoft);border-color:var(--accent)}
+.bayShot .ic{color:var(--fg)}
+
+/* 숫자를 키운다 — 이 앱에서 가장 중요한 것은 숫자다 */
+.rt b{font-size:19px;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.listrow .bd b{font-size:15.5px}
+.grade{font-size:14px}
+
+/* 고른 칸 — 노랑으로 */
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--onAccent);font-weight:800}
+.seg .tog[aria-pressed="true"]{background:var(--accent);color:var(--onAccent)}
+
+/* 표시줄 */
+.banner.ok{border-left-color:var(--ok)}
+.mark{background:var(--accent)}
+.mark::after{background:radial-gradient(circle at 50% 50%,rgba(21,21,15,.9) 0 2.5px,transparent 3px)}
 
 </style>
 
