@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v44">
+<meta name="app-version" content="v45">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -327,7 +327,9 @@ ul.plain li.bad{color:var(--bad)}
   border-radius:14px;padding:13px;font-size:15px;font-weight:700}
 .bayFoot{display:flex;gap:10px}
 .bayFoot .btn{flex:1;padding:16px;font-size:16px}
-.bigStart{padding:22px;font-size:20px;font-family:var(--fDisp);letter-spacing:-.02em;border-radius:22px}
+.bigStart{display:block;width:100%;padding:22px;font-size:20px;font-family:var(--fDisp);letter-spacing:-.02em;border-radius:22px}
+.verLine{display:block;width:100%;border:0;background:transparent;cursor:pointer;
+  color:var(--fg3);font-size:12.5px;padding:10px 0 2px;letter-spacing:.02em}
 /* 연습 중에는 머리띠를 접는다. 브랜드 이름을 볼 자리가 아니다. */
 body.bayMode .topbar{display:none}
 body.bayMode .bay{min-height:calc(100vh - 120px)}
@@ -1164,6 +1166,9 @@ function viewPractice(){
   }
 
   h+='<button class="btn primary bigStart" data-act="openPlan">연습 시작</button>';
+  /* 버전은 맨 아래 한 줄. 누르면 뭐가 바뀌었는지 나온다. */
+  h+='<button class="verLine" data-act="openChangelog">'+esc(APP_VER)
+   +(S.verNew?' · 새 버전 있음':' · 최신')+'</button>';
   h+='</div>';
   return h;
 }
@@ -2317,92 +2322,61 @@ function planCard(){
     +'<p class="muted" style="margin-top:6px">기록이 쌓이면 무엇을 칠지 여기서 짚어 드립니다. '
     +'클럽을 등록하고 한 세트를 넣어 보세요.</p></div>';
 
-  /* 평소에는 네 줄만 보인다 — 무엇을, 왜, 무슨 생각으로, 시작.
-     시간·배분·뺄 채·판정은 눌러야 나온다. 매번 볼 것이 아니다. */
-  /* 내 의견이 들어와 정리된 것이 있으면 그것이 오늘의 머리가 된다.
-     없으면 기록만 보고 앱이 고른 것이 머리다. */
+  /* 늘 보이는 것은 넷뿐이다 — 칠 채, 생각, 시간, 시작.
+     이유·배분·내 의견·몸 상태는 '다르게 할래요' 안에 있다.
+     매번 볼 것이 아니다. */
   var D=S.preDiag;
-  var head=(D&&D.head)||P.primary.head;
-  var why =(D&&D.diag)||P.primary.why;
-  var cue =(D&&D.cue)||(P.cue?P.cue.t:"");
-
-  var h='<div class="card"><div class="eyebrow">오늘 연습'+(D?' · 내 의견 반영':'')+'</div>';
-  h+='<h2 class="sec-title" style="margin-top:6px">'+esc(head)+'</h2>';
-  h+='<p class="muted" style="margin-top:6px;color:var(--fg)">'+esc(why)+'</p>';
-  if(D&&String(S.preGoal||"").trim())
-    h+='<p class="tiny" style="margin-top:8px;white-space:normal">내가 적은 것 — '+esc(String(S.preGoal).trim())+'</p>';
-
-  /* 오늘 칠 채와 뺄 채 — 가방을 다 칠 수는 없다 */
+  var cue=(D&&D.cue)||(P.cue?P.cue.t:"");
   var todayClubs=[P.primary.x.c.name].concat(P.also.map(function(a){ return a.x.c.name; }));
-  h+='<div class="note" style="margin-top:12px"><b style="font-size:15px">오늘 칠 채 — '+esc(todayClubs.join(' · '))+'</b>';
-  if(P.also.length) h+='<div class="tiny" style="margin-top:4px;white-space:normal;color:var(--fg2)">'
-   + P.also.map(function(a){ return esc(a.x.c.name)+': '+esc(a.why); }).join('<br>')+'</div>';
-  if(P.skip.length) h+='<div class="tiny" style="margin-top:6px;white-space:normal;color:var(--fg3)">오늘 빼는 채 — '
-   + esc(P.skip.map(function(x){ return x.x.c.name; }).join(' · '))+'</div>';
-  h+='</div>';
 
-  if(cue) h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 생각은 하나만</div>'
-   +'<b style="font-size:16px">'+esc(cue)+'</b></div>';
-  if(D&&D.test) h+='<div class="note" style="margin-top:10px"><b>성공 판정</b>\n'+esc(D.test)+'</div>';
+  var h='<div class="card">';
+  h+='<div class="eyebrow">오늘 칠 채'+(D?' · 내 의견 반영':'')+'</div>';
+  h+='<h2 class="sec-title" style="margin-top:6px;font-size:24px">'+esc(todayClubs.join(' · '))+'</h2>';
+  if(cue) h+='<p style="margin-top:8px;font-size:17px;font-weight:800;color:var(--accent)">'+esc(cue)+'</p>';
 
-  /* 시간과 9홀은 한 줄에서 바로 고른다 — 펼칠 필요 없음 */
-  h+='<div class="seg oneline" role="group" aria-label="연습 시간과 9홀" style="margin-top:14px">'
+  h+='<div class="seg oneline" role="group" aria-label="연습 시간과 9홀" style="margin-top:16px">'
    + MINS.map(function(m){
        return '<button type="button" aria-pressed="'+(P.min===m?"true":"false")+'" '
         +'data-act="planMin" data-m="'+m+'">'+(m===60?'1시간':(m===90?'1시간 반':'2시간'))+'</button>'; }).join("")
    +'<button type="button" class="tog" aria-pressed="'+(P.holes9?"true":"false")+'" data-act="planHoles" data-h="'+(P.holes9?"0":"1")+'">'+(P.holes9?'✓ 9홀':'+ 9홀')+'</button>'
    +'</div>';
 
-  /* 고른 시간에 따라 어느 채부터 잡는지가 바뀐다. 그 한 줄은 늘 보이게 둔다. */
-  var first=P.plan.filter(function(x){ return x.t!=="몸풀기"&&x.t!=="쉬기"; })[0];
-  if(first){
-    h+='<div class="note" style="margin-top:12px"><b style="font-size:16px">먼저 잡을 채 — '+esc(first.t)+' '+first.m+'분</b>';
-    if(P.open) h+='<div class="tiny" style="margin-top:3px;white-space:normal;color:var(--fg2)">'+esc(P.open.why)+'</div>';
-    h+='<div class="tiny" style="margin-top:6px;white-space:normal;color:var(--fg2)">'
-     + P.plan.map(function(x){ return esc(x.t)+(x.tag?'('+x.tag+')':'')+' '+x.m; }).join(' › ')+'분</div></div>';
-  }
-
-  if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
-   +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
-  /* 내 의견 — 적으면 위의 중점과 합쳐서 오늘 할 연습을 다시 짠다 */
-  h+='<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">'
-   +'<span class="lab" style="display:block;margin-bottom:6px">오늘 내 의견</span>'
-   +'<textarea id="pre_goal" style="min-height:56px" '
-   +'placeholder="예) 어제 드라이버가 왼쪽으로 갔다. 오늘은 그것부터 보고 싶다">'+esc(S.preGoal||"")+'</textarea>'
-   +'<button class="btn full" style="margin-top:8px" data-act="preDiag"'+(S.busy.pdx?" disabled":"")+'>'
-   +(S.busy.pdx?('<span class="spin"></span> 합치는 중 <span data-tick="pdx">'+(S.asksec.pdx||0)+'초</span>')
-               :(D?'다시 정리하기':'내 의견 넣고 오늘 연습 정리'))+'</button>';
-  if(S.msg.pdx) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg.pdx)+'</div>';
-  if(D&&D.clubName) h+='<p class="tiny" style="margin-top:8px">중심을 <b>'+esc(D.clubName)+'</b>로 잡았습니다. 아래 <b>몸 상태·중점</b>에서 바꿀 수 있습니다.</p>';
-  h+='</div>';
-
-  h+='<button class="btn primary full" style="margin-top:14px" data-act="startNow">이대로 연습 시작</button>';
-  h+='<div class="row" style="margin-top:6px;gap:8px">'
-   +'<button class="btn ghost sm" style="flex:1" data-act="newSession">몸 상태·중점</button>'
-   +'<button class="btn ghost sm" style="flex:1" data-act="planOpen">'+(S.planOpen?'접기':'자세히')+'</button></div>';
+  h+='<button class="btn primary bigStart" style="margin-top:16px" data-act="startNow">이대로 시작</button>';
+  h+='<button class="btn ghost sm full" style="margin-top:8px" data-act="planOpen">'
+   +(S.planOpen?'접기':'다르게 할래요')+'</button>';
 
   if(S.planOpen){
+    h+='<div style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">';
 
-    h+='<div style="margin-top:14px"><div class="eyebrow">시간 배분</div>';
-    P.plan.forEach(function(x){
-      h+='<div class="listrow" style="cursor:default;padding:10px 0">'
-       +'<span class="grade X" style="font-family:var(--fData);font-size:12px">'+x.m+'</span>'
-       +'<div class="bd"><b>'+esc(x.t)+'</b><span style="white-space:normal;color:var(--fg2)">'+esc(x.d)+'</span></div></div>';
-    });
+    /* 내 의견이 가장 위 — 여기를 고치면 나머지가 따라온다 */
+    h+='<span class="lab" style="display:block;margin-bottom:6px">오늘 내 의견</span>'
+     +'<textarea id="pre_goal" style="min-height:56px" '
+     +'placeholder="예) 어제 드라이버가 왼쪽으로 갔다. 오늘은 그것부터 보고 싶다">'+esc(S.preGoal||"")+'</textarea>'
+     +'<button class="btn full" style="margin-top:8px" data-act="preDiag"'+(S.busy.pdx?" disabled":"")+'>'
+     +(S.busy.pdx?('<span class="spin"></span> 합치는 중 <span data-tick="pdx">'+(S.asksec.pdx||0)+'초</span>')
+                 :(D?'다시 정리하기':'내 의견 넣고 다시 짜기'))+'</button>';
+    if(S.msg.pdx) h+='<div class="banner bad" style="margin-top:8px">'+esc(S.msg.pdx)+'</div>';
+
+    h+='<p class="muted" style="margin-top:14px;color:var(--fg)">'+esc((D&&D.diag)||P.primary.why)+'</p>';
+    if(P.also.length) h+='<div class="tiny" style="margin-top:8px;white-space:normal;color:var(--fg2)">'
+     + P.also.map(function(a){ return esc(a.x.c.name)+': '+esc(a.why); }).join('<br>')+'</div>';
+    if(P.skip.length) h+='<div class="tiny" style="margin-top:6px;white-space:normal;color:var(--fg3)">오늘 빼는 채 — '
+     + esc(P.skip.map(function(x){ return x.x.c.name; }).join(' · '))+'</div>';
+
+    var first=P.plan.filter(function(x){ return x.t!=="몸풀기"&&x.t!=="쉬기"; })[0];
+    if(first){
+      h+='<div class="note" style="margin-top:14px"><b>먼저 잡을 채 — '+esc(first.t)+' '+first.m+'분</b>';
+      if(P.open) h+='<div class="tiny" style="margin-top:3px;white-space:normal;color:var(--fg2)">'+esc(P.open.why)+'</div>';
+      h+='<div class="tiny" style="margin-top:6px;white-space:normal;color:var(--fg2)">'
+       + P.plan.map(function(x){ return esc(x.t)+(x.tag?'('+x.tag+')':'')+' '+x.m; }).join(' › ')+'분</div></div>';
+    }
+    if(D&&D.test) h+='<div class="note" style="margin-top:10px"><b>성공 판정</b>\n'+esc(D.test)+'</div>';
+    else if(P.test) h+='<div class="note" style="margin-top:10px">'+esc(P.test)+'</div>';
+    if(P.tight) h+='<div class="banner warn" style="margin-top:10px">'
+     +'9홀에 '+HOLE9+'분이 들어가면 칠 시간이 얼마 남지 않습니다. 시간을 늘리거나 9홀을 빼는 편이 낫습니다.</div>';
+
+    h+='<button class="btn ghost sm full" style="margin-top:14px" data-act="newSession">몸 상태 · 중심 클럽 바꾸기</button>';
     h+='</div>';
-
-    if(P.cue&&P.cue.d) h+='<p class="tiny" style="margin-top:8px;white-space:normal">'+esc(P.cue.d)+'</p>';
-    if(P.rSig&&P.rSig.length)
-      h+='<ul class="plain" style="margin-top:10px">'
-       + P.rSig.map(function(z){ return '<li>'+esc(z.s)+'</li>'; }).join("")+'</ul>';
-    if(P.skip.length) h+='<div class="banner warn" style="margin-top:12px"><b>'+esc(P.skip[0].x.c.name)+'은 오늘 빼십시오</b>\n'
-     +esc(P.skip[0].why)+'</div>';
-    if(P.test) h+='<div class="note" style="margin-top:12px">'+esc(P.test)+'</div>';
-
-    h+='<button class="btn sm full" style="margin-top:12px" data-act="planDeep"'+(S.busy.plan?" disabled":"")+'>'
-     +(S.busy.plan?('<span class="spin"></span> <span data-tick="plan">'+(S.asksec.plan||0)+'초</span>'):'10발 단위로 더 자세히')+'</button>';
-    if(S.msg.plan) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg.plan)+'</div>';
-    if(S.planText) h+='<div class="ai" style="margin-top:12px"><div class="hd">자세한 안내</div>'+esc(S.planText)+'</div>';
   }
   return h+'</div>';
 }
