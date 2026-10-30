@@ -1,5 +1,5 @@
 /**
- * 스윙 로그 — 구글 앱스 스크립트 서버
+ * 핀하이 — 구글 앱스 스크립트 서버
  *
  * 기록은 구글 시트에 쌓입니다. 시트는 처음 실행할 때 자동으로 만들어집니다.
  *   클럽      — 클럽 한 개가 한 줄
@@ -62,15 +62,15 @@ function doGet() {
   return HtmlService.createHtmlOutput(
     '<!doctype html><meta charset="utf-8">' +
     '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-    '<title>스윙 로그</title>' +
+    '<title>핀하이</title>' +
     '<div style="font-family:system-ui,-apple-system,sans-serif;max-width:420px;margin:18vh auto;padding:0 20px;' +
     'text-align:center;color:#2b2724;line-height:1.7">' +
-    '<h1 style="font-size:21px">스윙 로그</h1>' +
+    '<h1 style="font-size:21px">핀하이</h1>' +
     '<p style="color:#6b635c;font-size:14.5px">여기는 데이터 창구입니다. 앱은 아래 주소에서 엽니다.</p>' +
     '<p style="margin-top:22px"><a href="' + APP_URL + '" ' +
     'style="display:inline-block;background:#BF4F19;color:#fff;text-decoration:none;' +
     'padding:13px 22px;border-radius:11px;font-weight:600">앱 열기</a></p></div>')
-    .setTitle('스윙 로그')
+    .setTitle('핀하이')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, viewport-fit=cover')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
@@ -648,7 +648,7 @@ function ss_() {
     props.setProperty('SPREADSHEET_ID', active.getId());
     return active;
   }
-  var made = SpreadsheetApp.create('스윙 로그 데이터');
+  var made = SpreadsheetApp.create('핀하이 데이터');
   props.setProperty('SPREADSHEET_ID', made.getId());
   return made;
 }

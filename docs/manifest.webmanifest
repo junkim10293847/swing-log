@@ -1,9 +1,16 @@
 {
-  "name": "스윙 로그",
-  "short_name": "스윙 로그",
+  "name": "핀하이",
+  "short_name": "핀하이",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#E8E8F5",
-  "theme_color": "#343672",
-  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "background_color": "#F2F1F9",
+  "theme_color": "#6C4CF0",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

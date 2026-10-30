@@ -2,11 +2,11 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v56">
+<meta name="app-version" content="v57">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
-<title>스윙 로그</title>
+<title>핀하이</title>
 <style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px -apple-system,system-ui,sans-serif;background:#E8E8F5}
 @media (prefers-color-scheme:dark){body{background:#121321}}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
@@ -901,12 +901,19 @@ input:focus,select:focus,textarea:focus{background:var(--surface);border-color:v
 .chip{background:var(--surface2);border:0;border-radius:10px;color:var(--fg2);font-weight:800}
 .chip.acc{background:var(--accentSoft);color:var(--accent)}
 
+/* 이름 앞 깃대 하나 — 앞선 팔레트에서 감춰 둔 것을 다시 꺼낸다 */
+.mark{display:block;width:28px;height:28px;border-radius:9px;background:var(--accent);
+  box-shadow:0 3px 0 var(--accentDeep);
+  background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Crect x='8.6' y='5' width='2.2' height='18' rx='1.1' fill='white'/%3E%3Cpath d='M10.8 6.2 L20 9 L10.8 11.8 Z' fill='white'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:center}
+.mark::after{display:none}
+
 </style>
 
 <div id="app">
   <div class="topbar">
     <div class="mark"></div>
-    <div class="brand">스윙 로그<small id="sub">불러오는 중</small></div>
+    <div class="brand">핀하이<small id="sub">불러오는 중</small></div>
     <a class="btn ghost sm" id="sheetLink" href="#" target="_blank" rel="noopener" title="구글 시트 열기" hidden>시트</a>
     <button class="btn ghost sm" id="themeBtn" title="화면 밝기 전환" aria-label="화면 밝기 전환">◐</button>
     <button class="btn ghost sm" id="logoutBtn" data-act="lockNow" title="로그아웃" aria-label="로그아웃">나가기</button>
@@ -1509,7 +1516,7 @@ function renderLock(){
   if(L.checking){
     /* 서버에 "열어도 되나" 묻는 왕복 중이다. 이때 로그인 양식을 보여주면
        넣을 필요도 없는 칸이 깜빡이고 지나간다. 표지만 둔다. */
-    h+='<h2>스윙 로그</h2>'
+    h+='<h2>핀하이</h2>'
      +'<p class="muted" style="margin:8px 0 0"><span class="spin"></span> 여는 중</p>';
     h+='</div></div>';
     host.innerHTML=h;
@@ -1528,7 +1535,7 @@ function renderLock(){
      +'<p class="tiny" style="margin-top:10px"><a href="#" data-act="toLogin" style="color:var(--accent);font-weight:600">돌아가기</a></p>';
   } else {
     /* 이름 한 칸이면 들어간다. 처음 쓰는 이름이면 그 자리에서 만들어진다. */
-    h+='<h2>스윙 로그</h2>'
+    h+='<h2>핀하이</h2>'
      +'<p class="muted" style="margin:8px 0 18px">이름만 넣으면 됩니다.</p>'
      +'<label class="f">이름<input type="text" id="lk_id" value="'+esc(L.id||savedName()||"")+'" placeholder="예) 홍길동" autocomplete="username" autocapitalize="none"></label>';
     /* 예전에 비밀번호로 만든 이름은 딱 한 번만 더 묻는다 */
