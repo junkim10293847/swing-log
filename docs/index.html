@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v51">
+<meta name="app-version" content="v52">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -720,6 +720,26 @@ input:focus,select:focus,textarea:focus{background:var(--surface);border-color:v
 .sheet{border-radius:20px 20px 0 0}
 .verLine{color:var(--fg3)}
 
+
+/* 시작 전 문답 — 한 번에 하나만 묻는다 */
+.askDots{display:flex;gap:6px;margin:14px 0 18px}
+.askDots span{height:3px;flex:1;border-radius:2px;background:var(--line)}
+.askDots span.on{background:var(--fg)}
+.askDots span.done{background:var(--fg3)}
+.askQ{font-family:var(--fDisp);font-size:21px;font-weight:800;letter-spacing:-.025em;margin-bottom:16px}
+.askOpts{display:flex;flex-direction:column;gap:10px}
+.askOpt{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;color:var(--fg)}
+.askOpt:hover{background:var(--surface2)}
+.askOpt.on{border-color:var(--fg);background:var(--surface2)}
+.askOpt b{font-size:18px;font-weight:800}
+.askOpt span{font-size:13px;color:var(--fg3)}
+.askSum{margin-top:14px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.askRow{display:flex;gap:12px;align-items:baseline;padding:13px 16px;border-bottom:1px solid var(--line)}
+.askRow:last-child{border-bottom:0}
+.askRow span{flex:none;width:76px;font-size:12.5px;color:var(--fg3)}
+.askRow b{font-size:15.5px;font-weight:700;white-space:normal}
+
 </style>
 
 <div id="app">
@@ -809,7 +829,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"practice", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  vmsg:{}, coolOpen:false, pendingVid:null, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  vmsg:{}, coolOpen:false, pendingVid:null, ask:null, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
@@ -1515,7 +1535,7 @@ function viewPractice(){
 
   /* ① 할 일 */
   h+='<div class="card">';
-  h+='<button class="btn primary bigStart" data-act="startNow">연습 시작</button>';
+  h+='<button class="btn primary bigStart" data-act="askStart">연습 시작</button>';
   var P=null; try{ P=prescribe(); }catch(e){}
   if(P){
     var D=S.preDiag;
@@ -1755,6 +1775,75 @@ function draftView(){
 
 /* 오늘 친 세트 — '더'에서 연다. 예전 연습 화면 본문이 그대로 여기로 왔다. */
 /* 연습 시작을 누르면 나오는 한 장 — 오늘 뭘 칠지 정하고 바로 들어간다 */
+/* ────────── 시작 전 문답 ──────────
+   한 번에 하나만 묻는다. 세 번이면 끝난다.
+   ① 몸은 어떤가  ② 오늘 하고 싶은 것  ③ 그래서 오늘은 이렇게 — 시작 */
+function sheetStart(){
+  var A=S.ask||{step:0};
+  var h='<div class="spread"><h3 style="font-size:19px">시작 전에</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+  h+='<div class="askDots">'+[0,1,2].map(function(i){
+      return '<span class="'+(i<A.step?'done':(i===A.step?'on':''))+'"></span>'; }).join("")+'</div>';
+
+  /* ① 몸 */
+  if(A.step===0){
+    var bk=preBody();
+    h+='<p class="askQ">오늘 몸은 어떻습니까?</p>';
+    h+='<div class="askOpts">'+BODY.map(function(x){
+        return '<button class="askOpt'+(bk===x.k?' on':'')+'" data-act="askBody" data-b="'+x.k+'">'
+         +'<b>'+esc(x.n)+'</b><span>몸풀기 '+x.w+'분</span></button>'; }).join("")+'</div>';
+    h+='<p class="tiny" style="margin-top:12px">고르면 다음으로 넘어갑니다.</p>';
+    return h;
+  }
+
+  /* ② 하고 싶은 것 */
+  if(A.step===1){
+    h+='<p class="askQ">오늘 중점적으로 하고 싶은 것이 있습니까?</p>';
+    h+='<textarea id="pre_goal" style="min-height:80px" '
+     +'placeholder="예) 드라이버 발사각이 너무 낮다. 그것부터 보고 싶다">'+esc(S.preGoal||"")+'</textarea>';
+    h+='<div class="row" style="margin-top:12px;gap:8px">'
+     +'<button class="btn" style="flex:1" data-act="askSkip">딱히 없다</button>'
+     +'<button class="btn primary" style="flex:1" data-act="askGoal">이걸로</button></div>';
+    return h;
+  }
+
+  /* ③ 그래서 오늘은 */
+  var P=null; try{ P=prescribe(); }catch(e){}
+  var D=S.preDiag;
+  h+='<p class="askQ">그래서 오늘은 이렇게 하시죠.</p>';
+  if(S.busy.pdx) h+='<div class="note"><span class="spin"></span> 적으신 것과 기록을 합치는 중입니다…</div>';
+  if(S.msg.pdx) h+='<div class="banner bad">'+esc(S.msg.pdx)+'</div>';
+  if(P){
+    var names=[P.primary.x.c.name].concat(P.also.map(function(a2){ return a2.x.c.name; }));
+    var cue=(D&&D.cue)||(P.cue?P.cue.t:"");
+    h+='<div class="askSum">';
+    h+='<div class="askRow"><span>칠 채</span><b>'+esc(names.join(' · '))+'</b></div>';
+    if(cue) h+='<div class="askRow"><span>생각 하나</span><b>'+esc(cue)+'</b></div>';
+    var first=P.plan.filter(function(x){ return x.t!=="몸풀기"&&x.t!=="쉬기"; })[0];
+    if(first) h+='<div class="askRow"><span>먼저</span><b>'+esc(first.t)+' '+first.m+'분</b></div>';
+    if(P.skip.length) h+='<div class="askRow"><span>오늘 뺄 채</span><b>'+esc(P.skip.map(function(x){ return x.x.c.name; }).join(' · '))+'</b></div>';
+    if(D&&D.test) h+='<div class="askRow"><span>성공 판정</span><b>'+esc(D.test)+'</b></div>';
+    h+='</div>';
+    var why=(D&&D.diag)||P.primary.why;
+    if(why) h+='<p class="muted" style="margin-top:12px;color:var(--fg)">'+esc(why)+'</p>';
+  } else {
+    h+='<p class="muted" style="margin-top:10px">기록이 쌓이면 여기서 오늘 칠 채를 짚어 드립니다. 그냥 시작하셔도 됩니다.</p>';
+  }
+
+  h+='<div class="seg oneline" role="group" aria-label="연습 시간" style="margin-top:14px">'
+   + MINS.map(function(m){
+       return '<button type="button" aria-pressed="'+((P?P.min:120)===m?"true":"false")+'" '
+        +'data-act="planMin" data-m="'+m+'">'+(m===60?'1시간':(m===90?'1시간 반':'2시간'))+'</button>'; }).join("")
+   +'<button type="button" class="tog" aria-pressed="'+((P&&P.holes9)?"true":"false")+'" data-act="planHoles" data-h="'+((P&&P.holes9)?"0":"1")+'">'+((P&&P.holes9)?'✓ 9홀':'+ 9홀')+'</button>'
+   +'</div>';
+
+  h+='<button class="btn primary bigStart" style="margin-top:14px" data-act="startNow">이대로 시작</button>';
+  h+='<div class="row" style="margin-top:8px;gap:8px">'
+   +'<button class="btn ghost sm" style="flex:1" data-act="askBack">다시 묻기</button>'
+   +'<button class="btn ghost sm" style="flex:1" data-act="openPlan">자세히 바꾸기</button></div>';
+  return h;
+}
+
 function sheetPlan(){
   var h='<div class="spread"><h3 style="font-size:19px">오늘 뭘 칠까</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
@@ -1995,7 +2084,7 @@ function sheetHTML(){
   var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
   S.sheetShown=s.kind;
   var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,warm:sheetWarm,finish:sheetFinish,plan:sheetPlan,sets:sheetSets,more:sheetMore}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,warm:sheetWarm,finish:sheetFinish,plan:sheetPlan,sets:sheetSets,more:sheetMore,start:sheetStart}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -3989,6 +4078,18 @@ document.addEventListener("click",function(ev){
   }
   /* 연습장 화면의 세 가지 */
   if(a==="openPlan"){ S.sheet={kind:"plan"}; render(); return; }
+  /* 시작 전 문답 */
+  if(a==="askStart"){ S.ask={step:0}; S.sheet={kind:"start"}; render(); return; }
+  if(a==="askBody"){ setPreBody(el.getAttribute("data-b")); S.ask={step:1}; render(); return; }
+  if(a==="askSkip"){ readPreGoal(); S.preGoal=""; S.preDiag=null; S.ask={step:2}; render(); return; }
+  if(a==="askGoal"){
+    readPreGoal();
+    S.ask={step:2};
+    if(String(S.preGoal||"").trim()) diagnoseGoal();   /* 바로 보여 주고, AI 는 뒤에서 다듬는다 */
+    else render();
+    return;
+  }
+  if(a==="askBack"){ S.ask={step:0}; render(); return; }
   if(a==="openSets"){ S.sheet={kind:"sets"}; render(); return; }
   if(a==="openMore"){ S.sheet={kind:"more"}; render(); return; }
   if(a==="openClub"){
