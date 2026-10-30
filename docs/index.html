@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v55">
+<meta name="app-version" content="v56">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -753,6 +753,153 @@ body.bayMode #app{padding-bottom:16px}
 .bayShot{flex:1 1 auto;min-height:170px;max-height:none}
 .bayFoot{margin-top:4px}
 .bayFoot .btn{padding:17px;font-size:16px;font-weight:800}
+
+
+/* ══════════════ 말랑 ══════════════
+   연보라 바탕에 흰 카드가 떠 있고, 버튼은 아래에 두께가 깔린 입체 단추.
+   모서리를 크게, 그림자를 옅게, 색은 보라 하나. */
+:root{
+  --bg:#F2F1F9; --surface:#FFFFFF; --surface2:#F4F3FB; --line:#EAE8F4;
+  --fg:#2A2740; --fg2:#71708C; --fg3:#A5A3BC;
+  --accent:#6C4CF0; --accentDeep:#5134CC; --accentSoft:#EFEBFF; --onAccent:#FFFFFF; --ink:#2A2740;
+  --mark:#FF8A3D; --markSoft:#FFF0E4;
+  --ok:#26A96C; --okSoft:#E6F6EE;
+  --warn:#C98A00; --warnSoft:#FFF5DE;
+  --bad:#E25563; --badSoft:#FEECEE;
+  --shadow:0 2px 10px rgba(74,62,140,.06),0 10px 28px rgba(74,62,140,.06);
+  --r:24px; color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#F2F1F9; --surface:#FFFFFF; --surface2:#F4F3FB; --line:#EAE8F4;
+  --fg:#2A2740; --fg2:#71708C; --fg3:#A5A3BC;
+  --accent:#6C4CF0; --accentDeep:#5134CC; --accentSoft:#EFEBFF; --onAccent:#FFFFFF; --ink:#2A2740;
+  --mark:#FF8A3D; --markSoft:#FFF0E4;
+  --ok:#26A96C; --okSoft:#E6F6EE;
+  --warn:#C98A00; --warnSoft:#FFF5DE;
+  --bad:#E25563; --badSoft:#FEECEE;
+  --shadow:0 2px 10px rgba(74,62,140,.06),0 10px 28px rgba(74,62,140,.06);
+  --r:24px; color-scheme:light;
+}}
+:root[data-theme="light"]{
+  --bg:#F2F1F9; --surface:#FFFFFF; --surface2:#F4F3FB; --line:#EAE8F4;
+  --fg:#2A2740; --fg2:#71708C; --fg3:#A5A3BC;
+  --accent:#6C4CF0; --accentDeep:#5134CC; --accentSoft:#EFEBFF; --onAccent:#FFFFFF; --ink:#2A2740;
+  --mark:#FF8A3D; --markSoft:#FFF0E4;
+  --ok:#26A96C; --okSoft:#E6F6EE;
+  --warn:#C98A00; --warnSoft:#FFF5DE;
+  --bad:#E25563; --badSoft:#FEECEE;
+  --shadow:0 2px 10px rgba(74,62,140,.06),0 10px 28px rgba(74,62,140,.06);
+  --r:24px; color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#15131F; --surface:#1E1B2C; --surface2:#262237; --line:#302B45;
+  --fg:#EDEBF7; --fg2:#A19DBC; --fg3:#716D8C;
+  --accent:#9B84FF; --accentDeep:#6B4FE0; --accentSoft:#241F3A; --onAccent:#15131F; --ink:#EDEBF7;
+  --mark:#FFA366; --markSoft:#2C2016;
+  --ok:#5FD39B; --okSoft:#16261E;
+  --warn:#E0B458; --warnSoft:#272015;
+  --bad:#F08793; --badSoft:#2A1A1D;
+  --shadow:0 2px 10px rgba(0,0,0,.35);
+  --r:24px; color-scheme:dark;
+}
+
+body{background:var(--bg)}
+
+/* 카드 — 테두리 대신 흰 면과 옅은 그림자 */
+.card{background:var(--surface);border:0;border-radius:var(--r);padding:20px;box-shadow:var(--shadow)}
+.stack{gap:14px}
+.stack > .card + .card{padding-top:20px}
+.card.empty{padding:44px 20px;text-align:center}
+
+/* 입체 단추 */
+.btn{border:0;background:var(--surface2);color:var(--fg);border-radius:16px;font-weight:800;
+  box-shadow:0 3px 0 var(--line);transition:transform .08s ease,box-shadow .08s ease,background .18s ease}
+.btn:hover{background:var(--accentSoft)}
+.btn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
+.btn.primary{background:var(--accent);color:var(--onAccent);box-shadow:0 5px 0 var(--accentDeep)}
+.btn.primary:hover{background:var(--accent)}
+.btn.primary:active{transform:translateY(3px);box-shadow:0 2px 0 var(--accentDeep)}
+.btn.primary:disabled{box-shadow:0 5px 0 var(--accentDeep);opacity:.45}
+.btn.ghost{background:transparent;box-shadow:none;color:var(--fg2)}
+.btn.ghost:active{transform:none;box-shadow:none}
+.btn.sm{border-radius:12px;box-shadow:0 2px 0 var(--line)}
+.bigStart{border-radius:20px;padding:20px;font-size:19px}
+
+/* 머리띠 */
+.topbar{background:transparent;border:0;padding:16px 0 8px;margin-bottom:4px}
+.brand{font-weight:900;font-size:19px;letter-spacing:-.03em}
+
+/* 섹션 제목 — 앞에 보라 점 */
+.eyebrow{display:flex;align-items:center;gap:7px;border:0;padding:0;margin:0 0 12px;
+  font-family:var(--fDisp);font-size:16.5px;font-weight:800;color:var(--fg);letter-spacing:-.02em}
+.eyebrow::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+.spread > .eyebrow{margin-bottom:0}
+
+/* 탭 — 선택된 것은 보라에 두껍게 */
+nav.tabs{background:var(--surface);border-top:0;box-shadow:0 -2px 16px rgba(74,62,140,.08);
+  padding:10px 8px calc(10px + env(safe-area-inset-bottom,0px))}
+nav.tabs button{color:var(--fg3);font-weight:700;font-size:11px}
+nav.tabs button svg{width:23px;height:23px;stroke-width:1.9}
+nav.tabs button[aria-current="true"]{color:var(--accent)}
+nav.tabs button[aria-current="true"] svg{stroke-width:2.6}
+
+/* 줄 */
+.listrow{border-bottom:1px solid var(--line);padding:15px 0}
+.listrow:last-child{border-bottom:0}
+.rt b{font-size:19px;font-variant-numeric:tabular-nums}
+.grade{background:var(--surface2);border-radius:10px;width:30px;height:30px;
+  display:inline-flex;align-items:center;justify-content:center;font-weight:900;font-size:13px;color:var(--fg3)}
+.grade.A{background:var(--okSoft);color:var(--ok)}
+.grade.B{background:var(--accentSoft);color:var(--accent)}
+.grade.C,.grade.D{background:var(--badSoft);color:var(--bad)}
+
+/* 안쪽 상자 */
+.note,.ai{background:var(--surface2);border:0;border-radius:16px;padding:15px}
+.banner{background:var(--surface2);border:0;border-radius:16px;padding:13px 15px;color:var(--fg2)}
+.banner.ok{background:var(--okSoft);color:var(--ok)}
+.banner.warn{background:var(--warnSoft);color:var(--warn)}
+.banner.bad{background:var(--badSoft);color:var(--bad)}
+
+/* 고르는 줄 */
+.seg{background:var(--surface2);border:0;border-radius:16px;padding:5px}
+.seg button{border-radius:12px;color:var(--fg2);font-weight:800}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--accent);
+  box-shadow:0 2px 6px rgba(74,62,140,.12)}
+
+/* 입력 */
+input[type=text],input[type=number],input[type=date],input[type=password],input[type=tel],select,textarea{
+  background:var(--surface2);border:2px solid transparent;border-radius:16px;padding:14px}
+input:focus,select:focus,textarea:focus{background:var(--surface);border-color:var(--accent);box-shadow:none}
+
+/* 연습장 화면 */
+.bayNow{background:var(--accent);color:#fff;border:0;border-radius:22px;padding:22px;
+  box-shadow:0 5px 0 var(--accentDeep)}
+.bayNow b{color:#fff}
+.bayNow span{color:#fff;opacity:.72}
+.bayNow:active{transform:translateY(3px);box-shadow:0 2px 0 var(--accentDeep)}
+.bayCue{background:var(--surface);border:0;border-radius:18px;padding:16px;color:var(--fg);
+  box-shadow:var(--shadow)}
+/* 흰 카드 안에서는 흰 상자를 또 올리지 않는다 — 옅은 보라 면으로 */
+.cueLine{background:var(--accentSoft);border:0;border-radius:16px;padding:14px 16px;
+  color:var(--fg);box-shadow:none;margin-top:12px}
+.bayShot{background:var(--surface);border:2px dashed var(--line);border-radius:22px;color:var(--accent);
+  box-shadow:var(--shadow)}
+.bayShot:hover{background:var(--accentSoft);border-color:var(--accent)}
+.bayShot .ic{color:var(--accent)}
+.bayShot em{color:var(--fg)}
+.bayCount{background:var(--surface);border:0;border-radius:16px;color:var(--fg2);box-shadow:var(--shadow)}
+.bayFoot .btn{background:var(--surface);box-shadow:0 3px 0 var(--line)}
+.bayBack{color:var(--fg2);font-weight:800}
+.planLine .chg{color:var(--accent);font-weight:800;text-decoration:none}
+.filebtn{background:var(--surface2);border:2px dashed var(--line);border-radius:18px}
+.sheet{border-radius:26px 26px 0 0}
+.askOpt{border:0;border-radius:18px;background:var(--surface2);box-shadow:0 3px 0 var(--line)}
+.askOpt.on{background:var(--accentSoft);box-shadow:0 3px 0 var(--accent)}
+.askSum{border:0;border-radius:18px;background:var(--surface2);overflow:hidden}
+.askRow{border-bottom:1px solid var(--line)}
+.askDots span.on{background:var(--accent)}
+.chip{background:var(--surface2);border:0;border-radius:10px;color:var(--fg2);font-weight:800}
+.chip.acc{background:var(--accentSoft);color:var(--accent)}
 
 </style>
 
