@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v54">
+<meta name="app-version" content="v55">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -843,7 +843,7 @@ var ready={db:false,ai:false,img:false};
 var S = {tab:"practice", clubs:[], sessions:[], rounds:[], loaded:false, draft:null, busy:{}, msg:{}, sheet:null, sheetUrl:"",
   picked:{}, files:{}, note:{}, prev:{}, stage:null, shrunk:null, sec:0, openBlock:null, jump:false, openMode:false,
   fromCache:false, cacheAt:0, syncing:false, cfgRaw:null, openHoles:false,
-  vmsg:{}, coolOpen:false, pendingVid:null, ask:null, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
+  vmsg:{}, coolOpen:false, pendingVid:null, ask:null, idleOut:false, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
   askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
@@ -950,7 +950,10 @@ function call(name){
     if(j.ok) return j.value;
     if(j.locked){
       saveToken("");
-      S.lock.need=true; S.lock.checking=false; S.lock.err="다시 들어와 주세요."; S.lock.focused=false; render();
+      S.lock.need=true; S.lock.checking=false; S.lock.focused=false;
+      /* 내가 방금 내보낸 것이면 그 이유를 지우지 않는다 */
+      if(!S.idleOut) S.lock.err="로그인이 풀렸습니다. 이름만 넣으면 바로 들어옵니다.";
+      render();
     }
     throw {message:j.error||"요청이 처리되지 않았습니다."};
   });
@@ -4204,7 +4207,7 @@ document.addEventListener("click",function(ev){
     var oldPw=L2.askPw ? ((document.getElementById("lk_pw")||{}).value||"") : "";
 
     function land(r){
-      L2.busy=false; L2.need=false; L2.err=null; L2.askPw=false;
+      L2.busy=false; L2.need=false; L2.err=null; L2.askPw=false; S.idleOut=false; bumpAct();
       setNickFlag(id,"pwneed",false); setNickFlag(id,"nick",true);
       L2.name=r.name; L2.id=r.loginId||id;
       saveToken(r.token); rememberName(L2.id); render(); boot();
@@ -4923,7 +4926,11 @@ function bumpAct(){ lastAct=Date.now(); }
   document.addEventListener(ev,bumpAct,true);
 });
 document.addEventListener("visibilitychange",function(){ if(!document.hidden) bumpAct(); });
+window.addEventListener("pageshow",bumpAct);
 setInterval(function(){
+  /* 화면이 가려져 있던 시간은 세지 않는다.
+     탭을 며칠 묵혀 두었다 돌아온 것을 "한 시간 안 썼다"로 세면 안 된다. */
+  if(document.hidden){ bumpAct(); return; }
   if(S.draft){ bumpAct(); return; }                  /* 연습 중에는 안 끊는다 */
   if(S.lock && (S.lock.need||S.lock.checking)) return;
   if(!getToken()) return;
@@ -4933,6 +4940,7 @@ setInterval(function(){
   S.lock.askPw=false;
   S.lock.id=pref("remember",true)?savedName():"";
   S.lock.err="한 시간 넘게 쓰지 않아 나갔습니다. 이름만 넣으면 바로 들어옵니다.";
+  S.idleOut=true;
   saveToken(""); dropCache(); render();
   if(tk) call("apiLock",tk).catch(function(){});
 },60*1000);
