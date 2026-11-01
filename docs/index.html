@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v58">
+<meta name="app-version" content="v59">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -2094,7 +2094,9 @@ function sheetSets(){
     });
     h+='</div>';
   }
-  h+='<button class="btn full" style="margin-top:14px" data-act="addBlock">사진 없이 한 세트 직접 넣기</button>';
+  /* 사진이 실패했을 때만 쓰는 뒷길. 큰 버튼으로 두면 주 동작처럼 보인다. */
+  h+='<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">'
+   +'<button class="btn ghost sm full" style="border:0;color:var(--fg3)" data-act="addBlock">사진 없이 직접 넣기</button></div>';
   return h;
 }
 
