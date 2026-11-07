@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v60">
+<meta name="app-version" content="v61">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -3226,12 +3226,73 @@ function guessClub(raw){
 }
 
 /* 사진을 한 장씩 차례로 읽는다. 한꺼번에 보내면 구글 쪽에서 막힌다. */
+/* 라운드 사진에서 읽은 값을 라운드 한 건에 담는다.
+   점수 입력 화면과 연습장 화면이 같은 읽기를 쓰도록 떼어 놓았다. */
+function applyRoundRead(v,r0){
+  var R={got:[],openHoles:false,warn:""};
+  var got=R.got;
+      function arr(x,lo,hi){
+        if(!x||!x.length) return null;
+        var out=[],any=false;
+        for(var i=0;i<18;i++){
+          var n2 = (i<x.length) ? num(x[i]) : null;
+          if(n2!=null&&(n2<lo||n2>hi)) n2=null;
+          out.push(n2); if(n2!=null) any=true;
+        }
+        return any?out:null;
+      }
+      /* 파 대비 값은 0이나 음수도 나온다. 변환 뒤에 다시 거른다. */
+      var hs=arr(v.holes,-5,15), ps=arr(v.pars,3,6);
+
+      /* 스크린 결과 화면 중에는 Score 줄에 타수가 아니라 파 대비를 적는 것이 있다.
+         합이 (총타수 - 코스 파)와 맞으면 그쪽이므로 각 홀의 파를 더해 실제 타수로 돌린다. */
+      if(hs&&ps){
+        var sH=0,sP=0,nn=0;
+        for(var k=0;k<18;k++){ if(hs[k]!=null&&ps[k]!=null){ sH+=hs[k]; sP+=ps[k]; nn++; } }
+        var tot=num(v.score);
+        var looksRel = (v.relative===true) || (tot!=null && nn>=18 && Math.abs(sH+sP-tot)<=1 && Math.abs(sH-tot)>3);
+        if(looksRel&&nn>=9){
+          for(var k2=0;k2<18;k2++) if(hs[k2]!=null&&ps[k2]!=null) hs[k2]=hs[k2]+ps[k2];
+        }
+        for(var k3=0;k3<18;k3++) if(hs[k3]!=null&&(hs[k3]<1||hs[k3]>15)) hs[k3]=null;
+      }
+      if(hs){ r0.holes=hs; R.openHoles=true; got.push("홀별 타수 "+hs.filter(function(x){return x!=null;}).length+"홀"); }
+      if(ps){ r0.pars=ps; }
+
+      if(v.course){ r0.course=String(v.course).slice(0,60); got.push("코스"); }
+      if(v.date&&/^\d{4}-\d{2}-\d{2}$/.test(String(v.date).trim())){ r0.date=String(v.date).trim(); got.push("날짜"); }
+      if(v.kind==="field"||v.kind==="screen") r0.type=v.kind;
+
+      var t=holeTally(r0);
+      [["score","스코어",50,200],["par","파",54,80],["putts","퍼팅",10,60],
+       ["fw","페어웨이",0,14],["gir","그린 적중",0,18],["ob","OB",0,30],["penalty","벌타",0,40]]
+      .forEach(function(x){
+        var n3=num(v[x[0]]);
+        if(n3==null||n3<x[2]||n3>x[3]) return;
+        r0[x[0]==="penalty"?"penalty":x[0]]=n3; got.push(x[1]);
+      });
+
+      /* 홀별이 들어왔으면 합계와 파 대비는 직접 센다. 화면 숫자보다 이게 정확하다. */
+      if(t.n>=18){
+        if(r0.score==null) r0.score=t.sum;
+        if(t.par) r0.par=t.par;
+      }
+      if(t.marks){ r0.dbl=t.dbl; r0.parOrBetter=t.good; got.push("더블 이상/파 이상"); }
+  var t2=holeTally(r0);
+  if(t2.n>=18 && r0.score!=null && t2.sum!==r0.score)
+    R.warn=" 홀별 합계는 "+t2.sum+"타인데 화면 총타수는 "+r0.score+"타입니다. 둘 중 맞는 쪽으로 고치세요.";
+  return R;
+}
+
 function runMulti(i){
   var M=S.multi;
   if(i>=M.files.length){
     M.busy=false;
-    var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length;
-    M.log.push(made ? ("세트 "+made+"개를 만들었습니다.") : "만들어진 세트가 없습니다.");
+    var rn=M.rounds||0;
+    var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length - rn;
+    var say=[]; if(made>0) say.push("세트 "+made+"개"); if(rn>0) say.push("라운드 "+rn+"건");
+    M.log.push(say.length ? (say.join(" · ")+" 넣었습니다.") : "만들어진 것이 없습니다.");
+    M.rounds=0;
     M.files=[];                /* 다시 읽지 않도록 비우되, 사진과 결과는 남겨 둔다 */
     render();
     /* 사진과 영상을 같이 골랐으면, 사진을 다 읽은 뒤에 영상을 본다. 둘 다 버리지 않는다. */
@@ -3240,7 +3301,17 @@ function runMulti(i){
   }
   M.at=i+1; render();
   var f=M.files[i], label=(f.name||("사진"+(i+1)));
-  sample.json("측정 화면",{images:[f],modelTier:"default"})
+
+  /* 올린 것이 측정기 화면인지 스코어카드인지 먼저 가린다.
+     전에는 무조건 측정기로 읽어, 9홀 스코어카드에서 캐리 150.8m 같은
+     있지도 않은 숫자를 지어내 세트를 만들었다. */
+  whatIsIt(f).then(function(kind){
+    if(kind==="round") return asRound(f,label);
+    return asShot(f,label);
+  });
+
+  function asShot(f,label){
+  return sample.json("측정 화면",{images:[f],modelTier:"default"})
   .then(function(v){
     if(!v){ M.bad=true; M.marks[i]="답이 비었음"; M.log.push(label+" — 답이 비었습니다"); return next(); }
     var m={}, got=0;
@@ -3279,7 +3350,63 @@ function runMulti(i){
     M.bad=true; M.marks[i]="실패"; M.log.push(label+" — "+readErr(e));
     next();
   });
+  }
+
+  /* 스코어카드로 가려졌으면 라운드로 넣는다. 탭을 옮겨 다닐 일이 없다. */
+  function asRound(f,label){
+    return sample.json("라운드 결과 화면",{images:[f],modelTier:"default"})
+    .then(function(v){
+      if(!v){ M.bad=true; M.log.push(label+" — 답이 비었습니다"); return next(); }
+      var r0={id:uuid(),date:today(),type:"field",course:"",holes:null,pars:null,note:""};
+      var R=applyRoundRead(v,r0);
+      if(!R.got.length){
+        M.bad=true;
+        M.log.push(label+" — 스코어카드 같은데 읽어낸 값이 없습니다. 홀별 표와 총타수가 한 화면에 들어가게 다시 찍어 주세요.");
+        return next();
+      }
+      var t=holeTally(r0), n=t.n||0;
+      put("rounds",r0,true,true).then(function(){
+        M.rounds=(M.rounds||0)+1;
+        M.log.push(label+" → 스코어카드로 읽었습니다 · "
+          +(r0.score!=null?(r0.score+"타"):(t.sum?t.sum+"타":"타수 미확인"))
+          +(n?(" ("+n+"홀)"):"")+(r0.course?(" · "+r0.course):"")
+          +". 기록 탭에 넣었습니다."+R.warn);
+        next();
+      }).catch(function(e){
+        M.bad=true; M.log.push(label+" — 스코어카드는 읽었는데 저장하지 못했습니다. "+readErr(e));
+        next();
+      });
+    })
+    .catch(function(e){
+      M.bad=true; M.log.push(label+" — "+readErr(e)); next();
+    });
+  }
   function next(){ render(); setTimeout(function(){ runMulti(i+1); },400); }
+}
+
+/* 사진 한 장이 무엇인지 한 낱말로 묻는다. 제미나이를 부르지만 아주 짧다.
+   서버에 이 기능이 없으면(옛 Code.gs) 가리지 않고 예전처럼 측정기로 읽는다. */
+function whatIsIt(f){
+  if(S.imgAsk===false) return Promise.resolve(null);
+  if(!/^image\//.test(f.type||"")) return Promise.resolve(null);
+  return toDataURLp(f).then(function(u){
+    var p="이 사진이 무엇인지 한 낱말로만 답하세요. 설명 금지.\n"
+      +"launch = 골프 연습장 탄도 측정기 화면 (캐리·볼스피드·발사각·스핀 같은 값이 적힌 화면)\n"
+      +"card = 골프 스코어카드 또는 라운드 결과 화면 (홀별 타수, 파, 총타수가 적힌 표)\n"
+      +"other = 둘 다 아님\n"
+      +"launch / card / other 중 하나만 출력.";
+    return withTimeout(call("apiAskImg",p,u),45000,"");
+  }).then(function(t){
+    S.imgAsk=true;
+    var s=String(t||"").toLowerCase();
+    if(/card/.test(s)) return "round";
+    if(/launch/.test(s)) return "shot";
+    return null;
+  }).catch(function(e){
+    /* 옛 서버면 이 기능이 없다. 한 번 겪으면 다시 묻지 않는다. */
+    if(/알 수 없는 요청/.test((e&&e.message)||"")) S.imgAsk=false;
+    return null;
+  });
 }
 
 /* 키가 없을 때 그 자리에서 바로 넣게 한다. 편집기를 열 필요가 없다. */
@@ -4192,61 +4319,13 @@ document.addEventListener("click",function(ev){
       if(!r0||!v){ S.msg.rphoto="답이 비어 있습니다. 다시 한 번 눌러 주세요."; render(); return; }
       var got=[];
 
-      function arr(x,lo,hi){
-        if(!x||!x.length) return null;
-        var out=[],any=false;
-        for(var i=0;i<18;i++){
-          var n2 = (i<x.length) ? num(x[i]) : null;
-          if(n2!=null&&(n2<lo||n2>hi)) n2=null;
-          out.push(n2); if(n2!=null) any=true;
-        }
-        return any?out:null;
-      }
-      /* 파 대비 값은 0이나 음수도 나온다. 변환 뒤에 다시 거른다. */
-      var hs=arr(v.holes,-5,15), ps=arr(v.pars,3,6);
-
-      /* 스크린 결과 화면 중에는 Score 줄에 타수가 아니라 파 대비를 적는 것이 있다.
-         합이 (총타수 - 코스 파)와 맞으면 그쪽이므로 각 홀의 파를 더해 실제 타수로 돌린다. */
-      if(hs&&ps){
-        var sH=0,sP=0,nn=0;
-        for(var k=0;k<18;k++){ if(hs[k]!=null&&ps[k]!=null){ sH+=hs[k]; sP+=ps[k]; nn++; } }
-        var tot=num(v.score);
-        var looksRel = (v.relative===true) || (tot!=null && nn>=18 && Math.abs(sH+sP-tot)<=1 && Math.abs(sH-tot)>3);
-        if(looksRel&&nn>=9){
-          for(var k2=0;k2<18;k2++) if(hs[k2]!=null&&ps[k2]!=null) hs[k2]=hs[k2]+ps[k2];
-        }
-        for(var k3=0;k3<18;k3++) if(hs[k3]!=null&&(hs[k3]<1||hs[k3]>15)) hs[k3]=null;
-      }
-      if(hs){ r0.holes=hs; S.openHoles=true; got.push("홀별 타수 "+hs.filter(function(x){return x!=null;}).length+"홀"); }
-      if(ps){ r0.pars=ps; }
-
-      if(v.course){ r0.course=String(v.course).slice(0,60); got.push("코스"); }
-      if(v.date&&/^\d{4}-\d{2}-\d{2}$/.test(String(v.date).trim())){ r0.date=String(v.date).trim(); got.push("날짜"); }
-      if(v.kind==="field"||v.kind==="screen") r0.type=v.kind;
-
-      var t=holeTally(r0);
-      [["score","스코어",50,200],["par","파",54,80],["putts","퍼팅",10,60],
-       ["fw","페어웨이",0,14],["gir","그린 적중",0,18],["ob","OB",0,30],["penalty","벌타",0,40]]
-      .forEach(function(x){
-        var n3=num(v[x[0]]);
-        if(n3==null||n3<x[2]||n3>x[3]) return;
-        r0[x[0]==="penalty"?"penalty":x[0]]=n3; got.push(x[1]);
-      });
-
-      /* 홀별이 들어왔으면 합계와 파 대비는 직접 센다. 화면 숫자보다 이게 정확하다. */
-      if(t.n>=18){
-        if(r0.score==null) r0.score=t.sum;
-        if(t.par) r0.par=t.par;
-      }
-      if(t.marks){ r0.dbl=t.dbl; r0.parOrBetter=t.good; got.push("더블 이상/파 이상"); }
-
+      var R=applyRoundRead(v,r0);
+      var got=R.got; if(R.openHoles) S.openHoles=true;
       if(!got.length){
         S.msg.rphoto="읽어낸 값이 없습니다. 홀별 표와 총타수가 한 화면에 또렷하게 들어가도록 다시 찍어 주세요.";
       } else {
         S.msg.rphoto=null;
-        var sv = (t.n>=18 && r0.score!=null && t.sum!==r0.score)
-          ? " 홀별 합계는 "+t.sum+"타인데 화면 총타수는 "+r0.score+"타입니다. 둘 중 맞는 쪽으로 고치세요." : "";
-        S.note.rphoto="읽었습니다 — "+got.join(", ")+"."+sv
+        S.note.rphoto="읽었습니다 — "+got.join(", ")+"."+R.warn
           +(v._ms?(" 서버 "+Math.round(v._ms/1000)+"초"+(v._model?" · "+v._model:"")):"");
       }
       render();
