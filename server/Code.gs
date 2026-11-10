@@ -1223,7 +1223,8 @@ function gemini_(parts, preferBig) {
      503 은 즉시 돌아오므로 세 모델을 거쳐도 대기는 거의 늘지 않는다. */
   var heavy = false;
   for (var pi = 0; pi < parts.length; pi++) if (parts[pi] && parts[pi].inline_data) heavy = true;
-  var maxModels = heavy ? 3 : 4;
+  var maxModels = heavy ? 3 : 6;      /* 글은 가벼운 모델까지 내려가 본다. 한도는 모델마다 따로다. */
+  var limited = 0;                    /* 429(사용량 한도)로 물리친 횟수 */
   var maxTries  = heavy ? 1 : 2;
   var napMs = heavy ? 0 : 1800;
 
@@ -1286,6 +1287,7 @@ function gemini_(parts, preferBig) {
         props.setProperty('BUSY_' + name, String(Date.now() + 5 * 60 * 1000));  /* 5분간 건너뛴다 */
         if (props.getProperty(OKKEY) === name) props.deleteProperty(OKKEY);
         busy.push(name);
+        if (code === 429) { limited++; break; }  /* 한도는 2초 쉰다고 풀리지 않는다. 바로 다음 모델로 */
         if (napMs && tryNo === 0 && maxTries > 1) { Utilities.sleep(napMs); continue; }
         break;                                   /* 바로 다음 모델로 */
       }
@@ -1301,9 +1303,12 @@ function gemini_(parts, preferBig) {
   }
 
   if (busy.length) {
-    throw new Error('구글 모델 ' + busy.length + '개가 모두 혼잡합니다(' + busy.join(', ') + '). ' +
-                    '지금은 구글 쪽 사정이라 기다리는 수밖에 없습니다. ' +
-                    '1~2분 뒤 다시 누르시거나, 아래 칸에 직접 넣어 주세요.');
+    if (limited && limited >= busy.length) {
+      throw new Error('구글 AI 사용량 한도에 걸렸습니다(429). 1분 안에 요청이 몰렸거나 오늘 무료 한도를 다 썼습니다. ' +
+                      '1~2분 뒤 다시 눌러 보고, 계속 이러면 내일 풀립니다. 마지막 응답: ' + lastMsg);
+    }
+    throw new Error('구글 모델이 모두 혼잡합니다(503). 구글 쪽 사정이라 1~2분 뒤 다시 눌러 주세요. ' +
+                    '마지막 응답: ' + lastMsg);
   }
   if (refused.length) {
     throw new Error('구글이 요청을 거부했습니다(' + refused.join(', ') + '). ' +

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v64">
+<meta name="app-version" content="v65">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1111,8 +1111,15 @@ function ask(key,prompt,opts){
       S.msg[key]= c==="not_granted"||c==="sampling_disabled" ? "AI 사용이 허용되지 않았습니다."
         : c==="rate_limited" ? "요청이 몰렸습니다. 잠시 뒤 다시 눌러 주세요."
         : c==="refused" ? "이 내용은 분석하지 못했습니다. 입력을 조금 바꿔 보세요."
-        : (raw || "분석에 실패했습니다. 다시 눌러 주세요.");
+        : busyMsg(raw) || (raw || "분석에 실패했습니다. 다시 눌러 주세요.");
       render(); throw e; });
+}
+/* 구글이 요청을 물리친 경우. 서버가 모델 이름을 줄줄이 적어 보내는데 연습장에서 읽을 글이 아니다.
+   혼잡인지 사용량 한도인지는 여기서 알 수 없으므로 둘 다 적는다. */
+function isBusyErr(raw){ return /혼잡|몰릴|\b429\b|\b503\b|사용량 한도/.test(String(raw||"")); }
+function busyMsg(raw){
+  if(!isBusyErr(raw)) return "";
+  return "구글 AI가 지금 답을 주지 않습니다 (혼잡하거나, 잠깐 사이 요청이 많았습니다). 숫자는 이미 저장됐습니다.";
 }
 function askJson(key,prompt,opts){
   if(!sample){ S.msg[key]="AI를 쓸 수 없는 화면입니다."; render(); return Promise.reject(); }
@@ -3411,7 +3418,11 @@ function runMulti(i){
     /* 방금 읽은 마지막 세트는 누르지 않아도 코치가 본다 */
     if(M.lastSet!=null && ready.ai && S.draft){
       var lb0=S.draft.blocks[M.lastSet];
-      if(lb0 && lb0.clubId && !(lb0.chat&&lb0.chat.length)) liveCoach(M.lastSet);
+      if(lb0 && lb0.clubId && !(lb0.chat&&lb0.chat.length)){
+        (function(ix,bb,dd){ setTimeout(function(){
+          if(S.draft===dd && dd.blocks[ix]===bb && !(bb.chat&&bb.chat.length) && !S.busy["lc"+ix]) liveCoach(ix);
+        },2500); })(M.lastSet,lb0,S.draft);
+      }
     }
     M.lastSet=null;
     /* 사진과 영상을 같이 골랐으면, 사진을 다 읽은 뒤에 영상을 본다. 둘 다 버리지 않는다. */
@@ -3899,7 +3910,22 @@ function liveCoach(i,answer,fromChip){
     var o=lcParse(t); b.chat.push({r:"ai",t:t,o:o});
     if(o.next) b.coaching=[o.verdict,o.diag||o.ans,"다음: "+o.next].filter(Boolean).join("\n");
     render();
-  }).catch(function(){ if(answer&&b.chat.length&&b.chat[b.chat.length-1].r==="me") b.chat.pop(); render(); });
+  }).catch(function(){
+    if(answer&&b.chat.length&&b.chat[b.chat.length-1].r==="me") b.chat.pop();
+    /* 구글이 물리친 것이면 40초 뒤 한 번, 그래도 안 되면 90초 뒤 한 번 더 묻는다.
+       사람이 측정기 앞에서 버튼을 다시 누르고 있을 일이 아니다. */
+    var key="lc"+i, tries=(S.lcRetry&&S.lcRetry[key])||0;
+    if(!answer && isBusyErr(S.msg[key]) && tries<2){
+      S.lcRetry=S.lcRetry||{}; S.lcRetry[key]=tries+1;
+      var wait=tries?90:40;
+      S.msg[key]=busyMsg(S.msg[key])+" "+wait+"초 뒤 다시 묻겠습니다 — 그동안 다음 세트를 치셔도 됩니다.";
+      setTimeout(function(){
+        if(S.draft!==d || d.blocks[i]!==b || S.busy[key] || (b.chat&&b.chat.length)) return;
+        liveCoach(i);
+      }, wait*1000);
+    } else if(S.lcRetry) { delete S.lcRetry[key]; }
+    render();
+  });
 }
 
 function metricSummary(m){
