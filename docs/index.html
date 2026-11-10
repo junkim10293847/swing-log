@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v63">
+<meta name="app-version" content="v64">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1715,6 +1715,7 @@ function homeToday(){
   if(bl.length){
     h+='<input type="text" id="feelLine" class="feelLine" maxlength="200" '
      +'placeholder="오늘 느낀 것 한 줄 (안 적어도 됩니다)" value="'+esc(d.feeling||"")+'">';
+    h+='<button class="btn full" style="margin-top:10px" data-act="wrapUp">오늘 마치기</button>';
   }
   return h+'</div>';
 }
@@ -1827,7 +1828,7 @@ var HELP=[
   ["올리기","측정기 화면을 찍어 올립니다. 스코어카드나 스윙 영상도 같은 버튼입니다. 무엇인지는 앱이 가립니다."],
   ["읽기","올리면 바로 아래에 세트가 생기고 코치가 판정합니다. 굵은 '다음 세트' 한 줄만 따라 치면 됩니다."],
   ["다시 올리기","같은 채로 한 세트 더 치고 또 올리면, 지시가 먹혔는지부터 알려 줍니다."],
-  ["끝","따로 저장하거나 끝낼 것이 없습니다. 올릴 때마다 시트에 저장되고, 다음 날이면 지난 기록으로 내려갑니다."]
+  ["마치기","올릴 때마다 이미 저장돼 있어 그냥 닫아도 됩니다. '오늘 마치기'를 누르면 오늘 친 것과 코치 총평 세 줄을 보고 닫습니다."]
 ];
 function helpBody(){
   return '<ol class="helpList">'+HELP.map(function(x,i){
@@ -1880,6 +1881,70 @@ function sheetMenu(){
   if(!S.openMode) h+='<button data-act="lockNow"><b>나가기</b><span>'+esc(S.lock&&S.lock.name||"")+'</span></button>';
   h+='</div>';
   return h;
+}
+/* 오늘 마치기 — 저장은 이미 되어 있다. 이것은 맺음이다.
+   오늘 친 것을 한 장으로 보고, 코치가 세 줄로 정리한다. */
+function sheetWrap(){
+  var d=S.draft, t=today();
+  var h='<div class="spread"><h3 style="font-size:19px">오늘은 여기까지</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
+  if(!d||!d.blocks.length) return h+'<p class="muted" style="margin-top:10px">오늘 올린 세트가 없습니다.</p>';
+  var by={}, order=[];
+  d.blocks.forEach(function(b){ if(!b.clubId) return;
+    if(!by[b.clubId]){ by[b.clubId]={name:b.clubName,n:0,best:null,last:null,first:null}; order.push(b.clubId); }
+    var o=by[b.clubId], c=(b.m&&b.m.carry!=null)?+b.m.carry:null;
+    o.n++; if(c!=null){ if(o.first==null) o.first=c; o.last=c; if(o.best==null||c>o.best) o.best=c; }
+  });
+  var rs=S.rounds.filter(function(r){ return r.date===t; });
+  h+='<div class="metrics" style="margin-top:12px">'
+   +mTile("세트",d.blocks.length,"")+mTile("친 채",order.length,"")
+   +(rs.length&&rs[0].score!=null?mTile("라운드",rs[0].score,"타"):"")+'</div>';
+  h+='<div style="margin-top:6px">';
+  order.forEach(function(id){ var o=by[id];
+    var mv=(o.n>=2&&o.first!=null&&o.last!=null)?(o.last-o.first):null;
+    h+='<div class="listrow" style="cursor:default"><div class="bd"><b>'+esc(o.name)+'</b>'
+     +'<span>'+o.n+'세트'+(mv!=null?(' · 첫 세트보다 '+(mv>=0?'+':'')+r1(mv)+'m'):'')+'</span></div>'
+     +'<div class="rt"><b>'+(o.best!=null?r1(o.best):'—')+'</b><span>가장 긴 캐리 m</span></div></div>';
+  });
+  h+='</div>';
+  if(S.busy.wrap) h+='<div class="note" style="margin-top:12px"><span class="spin"></span> 코치가 오늘을 정리하는 중</div>';
+  else if(S.msg.wrap) h+='<div class="banner bad" style="margin-top:12px">'+esc(S.msg.wrap)+'</div>';
+  if(d.coaching && !S.busy.wrap) h+='<div class="ai" style="margin-top:12px"><div class="hd">오늘 총평</div>'+esc(d.coaching)+'</div>';
+  if(!S.busy.wrap && ready.ai)
+    h+='<button class="btn ghost sm full" style="margin-top:10px" data-act="wrapCoach">'+(d.coaching?'총평 다시 받기':'총평 받기')+'</button>';
+  h+='<p class="tiny" style="margin-top:12px;white-space:normal;color:var(--fg3)">'
+   +(S.save==="bad"?'아직 시트에 올라가지 않았습니다. 닫고 \'저장 안 됨 · 다시\'를 눌러 주세요.'
+                   :'시트에 저장돼 있습니다. 앱을 닫으셔도 됩니다.')+'</p>';
+  return h+'<button class="btn primary full" style="margin-top:10px" data-act="closeSheet">닫기</button>';
+}
+function wrapCoach(){
+  var d=S.draft; if(!d||!d.blocks.length||S.busy.wrap) return;
+  if(!ready.ai){ S.msg.wrap="AI 키가 아직 없습니다."; render(); return; }
+  var t=today(), lines=d.blocks.filter(function(b){ return b.clubId; }).map(function(b,n){
+    var lastAi=(b.chat||[]).filter(function(c){ return c.r==="ai"; }).slice(-1)[0];
+    return (n+1)+"번째 세트 · "+b.clubName+(b.mode==="섞어"?" (섞어치기)":"")+": "+metricSummary(b.m)
+      +((b.bad||[]).length?(" / 기준 밖: "+b.bad.join(", ")):"")
+      +(lastAi&&lastAi.o&&lastAi.o.next?(" / 그때 지시: "+lastAi.o.next):"");
+  });
+  var rs=S.rounds.filter(function(r){ return r.date===t; })[0];
+  var p="골프 연습 하루를 마치며 총평을 씁니다. 아래는 오늘 측정기에서 잰 세트입니다 (친 순서).\n"
+    +lines.join("\n")
+    +(rs?("\n오늘 라운드: "+(rs.score!=null?rs.score+"타":"")+(rs.par?(" (파 "+rs.par+")"):"")
+        +(rs.gir!=null?(" · 그린적중 "+rs.gir):"")+(rs.putts!=null?(" · 퍼팅 "+rs.putts):"")):"")
+    +(String(d.feeling||"").trim()?("\n본인이 적은 느낌: "+d.feeling):"")
+    +"\n\n정확히 세 줄만 쓰세요. 머리말·맺음말·별표 없이.\n"
+    +"잘된 것: (숫자 하나를 들어 한 문장)\n"
+    +"고칠 것: (가장 큰 것 하나만, 숫자를 들어 한 문장)\n"
+    +"다음에: (다음 연습에서 처음 잡을 채와 판정 기준 한 문장)\n"
+    +"\n절대 규칙: 위에 적힌 숫자와 본인이 적은 말만 쓰세요. 보지 못한 자세나 하지 않은 동작을 지어내지 마세요.";
+  S.busy.wrap=true; S.msg.wrap=null; render();
+  withTimeout(call("apiAsk",p),90000,"").then(function(txt){
+    S.busy.wrap=false;
+    var out=String(txt||"").replace(/\*\*/g,"").trim();
+    if(!out){ S.msg.wrap="답이 비었습니다. 다시 눌러 주세요."; }
+    else if(S.draft===d){ d.coaching=out; }
+    render();
+  }).catch(function(e){ S.busy.wrap=false; S.msg.wrap=errMsg(e); render(); });
 }
 function sheetBag(){
   return '<div class="spread"><h3 style="font-size:19px">클럽 관리</h3>'
@@ -2096,7 +2161,7 @@ function sheetHTML(){
   var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
   S.sheetShown=s.kind;
   var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,plan:sheetPlan,start:sheetStart,menu:sheetMenu,bag:sheetBag,growth:sheetGrowth,help:sheetHelp}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,plan:sheetPlan,start:sheetStart,menu:sheetMenu,bag:sheetBag,growth:sheetGrowth,help:sheetHelp,wrap:sheetWrap}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -3861,6 +3926,13 @@ document.addEventListener("click",function(ev){
   /* --- 한 화면 --- */
   if(a==="openMenu"){ S.srv=null; S.sheet={kind:"menu"}; render(); return; }
   if(a==="openHelp"){ S.sheet={kind:"help"}; render(); return; }
+  if(a==="wrapUp"){
+    var fl=document.getElementById("feelLine"); if(fl&&S.draft) S.draft.feeling=fl.value;
+    S.msg.wrap=null; S.sheet={kind:"wrap"}; render();
+    if(S.draft && !S.draft.coaching && ready.ai) wrapCoach();    /* 처음 열 때는 묻지 않고 총평까지 */
+    return;
+  }
+  if(a==="wrapCoach"){ wrapCoach(); return; }
   if(a==="helpOk"){ try{ localStorage.setItem("swinglog.help","1"); }catch(e){} render(); return; }
   if(a==="openBag"){ S.sheet={kind:"bag"}; render(); return; }
   if(a==="openGrowth"){ S.sheet={kind:"growth"}; render(); return; }
