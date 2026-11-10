@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v62">
+<meta name="app-version" content="v63">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -662,6 +662,14 @@ nav.tabs{display:none}
 .kind.field{background:var(--okSoft);color:var(--ok)}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
+.helpList{list-style:none;margin:10px 0 0;padding:0}
+.helpList li{display:flex;gap:12px;align-items:flex-start;padding:9px 0}
+.helpList .n{flex:none;width:26px;height:26px;border-radius:9px;background:var(--accentSoft);color:var(--accent);
+  font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.helpList b{font-size:15.5px;font-weight:800}
+.helpList p{margin-top:2px;font-size:13.5px;line-height:1.55;color:var(--fg2)}
+.footLine{display:flex;justify-content:center;gap:6px}
+.footLine button{border:0;background:transparent;color:var(--fg3);font-size:12.5px;font-weight:600;cursor:pointer;padding:8px 10px}
 .topbar{position:static}
 .lc{margin:4px 0 12px}
 .menuList{margin-top:12px;background:var(--surface);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
@@ -1814,14 +1822,41 @@ function homeClubs(){
   return h+'</div></div>';
 }
 
+/* 사용법 — 네 줄이면 된다. 더 길면 아무도 안 읽는다. */
+var HELP=[
+  ["올리기","측정기 화면을 찍어 올립니다. 스코어카드나 스윙 영상도 같은 버튼입니다. 무엇인지는 앱이 가립니다."],
+  ["읽기","올리면 바로 아래에 세트가 생기고 코치가 판정합니다. 굵은 '다음 세트' 한 줄만 따라 치면 됩니다."],
+  ["다시 올리기","같은 채로 한 세트 더 치고 또 올리면, 지시가 먹혔는지부터 알려 줍니다."],
+  ["끝","따로 저장하거나 끝낼 것이 없습니다. 올릴 때마다 시트에 저장되고, 다음 날이면 지난 기록으로 내려갑니다."]
+];
+function helpBody(){
+  return '<ol class="helpList">'+HELP.map(function(x,i){
+    return '<li><span class="n">'+(i+1)+'</span><div><b>'+x[0]+'</b><p>'+x[1]+'</p></div></li>'; }).join("")+'</ol>';
+}
+function helpSeen(){ try{ return localStorage.getItem("swinglog.help")==="1"; }catch(e){ return true; } }
+function sheetHelp(){
+  return '<div class="spread"><h3 style="font-size:19px">사용법</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>'
+   +helpBody()
+   +'<p class="tiny" style="margin-top:12px;white-space:normal;color:var(--fg3)">'
+   +'오늘 칠 채와 시간을 바꾸려면 맨 위 \'계획 바꾸기\'. 클럽 추가·성장 그래프·화면 밝기는 오른쪽 위 ⋯ 에 있습니다. '
+   +'사진이 안 읽히면 \'세트 직접 넣기\'로 숫자를 적으면 됩니다.</p>';
+}
+function homeHelp(){
+  if(helpSeen() || !S.loaded) return "";
+  return '<div class="card helpCard"><div class="spread"><div class="eyebrow">처음이면 이것만</div>'
+   +'<button class="secLink" data-act="helpOk">알겠습니다</button></div>'+helpBody()+'</div>';
+}
+
 function viewHome(){
   var h='<div class="stack">';
+  h+=homeHelp();
   h+=homeHero();
   h+=homeToday();
   h+=homeHistory();
   h+=homeClubs();
-  h+='<button class="verLine" data-act="openChangelog">'+esc(APP_VER)
-   +(S.verNew?' · 새 버전 있음':' · 최신')+'</button>';
+  h+='<div class="footLine"><button data-act="openHelp">사용법</button>'
+   +'<button data-act="openChangelog">'+esc(APP_VER)+(S.verNew?' · 새 버전 있음':' · 최신')+'</button></div>';
   return h+'</div>';
 }
 
@@ -1832,6 +1867,7 @@ function sheetMenu(){
   var h='<div class="spread"><h3 style="font-size:19px">설정</h3>'
    +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
   h+='<div class="menuList">';
+  h+='<button data-act="openHelp"><b>사용법</b><span>네 줄</span></button>';
   h+='<button data-act="openBag"><b>클럽 관리</b><span>추가 · 수정 · 가방 간격</span></button>';
   h+='<button data-act="openGrowth"><b>성장 그래프</b><span>클럽별 캐리와 스코어 추이</span></button>';
   if(S.sheetUrl) h+='<a href="'+esc(S.sheetUrl)+'" target="_blank" rel="noopener"><b>구글 시트 열기</b><span>기록 원본</span></a>';
@@ -2060,7 +2096,7 @@ function sheetHTML(){
   var fresh=(S.sheetShown!==s.kind);   /* 같은 시트를 다시 그릴 때는 애니메이션을 돌리지 않는다 */
   S.sheetShown=s.kind;
   var h='<div class="sheet'+(fresh?' fresh':'')+'" data-act="closeSheetBg"><div class="inner" data-stop="1"><div class="hdl"></div>';
-  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,plan:sheetPlan,start:sheetStart,menu:sheetMenu,bag:sheetBag,growth:sheetGrowth}[s.kind]||function(){return "";})();
+  h+= ({club:sheetClub,block:sheetBlock,session:sheetSession,round:sheetRound,changelog:sheetChangelog,pre:sheetPre,plan:sheetPlan,start:sheetStart,menu:sheetMenu,bag:sheetBag,growth:sheetGrowth,help:sheetHelp}[s.kind]||function(){return "";})();
   h+='</div></div>';
   return h;
 }
@@ -3824,6 +3860,8 @@ document.addEventListener("click",function(ev){
 
   /* --- 한 화면 --- */
   if(a==="openMenu"){ S.srv=null; S.sheet={kind:"menu"}; render(); return; }
+  if(a==="openHelp"){ S.sheet={kind:"help"}; render(); return; }
+  if(a==="helpOk"){ try{ localStorage.setItem("swinglog.help","1"); }catch(e){} render(); return; }
   if(a==="openBag"){ S.sheet={kind:"bag"}; render(); return; }
   if(a==="openGrowth"){ S.sheet={kind:"growth"}; render(); return; }
   if(a==="themeToggle"){ toggleTheme(); render(); return; }
