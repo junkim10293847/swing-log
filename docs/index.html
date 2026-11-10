@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v66">
+<meta name="app-version" content="v67">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -648,6 +648,15 @@ nav.tabs{display:none}
 .upBtn[disabled]{opacity:.75;cursor:default}
 .upBtn .ic{width:26px;height:26px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linejoin:round}
 .upBtn em{font-style:normal;font-size:19px;font-weight:900;letter-spacing:-.02em}
+.upRow{display:flex;gap:10px;align-items:stretch;margin-top:14px}
+.upRow .upBtn{margin-top:0;flex:1}
+.wrapBtn{flex:none;min-width:92px;border:0;cursor:pointer;border-radius:18px;background:var(--surface2);color:var(--fg);
+  font-family:var(--fDisp);font-size:16px;font-weight:800;box-shadow:0 5px 0 var(--line)}
+.wrapBtn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
+.askRow{width:100%;display:flex;align-items:center;justify-content:space-between;border:0;cursor:pointer;
+  background:var(--surface);color:var(--fg2);border-radius:18px;padding:15px 20px;font-size:15px;font-weight:700;
+  box-shadow:var(--shadow);font-family:inherit;text-align:left}
+.askRow span:first-child{white-space:nowrap;flex:1}
 .upHint{margin-top:10px;text-align:center;font-size:12.5px;color:var(--fg3);font-weight:600}
 .upBtn .spin.big{width:22px;height:22px}
 .upBtn .spin{border-color:rgba(255,255,255,.35);border-top-color:currentColor}
@@ -1646,7 +1655,8 @@ function homeHero(){
   /* 사진이든 영상이든 스코어카드든 이 한 칸으로 받는다 */
   h+='<input type="file" multiple accept="'+PICK_ACCEPT+',video/*" id="multiPhoto" style="display:none" aria-hidden="true">'
    +'<input type="file" multiple id="multiPhoto_file" style="display:none" aria-hidden="true">';
-  h+='<button class="upBtn" data-act="shootNow"'+((busy||!ready.img)?" disabled":"")+'>'
+  var canWrap=!!(S.draft&&S.draft.blocks&&S.draft.blocks.length);
+  h+='<div class="upRow"><button class="upBtn" data-act="shootNow"'+((busy||!ready.img)?" disabled":"")+'>'
    + (M.busy
        ? '<span class="spin big"></span><em>'+esc(M.at+'/'+M.names.length)+'장째 읽는 중</em>'
        : (S.busy.lcv
@@ -1656,7 +1666,9 @@ function homeHero(){
              +'<circle cx="12" cy="13" r="3.6"/></svg>'
              +'<em>'+(ready.img?'올리기':'AI 키가 없습니다')+'</em>'))
    +'</button>'
-   +'<p class="upHint">측정기 화면 · 스코어카드 · 스윙 영상</p>';
+   +(canWrap?'<button class="wrapBtn" data-act="wrapUp">마치기</button>':'')
+   +'</div>'
+   +'<p class="upHint">측정기 · 스코어카드 · 자세 · 영상 — 찍으면 알아서 봅니다</p>';
 
   if(M.log.length)
     h+='<div class="banner'+(M.bad?' warn':' ok')+'" style="margin-top:12px">'+M.log.map(esc).join('<br>')+'</div>';
@@ -1664,10 +1676,6 @@ function homeHero(){
   if(S.vmsg.lcv) h+='<div class="note" style="margin-top:12px"><span class="spin"></span> '+esc(S.vmsg.lcv)+'</div>';
   if(S.msg.lcv) h+='<div class="banner bad" style="margin-top:12px">'+esc(S.msg.lcv)+'</div>';
 
-  h+='<div class="heroLinks">'
-   +'<button data-act="pickFile" data-for="multiPhoto">파일에서 고르기</button>'
-   +'<button data-act="addBlock">세트 직접 넣기</button>'
-   +'<button data-act="newRound">점수 직접 넣기</button></div>';
   return h+'</div>';
 }
 
@@ -1677,7 +1685,8 @@ function homeToday(){
   var rs=S.rounds.filter(function(r){ return r.date===t; });
   var bl=(d&&d.blocks)||[];
   var vb=(d&&d.vidB&&d.vidB.chat)?d.vidB.chat.filter(function(c){ return c.r==="ai"; }).slice(-1)[0]:null;
-  if(!bl.length && !rs.length && !vb) return "";
+  var nts=(d&&d.notes)||[];
+  if(!bl.length && !rs.length && !vb && !nts.length) return "";
 
   var h='<div class="card"><div class="spread"><div class="eyebrow">오늘 올린 것</div>'
    +'<span class="saveLine" id="saveLine">'+saveLineInner()+'</span></div>';
@@ -1718,12 +1727,21 @@ function homeToday(){
      +'</div>';
   }
 
+  for(var ni=nts.length-1;ni>=0;ni--){
+    var nt=nts[ni];
+    h+='<div class="note" style="margin-top:10px"><div class="spread"><div class="eyebrow">'+(nt.kind==="swing"?"자세 사진":"사진")+'</div>'
+     +'<button class="secLink" data-act="rmNote" data-i="'+ni+'">지우기</button></div>'
+     +(nt.seen?'<p style="margin-top:4px;color:var(--fg2)">'+esc(nt.seen)+'</p>':'')
+     +(nt.verdict?'<p style="margin-top:4px">'+esc(nt.verdict)+'</p>':'')
+     +(nt.next?'<p style="margin-top:6px"><b>다음 — '+esc(nt.next)+'</b></p>':'')
+     +'</div>';
+  }
+
   rs.forEach(function(r){ h+=roundRow(r); });
 
   if(bl.length){
     h+='<input type="text" id="feelLine" class="feelLine" maxlength="200" '
      +'placeholder="오늘 느낀 것 한 줄 (안 적어도 됩니다)" value="'+esc(d.feeling||"")+'">';
-    h+='<button class="btn full" style="margin-top:10px" data-act="wrapUp">오늘 마치기</button>';
   }
   return h+'</div>';
 }
@@ -1791,9 +1809,11 @@ function homeHistory(){
      +'<div class="rt"><b>'+bl.length+'</b><span>세트</span></div>'
      +'<span class="chev">›</span></div>';
   });
-  if(items.length>N)
-    h+='<button class="btn ghost sm full" style="margin-top:10px" data-act="histMore">더 보기 ('+(items.length-N)+')</button>';
-  h+='<div style="margin-top:10px">'+askBar("practice")+'</div>';
+  if(items.length>N || N>6){
+    h+='<div class="row" style="margin-top:10px;gap:8px">'
+     +(items.length>N?'<button class="btn ghost sm" style="flex:1" data-act="histMore">더 보기 ('+(items.length-N)+')</button>':'')
+     +(N>6?'<button class="btn ghost sm" style="flex:1" data-act="histLess">접기</button>':'')+'</div>';
+  }
   return h+'</div>';
 }
 
@@ -1833,10 +1853,10 @@ function homeClubs(){
 
 /* 사용법 — 네 줄이면 된다. 더 길면 아무도 안 읽는다. */
 var HELP=[
-  ["올리기","측정기 화면을 찍어 올립니다. 스코어카드나 스윙 영상도 같은 버튼입니다. 무엇인지는 앱이 가립니다."],
+  ["올리기","측정기 화면을 찍어 올립니다. 스코어카드, 스윙 자세 사진, 영상도 같은 버튼입니다. 무엇인지는 앱이 가립니다."],
   ["읽기","올리면 바로 아래에 세트가 생기고 코치가 판정합니다. 굵은 '다음 세트' 한 줄만 따라 치면 됩니다."],
   ["다시 올리기","같은 채로 한 세트 더 치고 또 올리면, 지시가 먹혔는지부터 알려 줍니다."],
-  ["마치기","올릴 때마다 이미 저장돼 있어 그냥 닫아도 됩니다. '오늘 마치기'를 누르면 오늘 친 것과 코치 총평 세 줄을 보고 닫습니다."]
+  ["마치기","올리기 옆 '마치기'를 누르면 오늘 친 것과 코치 총평 세 줄이 나옵니다. 안 눌러도 올릴 때마다 이미 저장돼 있습니다."]
 ];
 function helpBody(){
   return '<ol class="helpList">'+HELP.map(function(x,i){
@@ -1849,7 +1869,7 @@ function sheetHelp(){
    +helpBody()
    +'<p class="tiny" style="margin-top:12px;white-space:normal;color:var(--fg3)">'
    +'오늘 칠 채와 시간을 바꾸려면 맨 위 \'계획 바꾸기\'. 클럽 추가·성장 그래프·화면 밝기는 오른쪽 위 ⋯ 에 있습니다. '
-   +'사진이 안 읽히면 \'세트 직접 넣기\'로 숫자를 적으면 됩니다.</p>';
+   +'사진이 없을 때 숫자를 손으로 넣는 길도 ⋯ 안에 있습니다.</p>';
 }
 function homeHelp(){
   if(helpSeen() || !S.loaded) return "";
@@ -1861,6 +1881,7 @@ function viewHome(){
   var h='<div class="stack">';
   h+=homeHelp();
   h+=homeHero();
+  h+=askBar("practice");
   h+=homeToday();
   h+=homeHistory();
   h+=homeClubs();
@@ -1884,6 +1905,11 @@ function sheetMenu(){
   h+='<button data-act="checkServer"'+(S.busy.srv?" disabled":"")+'><b>'+(S.busy.srv?'확인 중…':'서버 점검')+'</b><span>서버 코드를 새로 배포했을 때</span></button>';
   h+='</div>';
   if(S.srv) h+='<div class="banner '+(S.srv.ok?'ok':'bad')+'" style="margin-top:10px;white-space:pre-line">'+esc(S.srv.msg)+'</div>';
+  h+='<div class="eyebrow" style="margin-top:16px">사진이 없을 때만</div><div class="menuList">'
+   +'<button data-act="menuPickFile"><b>파일에서 고르기</b><span>저장해 둔 사진·영상</span></button>'
+   +'<button data-act="menuAddSet"><b>세트 숫자 직접 넣기</b><span>측정기 숫자를 손으로</span></button>'
+   +'<button data-act="newRound"><b>라운드 점수 직접 넣기</b><span>스코어카드가 없을 때</span></button>'
+   +'</div>';
   h+='<div class="menuList" style="margin-top:10px">';
   h+='<button data-act="openChangelog"><b>변경 내역</b><span>'+esc(APP_VER)+(S.verNew?' · 새 버전 있음':' · 최신')+'</span></button>';
   if(!S.openMode) h+='<button data-act="lockNow"><b>나가기</b><span>'+esc(S.lock&&S.lock.name||"")+'</span></button>';
@@ -2809,7 +2835,7 @@ function sheetChangelog(){
    그 화면이 보고 있는 기록이 그대로 근거가 된다.
    평소에는 한 줄이고, 누르면 열린다. */
 var ASKBAR={
-  practice:{t:"연습 기록에 물어보기",
+  practice:{t:"코치에게 물어보기",
     q:["최근 연습에서 나아진 게 있나","다음 연습에 뭘 바꿔야 하나","연습량이 충분한가","제자리걸음인 채가 있나"]},
   rounds:{t:"라운드 기록에 물어보기",
     q:["어디서 타수를 가장 많이 잃나","라운드마다 점수 차이가 왜 큰가","다음 라운드 목표는","초반에 무너지는 편인가"]},
@@ -2821,8 +2847,8 @@ function askBar(scope){
   var C=ASKBAR[scope]; if(!C) return "";
   var open=(S.askOpen===scope);
   if(!open){
-    return '<button class="btn ghost sm full" style="justify-content:flex-start;color:var(--fg3)" '
-     +'data-act="askOpen" data-s="'+scope+'">'+esc(C.t)+'</button>';
+    return '<button class="askRow" data-act="askOpen" data-s="'+scope+'">'
+     +'<span>'+esc(C.t)+'</span><span class="chev">›</span></button>';
   }
   var k="ab_"+scope;
   var h='<div class="card"><div class="spread"><div class="eyebrow">'+esc(C.t)+'</div>'
@@ -3412,6 +3438,7 @@ function runMulti(i){
     var rn=M.rounds||0;
     var made=M.log.filter(function(x){ return x.indexOf("→")>0; }).length - rn;
     var say=[]; if(made>0) say.push("세트 "+made+"개"); if(rn>0) say.push("라운드 "+rn+"건");
+    if(M.notes) say.push("사진 "+M.notes+"장"); M.notes=0;
     M.log.push(say.length ? (say.join(" · ")+" 넣었습니다.") : "만들어진 것이 없습니다.");
     M.rounds=0;
     M.files=[];                /* 다시 읽지 않도록 비우되, 사진과 결과는 남겨 둔다 */
@@ -3438,8 +3465,19 @@ function runMulti(i){
      있지도 않은 숫자를 지어내 세트를 만들었다. */
   whatIsIt(f).then(function(kind){
     if(kind==="round") return asRound(f,label);
+    if(kind && kind.note) return asNote(kind.note,label);
     return asShot(f,label);
   });
+
+  /* 측정기도 스코어카드도 아닌 사진 — 숫자를 지어내 세트를 만들지 않고, 본 대로 적는다 */
+  function asNote(n,label){
+    if(!n.verdict && !n.seen){ M.bad=true; M.log.push(label+" — 무엇인지 알아보지 못했습니다."); return next(); }
+    var d=ensureDraft(); d.notes=d.notes||[];
+    d.notes.push({kind:n.kind,seen:n.seen,verdict:n.verdict,next:n.next,at:Date.now()});
+    M.notes=(M.notes||0)+1;
+    M.log.push(label+" — "+(n.kind==="swing"?"자세 사진으로 보고":"사진을 보고")+" 아래에 적었습니다.");
+    next();
+  }
 
   function asShot(f,label){
   return sample.json("측정 화면",{images:[f],modelTier:"default"})
@@ -3522,17 +3560,35 @@ function whatIsIt(f){
   if(S.imgAsk===false) return Promise.resolve(null);
   if(!/^image\//.test(f.type||"")) return Promise.resolve(null);
   return toDataURLp(f).then(function(u){
-    var p="이 사진이 무엇인지 한 낱말로만 답하세요. 설명 금지.\n"
-      +"launch = 골프 연습장 탄도 측정기 화면 (캐리·볼스피드·발사각·스핀 같은 값이 적힌 화면)\n"
-      +"card = 골프 스코어카드 또는 라운드 결과 화면 (홀별 타수, 파, 총타수가 적힌 표)\n"
-      +"other = 둘 다 아님\n"
-      +"launch / card / other 중 하나만 출력.";
-    return withTimeout(call("apiAskImg",p,u),45000,"");
+    var p="골프 연습 앱에 올라온 사진입니다. 먼저 무엇인지 가리세요.\n"
+      +"첫 줄은 반드시 '종류: ' 뒤에 launch / card / swing / other 중 하나.\n"
+      +"launch = 탄도 측정기·스크린골프의 샷 분석 화면 (캐리·볼스피드·발사각·스핀 같은 값이 적힌 화면)\n"
+      +"card = 스코어카드 또는 라운드 결과 화면 (홀별 타수, 파, 총타수가 적힌 표)\n"
+      +"swing = 사람이 골프 자세(어드레스·백스윙·임팩트·피니시)를 취한 사진, 또는 스윙 분석 앱의 정지 화면\n"
+      +"other = 그 밖 (클럽·그립·공이 놓인 자리·코스·장비·다른 통계 화면 등)\n"
+      +"launch 나 card 이면 첫 줄만 쓰고 끝내세요.\n"
+      +"swing 이나 other 이면 이어서 아래 형식으로, 줄마다 한 문장:\n"
+      +"본 것: (사진에 실제로 보이는 것)\n"
+      +"판정: (골프에 쓸모 있는 관찰 하나와 그 근거)\n"
+      +"다음: (다음 세트에서 해 볼 것 한 가지)\n"
+      +"절대 규칙: 사진에 보이는 것만 말하세요. 가려졌거나 안 보이는 부위·동작은 말하지 마세요. "
+      +"정지 사진 한 장으로 알 수 없는 것(속도, 궤도, 체중 이동의 흐름)은 단정하지 마세요. "
+      +"골프와 무관한 사진이면 '판정'에 그렇게만 쓰고 '다음' 줄은 빼세요.";
+    return withTimeout(call("apiAskImg",p,u),60000,"");
   }).then(function(t){
     S.imgAsk=true;
-    var s=String(t||"").toLowerCase();
-    if(/card/.test(s)) return "round";
-    if(/launch/.test(s)) return "shot";
+    var raw=String(t||""), k=(raw.match(/종류\s*[:：]\s*([a-zA-Z]+)/)||[])[1]||"";
+    k=k.toLowerCase();
+    if(k==="card") return "round";
+    if(k==="launch") return "shot";
+    if(k==="swing"||k==="other"){
+      var o=lcParse(raw), seen=(raw.match(/본 것\s*[:：]\s*(.*)/)||[])[1]||"";
+      return {note:{kind:k,seen:seen.trim(),verdict:o.verdict||"",next:o.next||""}};
+    }
+    /* 형식을 안 지킨 답 — 옛 방식대로 낱말만 찾아본다 */
+    var s2=raw.toLowerCase();
+    if(/card/.test(s2)) return "round";
+    if(/launch/.test(s2)) return "shot";
     return null;
   }).catch(function(e){
     /* 옛 서버면 이 기능이 없다. 한 번 겪으면 다시 묻지 않는다. */
@@ -3966,6 +4022,15 @@ document.addEventListener("click",function(ev){
   if(a==="themeToggle"){ toggleTheme(); render(); return; }
   if(a==="askPlan"){ S.ask={step:2}; S.sheet={kind:"start"}; render(); return; }
   if(a==="histMore"){ S.histN=(S.histN||6)+10; render(); return; }
+  if(a==="histLess"){ S.histN=6; render(); return; }
+  if(a==="rmNote"){ if(S.draft&&S.draft.notes){ S.draft.notes.splice(+el.getAttribute("data-i"),1); render(); } return; }
+  if(a==="menuAddSet"){ ensureDraft(); S.sheet={kind:"block",data:{clubId:"",m:{}}}; S.msg.sphoto=null; render(); return; }
+  if(a==="menuPickFile"){
+    var mf=document.getElementById("multiPhoto_file");
+    S.sheet=null; S.sheetShown=null;
+    if(mf){ try{ mf.click(); }catch(e){} }
+    render(); return;
+  }
   if(a==="retrySave"){ S.pendSig=null; S.save="saving"; flushDraft(); return; }
   if(a==="blkMode"){
     var mb=S.draft&&S.draft.blocks[+el.getAttribute("data-i")];
