@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v70">
+<meta name="app-version" content="v71">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -671,6 +671,10 @@ nav.tabs{display:none}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
 .btn{justify-content:center;text-align:center}
+/* 큰 단추는 한 가지 크기 — 올리기, 이대로, 시트 맨 아래의 주 단추가 모두 같다 */
+.upBtn,.bigStart,.btn.primary.full{min-height:62px;padding:0 20px;border-radius:18px;font-family:var(--fDisp);
+  font-size:19px;font-weight:900;letter-spacing:-.02em;display:flex;align-items:center;justify-content:center;gap:10px;width:100%}
+.upBtn em{font-size:19px}
 /* 계획 시트: 칸 사이를 한 가지 간격으로 */
 .askSum{margin-top:14px}
 .askSum .askRow{padding:15px 18px;align-items:center}
