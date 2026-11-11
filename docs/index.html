@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v69">
+<meta name="app-version" content="v70">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -655,10 +655,6 @@ nav.tabs{display:none}
 .wrapBtn{flex:none;min-width:92px;border:0;cursor:pointer;border-radius:18px;background:var(--surface2);color:var(--fg);
   font-family:var(--fDisp);font-size:16px;font-weight:800;box-shadow:0 5px 0 var(--line)}
 .wrapBtn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
-.askRow{width:100%;display:flex;align-items:center;justify-content:space-between;border:0;cursor:pointer;
-  background:var(--surface);color:var(--fg2);border-radius:18px;padding:15px 20px;font-size:15px;font-weight:700;
-  box-shadow:var(--shadow);font-family:inherit;text-align:left}
-.askRow span:first-child{white-space:nowrap;flex:1}
 .upHint{margin-top:10px;text-align:center;font-size:12.5px;color:var(--fg3);font-weight:600}
 .upBtn .spin.big{width:22px;height:22px}
 .upBtn .spin{border-color:rgba(255,255,255,.35);border-top-color:currentColor}
@@ -674,6 +670,12 @@ nav.tabs{display:none}
 .kind.field{background:var(--okSoft);color:var(--ok)}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
+.btn{justify-content:center;text-align:center}
+/* 계획 시트: 칸 사이를 한 가지 간격으로 */
+.askSum{margin-top:14px}
+.askSum .askRow{padding:15px 18px;align-items:center}
+.askSum .askRow span{width:84px}
+.sheet .seg{margin-top:14px}
 .secHead{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
 .secRight{display:inline-flex;align-items:center;gap:2px}
 .secRight .chev{margin-left:10px}
