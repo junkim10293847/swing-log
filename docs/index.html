@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v67">
+<meta name="app-version" content="v68">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -672,6 +672,9 @@ nav.tabs{display:none}
 .kind.field{background:var(--okSoft);color:var(--ok)}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
+.secHead{cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
+.secRight{display:inline-flex;align-items:center;gap:2px}
+.secRight .chev{margin-left:10px}
 .helpList{list-style:none;margin:10px 0 0;padding:0}
 .helpList li{display:flex;gap:12px;align-items:flex-start;padding:9px 0}
 .helpList .n{flex:none;width:26px;height:26px;border-radius:9px;background:var(--accentSoft);color:var(--accent);
@@ -1783,14 +1786,27 @@ function roundRow(r){
   return h+'</div>';
 }
 
+/* 지난 기록과 내 클럽은 머리줄을 누르면 접히고 펴진다. 접어 둔 것은 다음에 열어도 접혀 있다. */
+function folded(k){
+  if(!S.fold){ S.fold={}; try{ S.fold=JSON.parse(localStorage.getItem("swinglog.fold")||"{}")||{}; }catch(e){ S.fold={}; } }
+  return !!S.fold[k];
+}
+function foldHead(k,title,right){
+  var f=folded(k);
+  return '<div class="spread secHead" data-act="fold" data-k="'+k+'" role="button" aria-expanded="'+(f?'false':'true')+'">'
+   +'<div class="eyebrow">'+title+'</div>'
+   +'<span class="secRight">'+(right||'')+'<span class="chev">'+(f?'▾':'▴')+'</span></span></div>';
+}
+
 /* 지난 기록 — 연습과 라운드를 날짜순 한 줄로 */
 function homeHistory(){
   var t=today(), did=S.draft?S.draft.id:null, items=[];
   S.sessions.forEach(function(s){ if(s.id===did||s.date===t) return; items.push({k:"s",date:String(s.date||""),o:s}); });
   S.rounds.forEach(function(r){ if(r.date===t) return; items.push({k:"r",date:String(r.date||""),o:r}); });
   items.sort(function(a,b){ return b.date.localeCompare(a.date); });
-  var h='<div class="card"><div class="spread"><div class="eyebrow">지난 기록</div>'
-   +(items.length?'<span class="saveLine">연습 '+S.sessions.length+' · 라운드 '+S.rounds.length+'</span>':'')+'</div>';
+  var h='<div class="card">'+foldHead("hist","지난 기록",
+    items.length?'<span class="saveLine">연습 '+S.sessions.length+' · 라운드 '+S.rounds.length+'</span>':'');
+  if(folded("hist")) return h+'</div>';
   if(!items.length){
     h+='<p class="muted" style="margin-top:8px">'+(connOK()
       ? '아직 없습니다. 위에서 올리면 여기에 날짜별로 쌓입니다.'
@@ -1828,9 +1844,12 @@ function homeClubs(){
   }
   var live=S.clubs.filter(function(c){ return !c.spare && c.cat!=="putter"; })
     .sort(function(a,b){ return (a.loft==null?99:a.loft)-(b.loft==null?99:b.loft); });
-  var h='<div class="card"><div class="spread"><div class="eyebrow">내 클럽</div>'
-   +'<span><button class="secLink" data-act="openGrowth">성장</button>'
-   +'<button class="secLink" data-act="openBag">관리</button></span></div><div style="margin-top:4px">';
+  var cf=folded("clubs");
+  var h='<div class="card">'+foldHead("clubs","내 클럽",
+    cf ? '<span class="saveLine">'+live.length+'개</span>'
+       : '<button class="secLink" data-act="openGrowth">성장</button><button class="secLink" data-act="openBag">관리</button>');
+  if(cf) return h+'</div>';
+  h+='<div style="margin-top:4px">';
   live.forEach(function(c){
     var bb=lastBlockFor(c.id), se=clubSeries(c.id,"carry");
     var g=(bb&&bb.m&&bb.m.grade)||null;
@@ -4023,6 +4042,12 @@ document.addEventListener("click",function(ev){
   if(a==="askPlan"){ S.ask={step:2}; S.sheet={kind:"start"}; render(); return; }
   if(a==="histMore"){ S.histN=(S.histN||6)+10; render(); return; }
   if(a==="histLess"){ S.histN=6; render(); return; }
+  if(a==="fold"){
+    var fk=el.getAttribute("data-k"); folded(fk);
+    S.fold[fk]=!S.fold[fk];
+    try{ localStorage.setItem("swinglog.fold",JSON.stringify(S.fold)); }catch(e){}
+    render(); return;
+  }
   if(a==="rmNote"){ if(S.draft&&S.draft.notes){ S.draft.notes.splice(+el.getAttribute("data-i"),1); render(); } return; }
   if(a==="menuAddSet"){ ensureDraft(); S.sheet={kind:"block",data:{clubId:"",m:{}}}; S.msg.sphoto=null; render(); return; }
   if(a==="menuPickFile"){
