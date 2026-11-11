@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v68">
+<meta name="app-version" content="v69">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -639,7 +639,9 @@ nav.tabs{display:none}
 #app{padding-bottom:calc(36px + env(safe-area-inset-bottom,0px))}
 #menuBtn{font-size:22px;line-height:1;padding:4px 12px 8px;letter-spacing:1px;font-weight:900}
 .hero{padding:20px}
-.heroCue{margin-top:10px;font-family:var(--fDisp);font-size:25px;font-weight:900;letter-spacing:-.03em;line-height:1.25;color:var(--fg)}
+.heroTag{display:inline-block;margin-top:14px;padding:4px 10px;border-radius:999px;background:var(--accentSoft);color:var(--accent);
+  font-size:12px;font-weight:800;letter-spacing:-.01em}
+.heroCue{margin-top:6px;font-family:var(--fDisp);font-size:25px;font-weight:900;letter-spacing:-.03em;line-height:1.25;color:var(--fg)}
 .heroPlan{margin-top:6px;font-size:14.5px;line-height:1.5;color:var(--fg2);font-weight:600}
 .upBtn{margin-top:14px;width:100%;min-height:62px;display:flex;flex-direction:row;align-items:center;justify-content:center;gap:10px;
   border:0;cursor:pointer;background:var(--accent);color:var(--onAccent);border-radius:18px;
@@ -1650,7 +1652,7 @@ function homeHero(){
   var h='<div class="card hero">';
   h+='<div class="spread"><div class="eyebrow">오늘 · '+esc(fmtDate(today()))+' '+wd+'요일</div>'
    +(hp.has?'<button class="secLink" data-act="askPlan">계획 바꾸기</button>':'')+'</div>';
-  if(hp.cue) h+='<p class="heroCue">'+esc(hp.cue)+'</p>';
+  if(hp.cue) h+='<span class="heroTag">지금 중점</span><p class="heroCue">'+esc(hp.cue)+'</p>';
   if(hp.names.length) h+='<p class="heroPlan">'+esc(hp.names.join(' · '))
     +(hp.min?(' · '+minLabel(hp.min)):'')+(hp.holes9?' · 9홀':'')+'</p>';
   if(!hp.has && S.loaded) h+='<p class="heroPlan">올리면 그때부터 기록이 쌓이고, 쌓이면 오늘 칠 채를 짚어 드립니다.</p>';
@@ -2866,8 +2868,9 @@ function askBar(scope){
   var C=ASKBAR[scope]; if(!C) return "";
   var open=(S.askOpen===scope);
   if(!open){
-    return '<button class="askRow" data-act="askOpen" data-s="'+scope+'">'
-     +'<span>'+esc(C.t)+'</span><span class="chev">›</span></button>';
+    /* 접힌 지난 기록·내 클럽과 같은 모양, 같은 높이 */
+    return '<div class="card"><div class="spread secHead" data-act="askOpen" data-s="'+scope+'" role="button">'
+     +'<div class="eyebrow">'+esc(C.t)+'</div><span class="secRight"><span class="chev">▾</span></span></div></div>';
   }
   var k="ab_"+scope;
   var h='<div class="card"><div class="spread"><div class="eyebrow">'+esc(C.t)+'</div>'
