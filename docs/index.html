@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v71">
+<meta name="app-version" content="v72">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1770,10 +1770,12 @@ function roundRow(r){
    +'<span class="chev">'+(open?'▴':'▾')+'</span></div>';
   if(!open) return h;
   h+='<div class="rowBody">';
+  var RT=roundTraits(r), RL=roundLines(r);
+  if(RL.length) h+='<div class="note" style="margin-bottom:10px">'+RL.map(function(x){ return '<p style="margin:2px 0">'+esc(x)+'</p>'; }).join("")+'</div>';
   h+='<div class="metrics">'
-   +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/14")
-   +mTile("그린적중",r.gir,"/18")+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
-   +mTile("파온 미스",r.gir!=null?(18-r.gir):null,"")
+   +mTile("스코어",r.score,"")+mTile("퍼팅",r.putts,"")+mTile("페어웨이",r.fw,"/"+RT.fwHoles)
+   +mTile("그린적중",r.gir,"/"+RT.n)+mTile("OB",r.ob,"")+mTile("벌타",r.penalty,"")
+   +mTile("파온 미스",r.gir!=null?(RT.n-r.gir):null,"")
    +mTile("파 대비",over,"")+'</div>';
   if(tl.marks){
     h+='<div class="hRow" style="margin-top:10px">'+tl.marks+'</div>';
@@ -2107,6 +2109,7 @@ function sheetStart(){
     if(D&&D.test) h+='<div class="askRow"><span>성공 판정</span><b>'+esc(D.test)+'</b></div>';
     h+='</div>';
     var why=(D&&D.diag)||P.primary.why;
+    if(P.round && P.round.top && why.indexOf(P.round.top.s)<0) why+=" · 라운드: "+P.round.top.s+".";
     if(why) h+='<p class="muted" style="margin-top:12px;color:var(--fg)">'+esc(why)+'</p>';
   } else {
     h+='<p class="muted" style="margin-top:10px">기록이 쌓이면 여기서 오늘 칠 채를 짚어 드립니다. 그냥 시작하셔도 됩니다.</p>';
@@ -3043,16 +3046,28 @@ function prescribe(){
     P.test="성공 판정: "+flip.hi.c.name+" 캐리 < "+flip.lo.c.name+" 캐리";
   }
 
-  /* B. 라운드가 가리키는 곳 */
-  var r0=S.rounds.filter(function(r){ return r.score!=null; })[0];
-  var rSig=[];
-  if(r0){
-    if(r0.gir!=null&&r0.gir<=6) rSig.push({t:"short", s:"그린 적중 "+r0.gir+"/18 — 열"+(18-r0.gir>=15?"다섯":"몇")+" 홀 이상을 웨지로 수습했습니다"});
-    if(r0.putts!=null&&r0.putts>=36) rSig.push({t:"putt", s:"퍼팅 "+r0.putts+"개 — 그린에서도 새고 있습니다"});
-    if((r0.ob||0)+(r0.penalty||0)>=4) rSig.push({t:"tee", s:"OB·벌타 "+((r0.ob||0)+(r0.penalty||0))+"개 — 티샷이 경기를 무너뜨립니다"});
-    var tl=holeTally(r0);
-    if(tl.dbl>=8) rSig.push({t:"dbl", s:"더블 이상 "+tl.dbl+"홀 — 한 번 흔들리면 크게 잃습니다"});
+  /* B. 라운드가 가리키는 곳 — 최근 세 번을 18홀로 고쳐 읽는다 */
+  var LK=roundLeak(), rSig=LK?LK.list:[], leak=LK?LK.top:null;
+  function byCat(cat){ return info.filter(function(x){ return x.c.cat===cat; }); }
+  /* 새는 곳마다 연습장에서 잡을 채 */
+  function leakClub(lk){
+    if(!lk) return null;
+    if(lk.t==="tee") return byCat("driver")[0]||null;
+    if(lk.t==="short") return byCat("wedge")[0]||null;
+    if(lk.t==="par3"){
+      var irons=info.filter(function(x){ return x.c.cat==="iron" && x.c.loft!=null && x.c.loft>=28 && x.c.loft<=40; });
+      return irons.sort(function(a,b){ return (b.off.length-a.off.length) || (Math.abs(a.c.loft-33)-Math.abs(b.c.loft-33)); })[0]||null;
+    }
+    if(lk.t==="par5"){
+      var longs=info.filter(function(x){ return x.c.cat==="hybrid"||x.c.cat==="wood"||(x.c.cat==="iron"&&x.c.loft!=null&&x.c.loft<=27); });
+      return longs.sort(function(a,b){ return (a.c.loft==null?99:a.c.loft)-(b.c.loft==null?99:b.c.loft); }).slice(-1)[0]||null;
+    }
+    return null;                       /* 퍼팅·후반 무너짐은 채로 풀리지 않는다 */
   }
+  var leakX=leakClub(leak);
+  /* 채로 못 푸는 것(퍼팅)이 맨 위면, 그 다음으로 큰 것에서 채를 찾는다 */
+  if(!leakX && LK){ for(var li=1;li<LK.list.length && !leakX;li++){ leakX=leakClub(LK.list[li]); if(leakX) leak=LK.list[li]; } }
+  P.round = LK && LK.top ? {top:LK.top, used:leakX?leak:null, n:LK.n} : null;
 
   /* C. 측정이 비었거나 오래됐다 */
   var stale=info.filter(function(x){ return !x.b || (x.days!=null&&x.days>=21); })
@@ -3063,12 +3078,19 @@ function prescribe(){
                 .sort(function(a,b){ return b.off.length-a.off.length; })[0];
 
   if(!P.primary){
-    var wedge=info.filter(function(x){ return x.c.cat==="wedge"; })[0];
-    if(rSig.some(function(z){return z.t==="short";}) && wedge){
-      P.primary={x:wedge, kind:"short", head:wedge.c.name+" 거리 만들기",
-        why:"그린 적중이 "+r0.gir+"/18입니다. 놓친 홀은 전부 웨지로 처리해야 했습니다. "
-           +"라운드에서 퍼터 다음으로 많이 쓴 채인데 거리가 정해져 있지 않습니다."};
+    if(leakX && leak.t==="short"){
+      P.primary={x:leakX, kind:"short", head:leakX.c.name+" 거리 만들기",
+        why:leak.s+". 라운드에서 퍼터 다음으로 많이 쓴 채인데 거리가 정해져 있지 않습니다."};
       P.test="성공 판정: 풀·하프·쿼터 세 거리가 각각 10발 평균으로 적힌다";
+    } else if(leakX && leak.t==="tee"){
+      P.primary={x:leakX, kind:"tee", head:leakX.c.name+" 페어웨이에 올리기",
+        why:leak.s+". 거리보다 방향입니다 — 한 번 나가면 두 타가 사라집니다."};
+      P.test="성공 판정: 방향각 ±"+((leakX.T&&leakX.T.dir)||4)+"° 안 — 10발 중 7발";
+    } else if(leakX && (leak.t==="par3"||leak.t==="par5")){
+      P.primary={x:leakX, kind:leak.t, head:leakX.c.name+(leak.t==="par3"?" 한 번에 올리기":" 이어 치기"),
+        why:leak.s+"."};
+      P.test=leakX.off.length ? ("성공 판정: "+leakX.off[0].k+"가 "+leakX.off[0].want+" 안으로")
+                              : "성공 판정: 좌우 편차가 지난 기록보다 줄어든다";
     } else if(stale.length){
       var st=stale[0];
       P.primary={x:st, kind:"stale", head:st.c.name+" 측정",
@@ -3082,6 +3104,10 @@ function prescribe(){
     }
   }
   if(!P.primary) return null;
+
+  /* 중심이 다른 이유로 정해졌어도, 라운드가 가리킨 채는 오늘 같이 친다 */
+  if(leakX && leakX!==P.primary.x && !P.also.some(function(a){ return a.x===leakX; }))
+    P.also.unshift({x:leakX, why:"지난 라운드가 가리킨 채입니다 — "+leak.s});
 
   /* 보조 — 기준자 한 채와, 확인이 필요한 한 채 */
   var ruler=info.filter(function(x){
@@ -3119,7 +3145,7 @@ function prescribe(){
 
   /* 뺄 것 — 정렬이 흔들리는 드라이버는 짧은 날에 득이 없다 */
   var drv=info.filter(function(x){ return x.c.cat==="driver"; })[0];
-  if(drv && drv!==P.primary.x && drv.off.length && P.min<=120){
+  if(drv && drv!==P.primary.x && drv.off.length && P.min<=120 && !P.also.some(function(a){ return a.x===drv; })){
     var kinds=drv.off.map(function(o){ return o.k; }).join("·");
     P.skip.push({x:drv, why:kinds+"가 벗어나 있는데, 이건 스틱을 놓고 봐야 잡힙니다. "
       +"체력도 가장 많이 쓰므로 지친 상태로 치면 나쁜 자세가 굳습니다. 오늘은 빼거나 맨 마지막 10발만."});
@@ -3138,6 +3164,10 @@ function prescribe(){
     else if(o0&&(o0.k==="방향각"||o0.k==="좌우 편차")) P.cue={t:"헤드를 먼저 놓고 발은 나중에", d:"공 앞 30~50cm 표식에 헤드 면을 맞추고, 그다음 발을 그 면에 맞춰 섭니다"};
     else if(o0&&o0.k==="캐리") P.cue={t:"톱에서 잠시 멈춤", d:"멈추는 그 순간에 왼팔이 펴지는 것을 느끼면 아크가 돌아옵니다"};
     else P.cue={t:"톱에서 잠시 멈춤", d:"지금 유일하게 들고 갈 생각입니다"};
+    /* 라운드에서 가장 크게 새는 곳이 티샷이나 후반이면, 오늘 생각도 거기서 온다 */
+    var lt=P.round&&P.round.top;
+    if(lt && lt.t==="tee") P.cue={t:"헤드를 먼저 놓고 발은 나중에", d:lt.s+". 공 앞 30~50cm 표식에 헤드 면부터 맞춥니다", from:"round"};
+    else if(lt && lt.t==="late") P.cue={t:"한 발마다 처음부터 같은 순서", d:lt.s+". 지칠수록 준비 동작이 줄어듭니다. 마지막 세트까지 어드레스를 처음처럼", from:"round"};
   }
 
   /* 시간 배분 — 오늘의 방향과 몸, 그리고 남은 시간이 함께 정한다 */
@@ -3235,6 +3265,8 @@ function prescribe(){
     }
   }
 
+  if(P.round && P.round.top && P.round.top.t==="putt")
+    P.plan.push({m:0, t:"퍼팅", d:P.round.top.s+". 측정기로는 못 잡습니다 — 연습 그린이 있으면 끝나고 2m 열 개만 넣고 가세요."});
   if(P.holes9){
     P.plan.push({m:HOLE9, t:"9홀",
       d:"티샷마다 정렬 루틴을 지킵니다 — 공 뒤에서 목표선 보기 → 앞 50cm 표식 고르기 → 헤드 먼저 놓고 발은 나중. "
@@ -3245,6 +3277,86 @@ function prescribe(){
   }
   P.rSig=rSig;
   return P;
+}
+
+/* ────────── 라운드의 됨됨이 ──────────
+   9홀을 18홀 기준으로 읽으면 실제보다 나쁘게 나온다 (그린 적중 3/9 를 3/18 로 읽었다).
+   몇 홀을 돌았는지부터 세고, 모든 숫자를 그 홀 수로 읽는다. */
+function roundTraits(r){
+  var tl=holeTally(r), hs=r.holes||[], ps=r.pars||[], n=tl.n||0, i;
+  if(!n) n=(r.par && r.par<=40)?9:18;
+  var c3=0,c4=0,c5=0,o3=0,o4=0,o5=0,seq=[];
+  for(i=0;i<18;i++){
+    if(hs[i]==null||ps[i]==null||isNaN(hs[i])||isNaN(ps[i])) continue;
+    var d=hs[i]-ps[i]; seq.push(d);
+    if(ps[i]<=3){ c3++; o3+=d; } else if(ps[i]===4){ c4++; o4+=d; } else { c5++; o5+=d; }
+  }
+  var k=18/n, avg=function(a){ return a.length?a.reduce(function(x,y){ return x+y; },0)/a.length:null; };
+  var T={n:n, k:k, known:seq.length,
+    fwHoles: seq.length ? (c4+c5) : Math.round(n*14/18),
+    over:(r.score!=null&&r.par)?(r.score-r.par):null,
+    gir18:(r.gir!=null)?r.gir*k:null,
+    putts18:(r.putts!=null)?r.putts*k:null,
+    penN:(r.ob||0)+(r.penalty||0),
+    pen18:((r.ob||0)*2+(r.penalty||0))*k,          /* OB 는 두 타, 벌타는 한 타로 센다 */
+    dbl18: seq.length ? tl.dbl*k : null,
+    c3:c3,c4:c4,c5:c5, par3:c3?o3/c3:null, par4:c4?o4/c4:null, par5:c5?o5/c5:null,
+    early:null, late:null, bigN:0, bigShare:null};
+  if(seq.length>=6){ var t3=Math.floor(seq.length/3); T.early=avg(seq.slice(0,t3)); T.late=avg(seq.slice(-t3)); T.third=t3; }
+  if(seq.length){
+    var lost=0,big=0; seq.forEach(function(d){ if(d>0) lost+=d; if(d>=2){ big+=d; T.bigN++; } });
+    T.bigShare = lost>0 ? big/lost : 0;
+  }
+  return T;
+}
+function sgn(v){ return (v>0?"+":"")+r1(v); }
+/* 펼친 라운드에 보여 줄 두세 줄 */
+function roundLines(r){
+  var T=roundTraits(r), L=[];
+  if(T.over!=null && T.n<18) L.push(T.n+"홀 라운드입니다. 파 대비 "+sgn(T.over)+" — 18홀로 치면 "+sgn(T.over*T.k)+" 수준.");
+  var pt=[]; if(T.c3) pt.push("파3 "+sgn(T.par3)); if(T.c4) pt.push("파4 "+sgn(T.par4)); if(T.c5) pt.push("파5 "+sgn(T.par5));
+  if(pt.length>=2){
+    var worst=[["파3",T.par3,T.c3],["파4",T.par4,T.c4],["파5",T.par5,T.c5]].filter(function(x){ return x[2]>=2; })
+      .sort(function(a,b){ return b[1]-a[1]; })[0];
+    L.push("홀당 평균: "+pt.join(" · ")+(worst&&worst[1]>=1?(" — "+worst[0]+"에서 가장 많이 잃었습니다."):"."));
+  }
+  if(T.bigShare!=null && T.known){
+    if(T.bigN && T.bigShare>=0.5) L.push("더블 이상 "+T.bigN+"홀이 잃은 타수의 "+Math.round(T.bigShare*100)+"%입니다. 큰 사고 몇 번이 점수를 만든 날.");
+    else if(!T.bigN) L.push("더블 이상이 없습니다. 한 타씩 고르게 샌 날.");
+  }
+  if(T.early!=null && Math.abs(T.late-T.early)>=0.6)
+    L.push((T.late>T.early?"뒤 ":"앞 ")+T.third+"홀에서 무너졌습니다 — 앞 "+T.third+"홀 홀당 "+sgn(T.early)+", 뒤 "+T.third+"홀 홀당 "+sgn(T.late)+".");
+  return L;
+}
+/* 최근 라운드들이 가리키는 새는 곳. 오늘 것은 넣지 않는다 — 치는 날 계획이 중간에 바뀌면 안 된다.
+   모든 숫자는 18홀로 고쳐서 본다. */
+function roundLeak(){
+  var t=today();
+  var rs=S.rounds.filter(function(r){ return r.score!=null && r.date && r.date<t; })
+    .sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); }).slice(0,3);
+  if(!rs.length) return null;
+  var Ts=rs.map(roundTraits);
+  function mean(f){ var a=Ts.map(f).filter(function(v){ return v!=null&&!isNaN(v); }); return a.length?a.reduce(function(x,y){ return x+y; },0)/a.length:null; }
+  function wmean(fv,fc){ var sv=0,sc=0; Ts.forEach(function(T){ var c=fc(T)||0, v=fv(T); if(c&&v!=null){ sv+=v*c; sc+=c; } }); return sc?{v:sv/sc,c:sc}:null; }
+  var gir=mean(function(T){ return T.gir18; }), putts=mean(function(T){ return T.putts18; }),
+      pen=mean(function(T){ return T.pen18; }), penHas=rs.some(function(r){ return r.ob!=null||r.penalty!=null; }),
+      p3=wmean(function(T){ return T.par3; },function(T){ return T.c3; }),
+      p4=wmean(function(T){ return T.par4; },function(T){ return T.c4; }),
+      p5=wmean(function(T){ return T.par5; },function(T){ return T.c5; }),
+      early=mean(function(T){ return T.early; }), late=mean(function(T){ return T.late; });
+  var nR=rs.length, src="최근 라운드 "+nR+"번", out=[];
+  /* 잃는 타수를 18홀 기준으로 어림한다. 어림이지 측정이 아니다. */
+  if(penHas && pen>=3) out.push({t:"tee", loss:pen, s:src+"에서 OB·벌타로 18홀당 약 "+r1(pen)+"타를 잃었습니다"});
+  if(putts!=null && putts>=36) out.push({t:"putt", loss:putts-32, s:src+" 퍼팅이 18홀당 "+r1(putts)+"개입니다"});
+  if(gir!=null && gir<5) out.push({t:"short", loss:(7-gir)*0.6, s:src+" 그린 적중이 18홀당 "+r1(gir)+"번입니다. 놓친 홀은 전부 웨지로 수습해야 했습니다"});
+  if(p3 && p4 && p3.c>=3 && p3.v>=1.2 && p3.v-p4.v>=0.4)
+    out.push({t:"par3", loss:(p3.v-p4.v)*4, s:src+" 파3에서 홀당 "+sgn(p3.v)+"타 (파4는 "+sgn(p4.v)+"). 아이언 한 번으로 올려야 하는 홀에서 잃습니다"});
+  if(p5 && p4 && p5.c>=2 && p5.v>=1.2 && p5.v-p4.v>=0.4)
+    out.push({t:"par5", loss:(p5.v-p4.v)*4, s:src+" 파5에서 홀당 "+sgn(p5.v)+"타 (파4는 "+sgn(p4.v)+"). 긴 채로 두 번 이어 치는 데서 잃습니다"});
+  if(early!=null && late!=null && late-early>=0.6)
+    out.push({t:"late", loss:(late-early)*6, s:src+" 후반 홀당 "+sgn(late)+"타, 초반 "+sgn(early)+"타. 뒤로 갈수록 무너집니다"});
+  out.sort(function(a,b){ return b.loss-a.loss; });
+  return {list:out, top:out[0]||null, n:nR};
 }
 
 /* 홀별 타수를 더하고 파 대비를 센다. */
@@ -4731,7 +4843,7 @@ document.addEventListener("click",function(ev){
     var p6=profileText()+"\n\n라운드 기록\n"
       +"날짜 "+rr.date+" / "+(rr.type==="field"?"필드":"스크린")+(rr.course?(" / "+rr.course):"")+"\n"
       +"스코어 "+rr.score+" (파 "+rr.par+", "+(rr.score-rr.par>0?"+":"")+(rr.score-rr.par)+")\n"
-      +[["퍼팅",rr.putts],["페어웨이 안착",rr.fw!=null?rr.fw+"/14":null],["그린 적중",rr.gir!=null?rr.gir+"/18":null],
+      +[["퍼팅",rr.putts],["페어웨이 안착",rr.fw!=null?rr.fw+"/"+roundTraits(rr).fwHoles:null],["그린 적중",rr.gir!=null?rr.gir+"/"+roundTraits(rr).n:null],
         ["OB",rr.ob],["벌타",rr.penalty],["더블 이상",rr.dbl],["파 이상",rr.parOrBetter]]
         .filter(function(x){return x[1]!=null&&x[1]!=="";}).map(function(x){return x[0]+" "+x[1];}).join(" / ")
       +(function(){
@@ -4743,10 +4855,14 @@ document.addEventListener("click",function(ev){
            +"\nOUT "+tz.out+" IN "+tz.inn+(tz.dbl?(" / 더블 이상 "+tz.dbl+"홀"):"");
        })()
       +(rr.note?("\n본인 메모: "+rr.note):"")
+      +"\n\n앱이 먼저 계산한 이 라운드의 됨됨이 ("+roundTraits(rr).n+"홀 라운드 — 18홀 기준으로 읽지 마세요):\n- "
+        +(roundLines(rr).join("\n- ")||"홀별 기록이 없어 계산하지 못함")
+      +(function(){ var LK2=roundLeak(); return (LK2&&LK2.list.length)?("\n최근 라운드들의 경향(이 라운드를 포함할 수 있음): "+LK2.list.map(function(z){ return z.s; }).join(" / ")):""; })()
       +(lbd?("\n최근 드라이버 연습 10회 평균: "+metricSummary(lbd.m)):"")
       +"\n\n이 스코어에서 타수를 가장 많이 잃은 영역을 숫자로 짚어 주세요. "
       +"퍼팅·그린 적중·페어웨이·벌타 중 어디서 몇 타를 잃었는지 추정하고, 다음 연습에서 손댈 곳 한 군데만 지정하세요. "
-      +"홀별 타수가 있으면 전반과 후반 중 어디서 무너졌는지, 무너진 홀이 몰려 있는지도 짚으세요. "
+      +"위의 됨됨이 계산을 근거로 쓰고, 이 라운드가 최근 경향과 같은지 다른지도 한 문장으로 말하세요. "
+      +"코스 난이도·바람처럼 기록에 없는 것은 추측하지 마세요. "
       +"장비 교체는 답에 넣지 마세요. 400자 이내, 머리말 없이 바로 시작.";
     ask("rd"+rid,p6,{modelTier:"default"}).then(function(t){
       rr.analysis=t; put("rounds",rr,true).then(render);
