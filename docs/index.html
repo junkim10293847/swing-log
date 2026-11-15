@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v73">
+<meta name="app-version" content="v74">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -670,6 +670,8 @@ nav.tabs{display:none}
 .kind.field{background:var(--okSoft);color:var(--ok)}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
+.sessBlk{padding:14px 0 6px;border-top:1px dashed var(--line)}
+.rowBody > .sessBlk:first-child{border-top:0;padding-top:6px}
 /* 기준표 */
 .stdSum{font-size:14.5px;line-height:1.5;color:var(--fg);font-weight:600;margin:0 0 10px}
 .stdSum b.bad{color:var(--bad)} .stdSum b.ok{color:var(--ok)}
@@ -1846,12 +1848,14 @@ function homeHistory(){
     if(it.k==="r"){ h+=roundRow(it.o); return; }
     var s=it.o, bl=(s.blocks||[]), nm=[];
     bl.forEach(function(b){ if(b.clubName&&nm.indexOf(b.clubName)<0) nm.push(b.clubName); });
+    var so=(S.openSess===s.id);
     h+='<div class="listrow" data-act="openSession" data-id="'+esc(s.id)+'">'
      +'<span class="kind">연습</span>'
      +'<div class="bd"><b>'+esc(fmtDate(s.date))+'</b>'
      +'<span>'+esc(nm.length?(nm.slice(0,3).join(' · ')+(nm.length>3?(' 외 '+(nm.length-3)):'')):'세트 없음')+'</span></div>'
      +'<div class="rt"><b>'+bl.length+'</b><span>세트</span></div>'
-     +'<span class="chev">›</span></div>';
+     +'<span class="chev">'+(so?'▴':'▾')+'</span></div>';
+    if(so) h+='<div class="rowBody">'+sessionBody(s)+'</div>';
   });
   if(items.length>N || N>6){
     h+='<div class="row" style="margin-top:10px;gap:8px">'
@@ -1889,11 +1893,27 @@ function homeClubs(){
       else if(dv<-3){ ar="↓"; arc="var(--bad)"; }
       else ar="→";
     }
-    h+='<div class="listrow" data-act="openClub" data-id="'+esc(c.id)+'">'
+    var co=(S.openClubRow===c.id);
+    h+='<div class="listrow" data-act="clubRow" data-id="'+esc(c.id)+'">'
      +'<span class="grade '+(g||"X")+'">'+esc(g||"—")+'</span>'
      +'<div class="bd"><b>'+esc(c.name)+'</b></div>'
      +'<div class="rt"><b>'+(carry!=null?carry+'m':'<span style="color:var(--fg3);font-size:14px;font-weight:600">아직 없음</span>')+'</b>'
-     +'<span style="color:'+arc+'">'+ar+'</span></div></div>';
+     +'<span style="color:'+arc+'">'+ar+'</span></div>'
+     +'<span class="chev">'+(co?'▴':'▾')+'</span></div>';
+    if(co){
+      h+='<div class="rowBody">';
+      if(bb&&bb.m){
+        var best=clubBest(c.id);
+        h+='<p class="restLine" style="margin:0 0 8px">'+esc(fmtDate(bb.date))+' 기록'
+         +(se.length?(' · 지금까지 '+se.length+'번 잼'):'')
+         +(best?(' · 가장 긴 캐리 <b>'+r1(best.carry)+'</b>m'):'')+'</p>';
+        h+=(stdTable(c,bb.m)||'<p class="muted">이 채는 기준값이 없어 표를 만들지 못했습니다.</p>')+restLine(bb.m);
+      } else {
+        h+='<p class="muted">아직 잰 기록이 없습니다. 측정기 화면을 올리면 여기에 기준표가 생깁니다.</p>';
+      }
+      h+='<div style="text-align:right;margin-top:8px"><button class="secLink" data-act="openClub" data-id="'+esc(c.id)+'">추이 · 고치기</button></div>';
+      h+='</div>';
+    }
   });
   return h+'</div></div>';
 }
@@ -1927,8 +1947,8 @@ function homeHelp(){
 function viewHome(){
   var h='<div class="stack">';
   h+=homeHelp();
-  h+=homeHero();
   h+=askBar("practice");
+  h+=homeHero();
   h+=homeToday();
   h+=homeHistory();
   h+=homeClubs();
@@ -2384,21 +2404,12 @@ function sheetBlock(){
 }
 
 /* --- 연습 상세 --- */
-function sheetSession(){
-  var s=S.sessions.filter(function(x){return x.id===S.sheet.id;})[0];
-  if(!s) return '<p>기록을 찾지 못했습니다.</p>';
-  var h='<div class="spread"><h3 style="font-size:19px">'+esc(fmtDate(s.date))+' 연습</h3>'
-   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>';
-
-  var wOk=(s.warmup||[]).length>=countReq(WARMUP), cOk=(s.cooldown||[]).length>=countReq(COOLDOWN);
-  h+='<div class="row" style="margin-top:12px">'
-   +((s.warmup||[]).length?'<span class="chip '+(wOk?"ok":"neutral")+'">준비운동 '+(wOk?"완료":"일부")+'</span>':'')
-   +((s.cooldown||[]).length?'<span class="chip '+(cOk?"ok":"neutral")+'">마무리 '+(cOk?"완료":"일부")+'</span>':'')
-   +'<span class="chip neutral">'+((s.blocks||[]).length)+'세트</span></div>';
-
+/* 지난 연습 한 건의 속 — 줄 아래로 펼쳐 보일 때와 (옛) 창에서 같이 쓴다 */
+function sessionBody(s){
+  var h="";
   (s.blocks||[]).forEach(function(b,bi){
     var club=S.clubs.filter(function(c){return c.id===b.clubId;})[0];
-    h+='<div class="card" style="margin-top:12px"><div class="spread">'
+    h+='<div class="sessBlk"><div class="spread">'
      +'<div class="row" style="gap:8px"><span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
      +'<b style="font-family:var(--fDisp);font-size:16px">'+esc(b.clubName)+'</b></div></div>';
     var stT=stdTable(club,b.m);
@@ -2435,13 +2446,20 @@ function sheetSession(){
   });
 
   if(s.feeling){
-    h+='<div class="card" style="margin-top:12px"><div class="eyebrow">느낀점</div>'
+    h+='<div class="sessBlk"><div class="eyebrow">느낀점</div>'
      +'<div class="note" style="margin-top:8px">'+esc(s.feeling)+'</div>';
     if(s.coaching) h+='<div class="ai" style="margin-top:10px"><div class="hd">코칭</div>'+esc(s.coaching)+'</div>';
     h+='</div>';
   }
-  h+='<button class="btn full" style="margin-top:14px" data-act="delSession" data-id="'+esc(s.id)+'">이 연습 기록 삭제</button>';
+  h+='<div style="text-align:right;margin-top:10px"><button class="secLink" data-act="delSession" data-id="'+esc(s.id)+'">'
+   +(S.rmSess===s.id?'정말 지웁니다 — 한 번 더':'이 연습 기록 지우기')+'</button></div>';
   return h;
+}
+function sheetSession(){
+  var s=S.sessions.filter(function(x){return x.id===S.sheet.id;})[0];
+  if(!s) return '<p>기록을 찾지 못했습니다.</p>';
+  return '<div class="spread"><h3 style="font-size:19px">'+esc(fmtDate(s.date))+' 연습</h3>'
+   +'<button class="btn ghost sm" data-act="closeSheet">닫기</button></div>'+sessionBody(s);
 }
 
 /* --- 라운드 입력 --- */
@@ -4259,6 +4277,7 @@ document.addEventListener("click",function(ev){
   if(a==="askPlan"){ S.ask={step:2}; S.sheet={kind:"start"}; render(); return; }
   if(a==="histMore"){ S.histN=(S.histN||6)+10; render(); return; }
   if(a==="histLess"){ S.histN=6; render(); return; }
+  if(a==="clubRow"){ var crid=el.getAttribute("data-id"); S.openClubRow=(S.openClubRow===crid)?null:crid; render(); return; }
   if(a==="fold"){
     var fk=el.getAttribute("data-k"); folded(fk);
     S.fold[fk]=!S.fold[fk];
@@ -4335,7 +4354,7 @@ document.addEventListener("click",function(ev){
     })(0);
     return;
   }
-  if(a==="openSession"){ S.sheet={kind:"session",id:el.getAttribute("data-id")}; render(); return; }
+  if(a==="openSession"){ var osid=el.getAttribute("data-id"); S.openSess=(S.openSess===osid)?null:osid; S.rmSess=null; render(); return; }
   if(a==="newRound"){ S.openHoles=false;
     S.sheet={kind:"round",data:{date:today(),type:"screen",par:72}}; render(); return; }
 
@@ -4881,7 +4900,12 @@ document.addEventListener("click",function(ev){
     S.sheet=null; S.sheetShown=null; render(); return;
   }
 
-  if(a==="delSession"){ del("sessions",el.getAttribute("data-id")).then(function(){ S.sheet=null; S.sheetShown=null; render(); }); return; }
+  if(a==="delSession"){
+    var dsid=el.getAttribute("data-id");
+    if(S.rmSess!==dsid){ S.rmSess=dsid; render(); return; }      /* 두 번 눌러야 지운다 */
+    S.rmSess=null; S.openSess=null;
+    del("sessions",dsid).then(function(){ S.sheet=null; S.sheetShown=null; render(); }); return;
+  }
 
   if(a==="coachBlock"){
     var si=el.getAttribute("data-si"), bi=+el.getAttribute("data-bi");
