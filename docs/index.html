@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v72">
+<meta name="app-version" content="v73">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -670,6 +670,24 @@ nav.tabs{display:none}
 .kind.field{background:var(--okSoft);color:var(--ok)}
 .kind.screen{background:var(--accentSoft);color:var(--accent)}
 .rowBody{padding:4px 0 14px}
+/* 기준표 */
+.stdSum{font-size:14.5px;line-height:1.5;color:var(--fg);font-weight:600;margin:0 0 10px}
+.stdSum b.bad{color:var(--bad)} .stdSum b.ok{color:var(--ok)}
+.stdT{width:100%;border-collapse:collapse;table-layout:fixed;font-size:13.5px;background:var(--surface);border-radius:14px;overflow:hidden}
+.stdT th{font-size:11.5px;font-weight:700;color:var(--fg3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.stdT td{padding:10px 10px;border-bottom:1px solid var(--line);vertical-align:middle;line-height:1.35;word-break:keep-all}
+.stdT tr:last-child td{border-bottom:0}
+.stdT th:nth-child(1),.stdT td:nth-child(1){width:22%;font-weight:700}
+.stdT th:nth-child(2),.stdT td:nth-child(2){width:29%;color:var(--fg2)}
+.stdT th:nth-child(3),.stdT td:nth-child(3){width:19%}
+.stdT th,.stdT td{padding-left:8px;padding-right:6px}
+.stdT td b{font-family:var(--fData);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+.stdT tr.bad td b{color:var(--bad)} .stdT tr.ok td b{color:var(--ok)}
+.stdT tr.bad td:nth-child(4){color:var(--bad);font-weight:700}
+.stdT tr.bad td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+.okMark{color:var(--fg3);font-size:12.5px}
+.restLine{margin-top:10px;font-size:12.5px;color:var(--fg3);line-height:1.6}
+.restLine b{color:var(--fg2);font-family:var(--fData)}
 .btn{justify-content:center;text-align:center}
 /* 큰 단추는 한 가지 크기 — 올리기, 이대로, 시트 맨 아래의 주 단추가 모두 같다 */
 .upBtn,.bigStart,.btn.primary.full{min-height:62px;padding:0 20px;border-radius:18px;font-family:var(--fDisp);
@@ -2383,20 +2401,32 @@ function sheetSession(){
     h+='<div class="card" style="margin-top:12px"><div class="spread">'
      +'<div class="row" style="gap:8px"><span class="grade '+(b.m.grade||"X")+'">'+esc(b.m.grade||"—")+'</span>'
      +'<b style="font-family:var(--fDisp);font-size:16px">'+esc(b.clubName)+'</b></div></div>';
+    var stT=stdTable(club,b.m);
+    if(stT){
+      h+='<div style="margin-top:12px">'+stT+restLine(b.m)+'</div>';
+      if(b.deltas){
+        var dsv=[];
+        METRICS.forEach(function(x){ var d=b.deltas[x.k]; if(d==null||d===0) return;
+          var up=d>0, gd=x.low?!up:up;
+          dsv.push('<span class="chip '+(x.lr?'neutral':(gd?'ok':'bad'))+'">'+esc(x.n)+' '+(up?'+':'')+r1(d)+'</span>'); });
+        if(dsv.length) h+='<div style="margin-top:10px"><div class="eyebrow">그 전 기록 대비</div><div class="row" style="gap:6px;margin-top:6px">'+dsv.join('')+'</div></div>';
+      }
+    } else {
     h+='<div class="metrics" style="margin-top:10px">';
-    METRICS.forEach(function(x){
-      var v=b.m[x.k]; if(v==null) return;
-      var st=metricState(club,x.k,v);
-      var d=b.deltas&&b.deltas[x.k];
-      h+='<div class="metric '+st+'"><b>'+(x.lr?numToLR(v,x.k==="side"?0:1):r1(v))+'</b>'
-       +'<span>'+x.n+' '+x.u+'</span>'
-       +(d!=null&&d!==0?'<span class="d '+(d>0?"up":"dn")+'">'+(d>0?"+":"")+d+'</span>':'')+'</div>';
-    });
-    h+='</div>';
-    if(b.good&&b.good.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--ok)">기준 안</div>';
-      b.good.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
-    if(b.bad&&b.bad.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--bad)">부족한 점</div>';
-      b.bad.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
+      METRICS.forEach(function(x){
+        var v=b.m[x.k]; if(v==null) return;
+        var st=metricState(club,x.k,v);
+        var d=b.deltas&&b.deltas[x.k];
+        h+='<div class="metric '+st+'"><b>'+(x.lr?numToLR(v,x.k==="side"?0:1):r1(v))+'</b>'
+         +'<span>'+x.n+' '+x.u+'</span>'
+         +(d!=null&&d!==0?'<span class="d '+(d>0?"up":"dn")+'">'+(d>0?"+":"")+d+'</span>':'')+'</div>';
+      });
+      h+='</div>';
+      if(b.good&&b.good.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--ok)">기준 안</div>';
+        b.good.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
+      if(b.bad&&b.bad.length){ h+='<div style="margin-top:10px"><div class="eyebrow" style="color:var(--bad)">부족한 점</div>';
+        b.bad.forEach(function(g){ h+='<p class="muted" style="margin-top:4px">· '+esc(g)+'</p>'; }); h+='</div>'; }
+    }
     h+='<button class="btn sm full" style="margin-top:12px" data-act="coachBlock" data-si="'+esc(s.id)+'" data-bi="'+bi+'">'
      +(S.busy["cb"+s.id+bi]?'<span class="spin"></span> 코칭 중':(b.coaching?'다시 코칭':'이 클럽 코칭 받기'))+'</button>';
     if(S.msg["cb"+s.id+bi]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg["cb"+s.id+bi])+'</div>';
@@ -3815,7 +3845,73 @@ function pickBlockedMsg(){
 function toDataURL(file,cb){ var r=new FileReader(); r.onload=function(){ cb(r.result); }; r.onerror=function(){ cb(null); }; r.readAsDataURL(file); }
 
 /* 세트 한 줄을 펼쳤을 때 — 숫자 전부와 기준 대비 판정을 보여준다 */
+function fmtN(v){ return (Math.abs(v)>=1000) ? String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g,",") : String(r1(v)); }
+/* 한 세트를 기준과 나란히 놓는다. 벗어난 것이 위로 온다. */
+function stdRows(club,m){
+  var T=club?TARGET[tkey(club)]:null, rows=[];
+  if(!T||!m) return rows;
+  [["carry","캐리","m"],["launch","발사각","°"],["back","백스핀","rpm"]].forEach(function(p){
+    var v=m[p[0]], r=T[p[0]]; if(v==null||!r) return;
+    var ok=inRange(v,r), low=v<r[0];
+    rows.push({n:p[1], std:fmtN(r[0])+"~"+fmtN(r[1])+(p[2]==="rpm"?"":p[2]), now:fmtN(v)+(p[2]==="rpm"?"":p[2]), ok:ok,
+      fix: ok ? "" : (fmtN(low?(r[0]-v):(v-r[1]))+p[2]+" "+(low?(p[0]==="carry"?"짧음":"낮음"):(p[0]==="carry"?"김":"높음")))});
+  });
+  [["width","좌우 편차","m"],["depth","앞뒤 편차","m"]].forEach(function(p){
+    var v=m[p[0]], r=T[p[0]]; if(v==null||!r) return;
+    var ok=v<=r[1];
+    rows.push({n:p[1], std:r[1]+p[2]+" 이하", now:r1(v)+p[2], ok:ok, fix: ok?"":(r1(v-r[1])+p[2]+" 넓음")});
+  });
+  if(m.dir!=null && T.dir!=null){
+    var okd=Math.abs(m.dir)<=T.dir;
+    rows.push({n:"방향각", std:"±"+T.dir+"° 이내", now:numToLR(m.dir)+"°", ok:okd,
+      fix: okd?"":((m.dir<0?"왼":"오른")+"쪽 출발 — 정렬 점검")});
+  }
+  if(m.side!=null){
+    var oks=Math.abs(m.side)<=600;
+    rows.push({n:"사이드스핀", std:"±600 이내", now:numToLR(m.side,0), ok:oks, fix: oks?"":"좌우 회전이 큼"});
+  }
+  /* 고칠 것이 위로 */
+  return rows.filter(function(x){ return !x.ok; }).concat(rows.filter(function(x){ return x.ok; }));
+}
+function stdTable(club,m){
+  var rows=stdRows(club,m);
+  if(!rows.length) return "";
+  var bad=rows.filter(function(x){ return !x.ok; });
+  var h='<p class="stdSum">'+(bad.length
+      ? ('기준 '+rows.length+'개 중 <b class="bad">'+bad.length+'개</b>가 벗어났습니다 — '+esc(bad.map(function(x){ return x.n; }).join(", ")))
+      : ('기준 '+rows.length+'개가 <b class="ok">모두 안</b>입니다'))+'</p>';
+  h+='<table class="stdT"><thead><tr><th>항목</th><th>기준</th><th>지금</th><th>보완할 것</th></tr></thead><tbody>';
+  rows.forEach(function(x){
+    h+='<tr class="'+(x.ok?'ok':'bad')+'"><td>'+esc(x.n)+'</td><td>'+esc(x.std)+'</td><td><b>'+esc(x.now)+'</b></td>'
+     +'<td>'+(x.ok?'<span class="okMark">기준 안</span>':esc(x.fix))+'</td></tr>';
+  });
+  return h+'</tbody></table>';
+}
+/* 기준이 없는 숫자들 — 표 아래에 작게 */
+function restLine(m){
+  var out=[];
+  [["total","비거리","m"],["apex","최고높이","m"],["ball","볼스피드","m/s"],["landing","안착률","%"]].forEach(function(p){
+    if(m[p[0]]!=null) out.push(p[1]+' <b>'+r1(m[p[0]])+'</b>'+p[2]);
+  });
+  return out.length?'<p class="restLine">'+out.join(' · ')+'</p>':'';
+}
 function blockDetail(b){
+  var clubT=S.clubs.filter(function(c){ return c.id===b.clubId; })[0];
+  var tbl=stdTable(clubT,b.m);
+  if(tbl){
+    var h0='<div class="card" style="margin:0 0 10px;background:var(--surface2)">'+tbl+restLine(b.m);
+    if(b.deltas && Object.keys(b.deltas).length){
+      var ds0=[];
+      METRICS.forEach(function(x){
+        var dv=b.deltas[x.k]; if(dv==null||dv===0) return;
+        var up=dv>0, good = x.low ? !up : up;
+        ds0.push('<span class="chip '+(x.lr?'neutral':(good?'ok':'bad'))+'">'+esc(x.n)+' '+(up?'+':'')+r1(dv)+'</span>');
+      });
+      if(ds0.length) h0+='<div style="margin-top:10px"><div class="eyebrow">지난번 대비</div>'
+        +'<div class="row" style="gap:6px;margin-top:6px">'+ds0.join('')+'</div></div>';
+    }
+    return h0+'</div>';
+  }
   var h='<div class="card" style="margin:0 0 10px;background:var(--surface2)">';
   h+='<div class="metrics">';
   METRICS.forEach(function(x){
