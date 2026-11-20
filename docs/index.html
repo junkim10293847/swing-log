@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v74">
+<meta name="app-version" content="v75">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1750,7 +1750,7 @@ function homeToday(){
   }
 
   if(vb){
-    var vo=vb.o||lcParse(vb.t);
+    var vo=lcParse(vb.t);
     h+='<div class="note" style="margin-top:10px"><div class="eyebrow">스윙 영상</div>'
      +(vo.verdict?'<p style="margin-top:4px">'+esc(vo.verdict)+'</p>':'')
      +(vo.diag?'<p style="margin-top:4px">'+esc(vo.diag)+'</p>':'')
@@ -3975,6 +3975,24 @@ function blockDetail(b){
    → 같은 채로 다음 세트를 치면 지난 지시가 효과가 있었는지 숫자로 먼저 판정한다. */
 function lcParse(t){
   var o={raw:t||""}, keys={"판정":"verdict","진단":"diag","다음":"next","질문":"q","보기":"opts","답":"ans"};
+  /* 형식을 어기고 JSON 으로 답하는 일이 있다. 그대로 찍히면 읽을 수가 없다. */
+  var js=String(t||"").replace(/```(?:json)?/gi,"");
+  var jm=js.match(/\{[\s\S]*\}/);
+  if(jm){
+    try{
+      var J=JSON.parse(jm[0]), hit=false;
+      Object.keys(J).forEach(function(k){
+        var kk=String(k).trim(); if(!keys[kk]) return;
+        var val=J[k]; if(Array.isArray(val)) val=val.join(" | ");
+        o[keys[kk]]=String(val==null?"":val).trim(); hit=true;
+      });
+      if(hit){
+        o.opts=o.opts?o.opts.split(/\s*[|｜\/]\s*/).filter(Boolean).slice(0,4):[];
+        o.raw=[o.verdict&&("판정: "+o.verdict),o.diag&&("진단: "+o.diag),o.next&&("다음: "+o.next)].filter(Boolean).join("\n")||o.raw;
+        return o;
+      }
+    }catch(e){}
+  }
   String(t||"").split(/\n+/).forEach(function(line){
     var m=line.match(/^\s*[-*·]?\s*(판정|진단|다음|질문|보기|답)\s*[:：]\s*(.*)$/);
     if(m) o[keys[m[1]]]=m[2].trim();
@@ -4004,7 +4022,7 @@ function liveChat(b,i){
   }
   chat.forEach(function(x,k){
     if(x.r==="me"){ h+='<div class="lc-me">'+esc(x.t)+'</div>'; return; }
-    var o=x.o||lcParse(x.t), last=(k===chat.length-1);
+    var o=(x.o&&x.o.verdict)?x.o:lcParse(x.t), last=(k===chat.length-1);
     h+='<div class="lc-ai">'
       +(o.verdict?'<div class="lc-v">'+esc(o.verdict)+'</div>':'')
       +(o.ans?'<p>'+esc(o.ans)+'</p>':'')
@@ -4046,7 +4064,7 @@ function vidCard(){
     h+='<div class="lc">';
     chat.forEach(function(x){
       if(x.r==="me"){ h+='<div class="lc-me">'+esc(x.t)+'</div>'; return; }
-      var o=x.o||lcParse(x.t);
+      var o=(x.o&&x.o.verdict)?x.o:lcParse(x.t);
       h+='<div class="lc-ai">'
        +(o.verdict?'<div class="lc-v">'+esc(o.verdict)+'</div>':'')
        +(o.ans?'<p>'+esc(o.ans)+'</p>':'')
@@ -4068,52 +4086,144 @@ function vidCard(){
 /* ---------- 스윙 영상 ----------
    영상을 통째로 보내면 너무 크고, 한 컷만 보내면 스윙이 안 보인다.
    고르게 여덟 컷을 뽑아 한 장으로 붙여 보낸다. */
+/* 스윙 영상에서 여덟 컷을 꺼내 한 장에 붙인다.
+   카카오 아카데미처럼 화면에 다시 틀어 놓은 스윙을 폰으로 찍으면, 스윙은 화면 위쪽
+   작은 칸에만 있다. 통째로 줄여 붙이면 사람이 손톱만 해져서 코치가 아무것도 못 본다.
+   그래서 먼저 움직이는 곳을 찾아 그 둘레만 잘라 크게 붙인다. */
 function videoSheet(file,cb){
   var v=document.createElement("video");
   v.preload="auto"; v.muted=true; v.playsInline=true; v.setAttribute("playsinline","");
   var url; try{ url=URL.createObjectURL(file); }catch(e){ cb(null,"영상을 열지 못했습니다."); return; }
   var done=false;
   function fail(m){ if(done) return; done=true; try{URL.revokeObjectURL(url);}catch(e){} cb(null,m); }
-  var guard=setTimeout(function(){ fail("영상을 읽는 데 너무 오래 걸립니다. 더 짧게 찍어 주세요."); },45000);
+  var guard=setTimeout(function(){ fail("영상을 읽는 데 너무 오래 걸립니다. 더 짧게 찍어 주세요."); },60000);
   v.onerror=function(){ clearTimeout(guard); fail("이 형식의 영상은 읽지 못합니다. 휴대폰 기본 카메라로 찍은 것을 올려 주세요."); };
+
+  /* 정해진 시각들로 차례로 넘기며 그림마다 f 를 부른다 */
+  function seekAll(times,f,end){
+    var k=0;
+    v.onseeked=function(){
+      if(done) return;
+      try{ f(k); }catch(e){ clearTimeout(guard); fail("영상에서 그림을 꺼내지 못했습니다."); return; }
+      k++; next();
+    };
+    function next(){
+      if(k>=times.length){ end(); return; }
+      try{ v.currentTime=times[k]; }catch(e){ clearTimeout(guard); fail("영상을 넘기지 못했습니다."); }
+    }
+    next();
+  }
+
   v.onloadedmetadata=function(){
     var dur=v.duration;
     if(!isFinite(dur)||dur<=0){ clearTimeout(guard); fail("영상 길이를 알 수 없습니다."); return; }
     if(dur>20){ clearTimeout(guard); fail("영상이 "+Math.round(dur)+"초입니다. 스윙 한 번만 10초 안으로 찍어 주세요."); return; }
-    var N=8, cols=4;
     var vw=v.videoWidth||360, vh=v.videoHeight||640;
-    var cw=Math.min(220,vw), ch=Math.round(vh*(cw/vw));
-    var cv=document.createElement("canvas");
-    cv.width=cw*cols; cv.height=ch*Math.ceil(N/cols);
-    var cx=cv.getContext("2d");
-    cx.fillStyle="#000"; cx.fillRect(0,0,cv.width,cv.height);
-    var k=0;
-    function step(){
-      if(k>=N){
+    var clampT=function(t){ return Math.min(Math.max(t,0), Math.max(dur-0.05,0)); };
+
+    /* ① 작게 열두 장을 떠서, 손떨림을 맞춘 뒤 움직임이 몰린 곳을 찾는다 */
+    var SW=96, SH=Math.max(8,Math.round(vh*SW/vw)), M=12, small=[];
+    var sc=document.createElement("canvas"); sc.width=SW; sc.height=SH;
+    var sx=sc.getContext("2d",{willReadFrequently:true});
+    var t1=[]; for(var i=0;i<M;i++) t1.push(clampT(dur*(i+0.5)/M));
+    seekAll(t1,function(){
+      sx.drawImage(v,0,0,SW,SH);
+      var d=sx.getImageData(0,0,SW,SH).data, g=new Float32Array(SW*SH);
+      for(var p=0,q=0;p<g.length;p++,q+=4) g[p]=d[q]*0.299+d[q+1]*0.587+d[q+2]*0.114;
+      small.push(g);
+    },function(){
+      var box=motionBox(small,SW,SH);
+      /* ② 그 둘레만 잘라 여덟 컷을 크게 */
+      var bx=Math.round(box.x*vw), by=Math.round(box.y*vh), bw=Math.round(box.w*vw), bh=Math.round(box.h*vh);
+      var N=8, cols=2;
+      var cw=Math.min(540,bw), ch=Math.round(bh*cw/bw);
+      if(ch>620){ ch=620; cw=Math.round(bw*ch/bh); }       /* 세로로 긴 칸은 높이를 묶는다 */
+      var cv=document.createElement("canvas");
+      cv.width=cw*cols; cv.height=ch*Math.ceil(N/cols);
+      var cx=cv.getContext("2d");
+      cx.fillStyle="#000"; cx.fillRect(0,0,cv.width,cv.height);
+      var t2=[]; for(var j=0;j<N;j++) t2.push(clampT(dur*(j+0.5)/N));
+      seekAll(t2,function(k){
+        var x=(k%cols)*cw, y=Math.floor(k/cols)*ch;
+        cx.drawImage(v,bx,by,bw,bh,x,y,cw,ch);
+        cx.fillStyle="rgba(0,0,0,.65)"; cx.fillRect(x,y,34,28);
+        cx.fillStyle="#fff"; cx.font="bold 19px sans-serif"; cx.fillText(String(k+1), x+10, y+21);
+      },function(){
         clearTimeout(guard); done=true;
         try{URL.revokeObjectURL(url);}catch(e){}
         var out=null;
-        try{ out=cv.toDataURL("image/jpeg",0.62); }catch(e){}
-        cb(out, out?null:"영상에서 그림을 꺼내지 못했습니다.");
-        return;
-      }
-      var t=dur*(k+0.5)/N;
-      try{ v.currentTime=Math.min(Math.max(t,0), Math.max(dur-0.05,0)); }
-      catch(e){ clearTimeout(guard); fail("영상을 넘기지 못했습니다."); }
-    }
-    v.onseeked=function(){
-      if(done) return;
-      var x=(k%cols)*cw, y=Math.floor(k/cols)*ch;
-      try{ cx.drawImage(v,x,y,cw,ch); }
-      catch(e){ clearTimeout(guard); fail("영상에서 그림을 꺼내지 못했습니다."); return; }
-      cx.fillStyle="rgba(0,0,0,.6)"; cx.fillRect(x,y,30,24);
-      cx.fillStyle="#fff"; cx.font="bold 16px sans-serif";
-      cx.fillText(String(k+1), x+9, y+18);
-      k++; step();
-    };
-    step();
+        try{
+          out=cv.toDataURL("image/jpeg",0.82);
+          if(out.length>1600000) out=cv.toDataURL("image/jpeg",0.66);   /* 서버로 가는 길이 막히지 않게 */
+        }catch(e){}
+        cb(out, out?null:"영상에서 그림을 꺼내지 못했습니다.", box);
+      });
+    });
   };
   v.src=url;
+}
+/* 손떨림을 맞춘 뒤 '진짜로 움직인 곳'이 몰린 띠를 찾는다. 결과는 화면 대비 비율.
+   손떨림은 한 픽셀 안쪽으로도 남아서, 글자처럼 선명한 테두리에서 가짜 움직임을 만든다.
+   그래서 흔들림을 그 자리의 테두리 세기로 나눠, 테두리 때문에 생긴 흔들림을 깎는다. */
+function motionBox(fr,W,H){
+  var full={x:0,y:0,w:1,h:1,full:true};
+  if(!fr||fr.length<4) return full;
+  var R=5, w=W-2*R, h=H-2*R; if(w<20||h<20) return full;
+  var ref=fr[Math.floor(fr.length/2)];
+  var al=fr.map(function(f){
+    var best=1e18,bdx=0,bdy=0;
+    for(var dy=-R;dy<=R;dy++) for(var dx=-R;dx<=R;dx++){
+      var sum=0;
+      for(var y=0;y<h;y+=2){ var o1=(y+R+dy)*W+R+dx, o2=(y+R)*W+R;
+        for(var x=0;x<w;x+=2){ var d=f[o1+x]-ref[o2+x]; sum+=d<0?-d:d; } }
+      if(sum<best){ best=sum; bdx=dx; bdy=dy; }
+    }
+    var out=new Float32Array(w*h);
+    for(var y2=0;y2<h;y2++) for(var x2=0;x2<w;x2++) out[y2*w+x2]=f[(y2+R+bdy)*W+x2+R+bdx];
+    return out;
+  });
+  var n=al.length, mean=new Float32Array(w*h), sd=new Float32Array(w*h);
+  for(var pi=0;pi<w*h;pi++){
+    var m=0,m2=0; for(var k=0;k<n;k++){ var v=al[k][pi]; m+=v; m2+=v*v; }
+    m/=n; mean[pi]=m; sd[pi]=Math.sqrt(Math.max(0,m2/n-m*m));
+  }
+  var C=6, gw=Math.floor(w/C), gh=Math.floor(h/C), G=new Float32Array(gw*gh);
+  for(var cy=0;cy<gh;cy++) for(var cx=0;cx<gw;cx++){
+    var acc=0;
+    for(var yy=cy*C;yy<cy*C+C;yy++) for(var xx=cx*C;xx<cx*C+C;xx++){
+      var i=yy*w+xx;
+      var gx=(xx>0&&xx<w-1)?Math.abs(mean[i+1]-mean[i-1])/2:0;
+      var gy=(yy>0&&yy<h-1)?Math.abs(mean[i+w]-mean[i-w])/2:0;
+      acc+=sd[i]/(Math.max(gx,gy)+8);
+    }
+    G[cy*gw+cx]=acc/(C*C);
+  }
+  var sorted=Array.prototype.slice.call(G).sort(function(a,b){ return a-b; });
+  var thr=sorted[Math.floor(sorted.length*0.85)], top=sorted[sorted.length-1];
+  if(!(top>0.25)) return full;                       /* 움직임이 거의 없다 — 통째로 */
+  var rows=new Float32Array(gh), cols=new Float32Array(gw);
+  for(var j=0;j<G.length;j++){ if(G[j]<thr) continue; rows[Math.floor(j/gw)]+=G[j]; cols[j%gw]+=G[j]; }
+  /* 움직임이 이어서 몰린 가장 무거운 띠 — 떨어진 곳의 잔떨림은 버린다 */
+  function band(p){
+    var n2=p.length, sm=new Float32Array(n2), mx=0;
+    for(var q=0;q<n2;q++){ sm[q]=(p[q]*2+(q>0?p[q-1]:0)+(q<n2-1?p[q+1]:0))/4; if(sm[q]>mx) mx=sm[q]; }
+    if(!mx) return null;
+    var best=null,bm=0,a=-1,m2=0,gap=0,end=0;
+    for(var q2=0;q2<=n2;q2++){
+      var on=q2<n2&&sm[q2]>=mx*0.3;
+      if(on){ if(a<0){ a=q2; m2=0; } m2+=p[q2]; gap=0; end=q2; }
+      else if(a>=0){ gap++; if(gap>1||q2===n2){ if(m2>bm){ bm=m2; best=[a,end]; } a=-1; gap=0; } }
+    }
+    return best;
+  }
+  var rb=band(rows), cb=band(cols);
+  if(!rb||!cb) return full;
+  var pad=1.5;
+  var px0=Math.max(0,(cb[0]-pad)*C+R), px1=Math.min(W,(cb[1]+1+pad)*C+R);
+  var py0=Math.max(0,(rb[0]-pad)*C+R), py1=Math.min(H,(rb[1]+1+pad)*C+R);
+  var bw=(px1-px0)/W, bh=(py1-py0)/H;
+  if(bw*bh>0.8 || bw<0.2 || bh<0.15) return full;    /* 거의 전부이거나 너무 작으면 믿지 않는다 */
+  return {x:px0/W,y:py0/H,w:bw,h:bh,full:false};
 }
 
 /* 스윙 영상 여덟 컷을 코치에게 보인다. */
@@ -4125,20 +4235,23 @@ function lcVideo(i,file){
   var key = (i>=0) ? ("lc"+i) : "lcv";
   if(!ready.ai){ S.msg[key]="AI 키가 아직 없습니다."; render(); return; }
   S.vmsg[key]="영상에서 여덟 컷을 꺼내는 중입니다."; S.msg[key]=null; S.busy[key]=true; render();
-  videoSheet(file,function(url,err){
+  videoSheet(file,function(url,err,box){
     if(err||!url){ S.busy[key]=false; S.vmsg[key]=null; S.msg[key]=err||"영상을 읽지 못했습니다."; render(); return; }
     var cl=S.clubs.filter(function(x){return x.id===b.clubId;})[0];
     b.chat=b.chat||[];
     b.chat.push({r:"me",t:"스윙 영상을 올렸습니다."});
     var p=profileText()
-     +"\n\n스윙 한 번을 처음부터 끝까지 여덟 컷으로 잘라 한 장에 붙인 그림입니다. "
-     +"왼쪽 위 1번부터 오른쪽 아래 8번까지가 시간 순서입니다."
+     +"\n\n스윙 영상에서 여덟 컷을 고르게 꺼내 한 장에 붙인 그림입니다. "
+     +"왼쪽 위 1번부터 오른쪽 아래 8번까지, 한 줄에 두 컷씩 시간 순서입니다."
+     +((box&&!box.full)?" 움직임이 있는 부분만 잘라 크게 붙였습니다.":"")
+     +"\n연습장 화면(카카오 등)에 다시 틀어 놓은 스윙을 폰으로 찍은 것일 수 있습니다. 그러면 한 컷 안에 정면과 옆면이 나란히 있을 수 있으니 둘 다 보세요. 화면의 글자·숫자·버튼은 스윙이 아닙니다."
+     +"\n영상이 스윙 전체가 아니라 일부(예: 백스윙만)일 수 있습니다. 보이는 구간만 판정하세요."
      +(cl?("\n친 채: "+b.clubName+" ("+[cl.brand,cl.model,cl.loft?cl.loft+"도":"",cl.shaft,cl.flex].filter(Boolean).join(" ")+")")
          :(b.clubName?("\n친 채: "+b.clubName):""))
      +(b.m&&Object.keys(b.m).length?("\n이 세트에서 잰 값: "+metricSummary(b.m)):"")
      +"\n\n보이는 것만 말하세요. 흐리거나 가려서 안 보이면 안 보인다고 하세요. 없는 것을 지어내지 마세요."
      +"\n고칠 것은 한 가지만 고르세요. 숫자가 같이 있으면 그 숫자와 맞물리는 것으로 고르세요."
-     +"\n\n아래 형식 그대로, 전체 240자 이내로 답하세요."
+     +"\n\nJSON 이나 코드 블록으로 쓰지 말고, 아래 세 줄 형식 그대로, 전체 240자 이내로 답하세요."
      +"\n판정: (몇 번 컷에서 무엇이 보이는지 한 문장)"
      +"\n진단: (그래서 무엇이 문제인지 한 문장)"
      +"\n다음: (다음 세트에서 바꿀 동작 하나 + 성공 판정 숫자)";
