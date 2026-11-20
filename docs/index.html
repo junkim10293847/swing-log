@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v75">
+<meta name="app-version" content="v76">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1292,7 +1292,9 @@ function render(){
   var sub=document.getElementById("sub");
   sub.textContent = !S.loaded ? "불러오는 중"
     : !connOK() ? "구글 시트에 연결되지 않음"
-    : (S.syncing ? "맞추는 중" : "");
+    : (S.syncing ? "맞추는 중" : (APP_VER+(S.verNew?" · 새 버전 "+S.verNew+" 있음":" · 최신")));
+  sub.style.color = S.verNew ? "var(--accent)" : "";
+  if(S.verNew) sub.setAttribute("data-act","reloadApp"); else sub.removeAttribute("data-act");
   var h = "";
   if(S.msg.flash) h += '<div class="banner warn" style="margin-bottom:14px">'+esc(S.msg.flash)+'</div>';
   h += offlineBar();
