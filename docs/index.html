@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v79">
+<meta name="app-version" content="v80">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -810,7 +810,7 @@ var S = {tab:"practice", clubs:[], sessions:[], rounds:[], loaded:false, draft:n
   vmsg:{}, coolOpen:false, pendingVid:null, ask:null, idleOut:false, logSec:"sessions", moreOpen:false, openBought:false, boughtWhen:"2026년 6월 7일", boughtDone:0, boughtAll:0, qDraft:"", srv:null, asksec:{}, planText:null,
   stripOpen:false, setOpen:false, planOpen:false, sheetShown:null, openRound:"", resumed:false, preFocus:"",
   earlyShown:false, preGoal:"", preDiag:null,
-  askOpen:"", askDraft:"", askAns:{}, askAsked:{}, offline:null, verNew:null, verLog:[], verLatest:"",
+  askOpen:"", askDraft:"", askAns:{}, askAsked:{}, askThread:{}, offline:null, verNew:null, verLog:[], verLatest:"",
   multi:{names:[],files:[],urls:[],marks:[],busy:false,at:0,log:[],bad:false}, loadTimer:null,
   lock:{need:true,checking:true,needUrl:false,mode:"login",id:"",name:"",err:null,busy:false,wait:0,focused:false},
   conn:{db:null,user:null,uid:null,err:null,tried:false,retrying:false}};
@@ -2547,21 +2547,43 @@ function sheetRound(){
 }
 
 /* ====================== 동작 ====================== */
+/* 코치와 이어지는 대화 — 앞의 문답을 기억하고, 다음에 물을 만한 것을 셋 내놓는다. */
 function askScope(scope){
   var k="ab_"+scope;
   var q=String(S.askDraft||"").trim();
   if(!q){ S.msg[k]="무엇을 물어볼지 적거나 위의 질문을 눌러 주세요."; render(); return; }
   if(!ready.ai){ S.msg[k]="AI 키가 아직 없습니다."; render(); return; }
   S.msg[k]=null;
+  var th=S.askThread[scope]||[];
+  var past=th.slice(-3).map(function(x){
+    return "물음: "+x.q+"\n코치: "+String(x.a).slice(0,500);
+  }).join("\n\n");
   var p=profileText()+"\n\n"+askContext(scope)
+   +(past?("\n\n지금까지 나눈 이야기(이어지는 질문이면 이 흐름을 이어서 답하세요):\n"+past):"")
    +"\n\n질문: "+q
-   +"\n\n위 기록만 근거로 답하세요. 없는 숫자는 만들지 말고 '측정이 없다'고 쓰세요.\n"
-   +"답: 결론 한 문장. 한쪽을 고르세요.\n"
-   +"근거: 위 숫자를 직접 인용해 두세 문장.\n"
-   +"할 일: 다음에 바꿀 것 한 가지만.\n"
-   +"500자 이내, 머리말 없이 바로 시작.";
+   +"\n\n당신은 이 사람을 오래 봐 온 골프 코치입니다. 질문에 정면으로, 구체적으로 답하세요."
+   +"\n- 이 사람의 숫자는 위 기록에 있는 것만 인용하고, 없으면 '측정이 없다'고 쓰세요."
+   +"\n- 측정기 읽는 법, 스윙 원리, 점검 방법 같은 골프 지식은 기록에 없어도 자유롭게 설명하세요. 그게 코치의 일입니다."
+   +"\n- 막연한 말(관련이 있다, 중요하다) 대신 무엇을 보고 몇이면 좋은지 숫자와 동작으로 쓰세요."
+   +"\n형식:"
+   +"\n답: 질문에 대한 직접 답 두세 문장."
+   +"\n근거: 이 사람 기록의 숫자를 인용해 한두 문장 (관련 기록이 없으면 생략)."
+   +"\n해 볼 것: 1) 2) 3) 순서대로 — 각각 무엇을, 어떻게, 몇이 나오면 성공인지."
+   +"\n이어서: 이 사람이 다음에 물어볼 만한 짧은 질문 세 개를 ' | ' 로 구분해 한 줄로."
+   +"\n800자 이내, 머리말 없이 '답:'으로 시작.";
   ask(k,p,{modelTier:"default"}).then(function(t){
-    S.askAns[scope]=t; S.askAsked[scope]=q; S.askDraft=""; render();
+    var txt=String(t||"").trim(), next=[];
+    var m=txt.match(/\n?\s*\**\s*이어서\s*\**\s*[:：]\s*([^\n]+)\s*$/);
+    if(m){
+      next=m[1].split(/\s*[|｜]\s*/).map(function(x){ return x.replace(/^[\s\-•·\d.)]+|[\s"“”]+$/g,"").trim(); })
+        .filter(function(x){ return x && x.length<=40; }).slice(0,3);
+      txt=txt.slice(0,m.index).trim();
+    }
+    th=(S.askThread[scope]||[]).concat([{q:q,a:txt,next:next}]).slice(-6);
+    S.askThread[scope]=th;
+    S.askAns[scope]=txt; S.askAsked[scope]=q; S.askDraft="";
+    var qe=document.getElementById("ab_q"); if(qe) qe.value="";      /* 다시 그릴 때 입력칸 글을 살려 두므로 직접 비운다 */
+    render();
   }).catch(function(){});
 }
 
@@ -2968,18 +2990,25 @@ function askBar(scope){
     return '<div class="card"><div class="spread secHead" data-act="askOpen" data-s="'+scope+'" role="button">'
      +'<div class="eyebrow">'+esc(C.t)+'</div><span class="secRight"><span class="chev">▾</span></span></div></div>';
   }
-  var k="ab_"+scope;
-  var h='<div class="card"><div class="spread"><div class="eyebrow">'+esc(C.t)+'</div>'
-   +'<button class="btn ghost sm" data-act="askOpen" data-s="'+scope+'">닫기</button></div>';
-  h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'
-   + C.q.map(function(q){ return '<button class="chip acc" style="border:0;cursor:pointer;padding:7px 12px" '
-      +'data-act="askPick" data-s="'+scope+'" data-q="'+esc(q)+'">'+esc(q)+'</button>'; }).join("")
-   +'</div>';
-  h+='<textarea id="ab_q" style="min-height:52px;margin-top:10px" placeholder="직접 물어도 됩니다">'+esc(S.askDraft||"")+'</textarea>';
+  var k="ab_"+scope, th=S.askThread[scope]||[], last=th[th.length-1];
+  var h='<div class="card"><div class="spread"><div class="eyebrow">'+esc(C.t)+'</div><span>'
+   +(th.length?'<button class="btn ghost sm" data-act="askNew" data-s="'+scope+'">새로 묻기</button> ':'')
+   +'<button class="btn ghost sm" data-act="askOpen" data-s="'+scope+'">닫기</button></span></div>';
+  /* 나눈 이야기 — 오래된 것부터, 맨 아래가 방금 답 */
+  th.forEach(function(x,i){
+    h+='<div class="ai" style="margin-top:12px'+(i<th.length-1?';opacity:.78':'')+'"><div class="hd">'+esc(x.q)+'</div>'+esc(x.a)+'</div>';
+  });
+  var chips=(last&&last.next&&last.next.length)?last.next:(th.length?[]:C.q);
+  if(chips.length){
+    h+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px">'
+     + chips.map(function(q){ return '<button class="chip acc" style="border:0;cursor:pointer;padding:7px 12px" '
+        +'data-act="askPick" data-s="'+scope+'" data-q="'+esc(q)+'">'+esc(q)+'</button>'; }).join("")
+     +'</div>';
+  }
+  h+='<textarea id="ab_q" style="min-height:52px;margin-top:10px" placeholder="'+(th.length?'이어서 물어보기':'직접 물어도 됩니다')+'">'+esc(S.askDraft||"")+'</textarea>';
   h+='<button class="btn full" style="margin-top:8px" data-act="askGo" data-s="'+scope+'"'+(S.busy[k]?" disabled":"")+'>'
-   +(S.busy[k]?('<span class="spin"></span> 답 만드는 중 <span data-tick="'+k+'">'+(S.asksec[k]||0)+'초</span>'):'물어보기')+'</button>';
+   +(S.busy[k]?('<span class="spin"></span> 답 만드는 중 <span data-tick="'+k+'">'+(S.asksec[k]||0)+'초</span>'):(th.length?'이어서 물어보기':'물어보기'))+'</button>';
   if(S.msg[k]) h+='<div class="banner bad" style="margin-top:10px">'+esc(S.msg[k])+'</div>';
-  if(S.askAns[scope]) h+='<div class="ai" style="margin-top:12px"><div class="hd">'+esc(S.askAsked[scope]||"답")+'</div>'+esc(S.askAns[scope])+'</div>';
   return h+'</div>';
 }
 
@@ -3009,12 +3038,11 @@ function askContext(scope){
   }
   var ss=S.sessions.slice(0,6);
   if(!ss.length) return "연습 기록이 없습니다.";
-  return "연습 기록 "+S.sessions.length+"회 중 최근 "+ss.length+"회\n"+ss.map(function(x){
-    return "· "+fmtDate(x.date)+" — "+((x.blocks||[]).map(function(b){
-      return b.clubName+(b.mode==="섞어"?"(섞어)":"")+" "+(b.m&&b.m.carry!=null?r1(b.m.carry)+"m":"—")
-        +(b.m&&b.m.grade?("/"+b.m.grade):"");
-    }).join(", ")||"세트 없음")
-      +(x.feeling?(" / 느낀점: "+String(x.feeling).slice(0,70)):"");
+  /* 세트마다 측정값을 다 넘긴다 — 사이드스핀·방향·볼스피드를 물어도 답할 근거가 있어야 한다 */
+  return "연습 기록 "+S.sessions.length+"회 중 최근 "+ss.length+"회 (세트마다 10발 평균)\n"+ss.map(function(x){
+    return "· "+fmtDate(x.date)+(x.feeling?(" / 느낀점: "+String(x.feeling).slice(0,80)):"")+"\n"+((x.blocks||[]).map(function(b){
+      return "   - "+b.clubName+(b.mode==="섞어"?"(섞어)":"")+": "+(b.m?metricSummary(b.m):"측정 없음");
+    }).join("\n")||"   - 세트 없음");
   }).join("\n");
 }
 
@@ -4659,6 +4687,7 @@ document.addEventListener("click",function(ev){
     var sc=el.getAttribute("data-s");
     S.askOpen=(S.askOpen===sc)?"":sc; S.askDraft=""; render(); return;
   }
+  if(a==="askNew"){ S.askThread[el.getAttribute("data-s")]=[]; S.askDraft=""; render(); return; }
   if(a==="askPick"){
     S.askDraft=el.getAttribute("data-q")||"";
     askScope(el.getAttribute("data-s")); return;
