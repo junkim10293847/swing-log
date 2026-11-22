@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v78">
+<meta name="app-version" content="v79">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -990,32 +990,40 @@ function showCached(){
   return true;
 }
 
-/* 2026-11-22 아이언 교체 — 8세대 5~P 를 9세대로 바꾼다. 4번(8세대)은 팔 때까지 예비로.
-   서버에서 받은 자료에만, 아직 8세대로 남은 것에만 한 번 적용된다. */
+/* 2026-11-22 아이언 교체 — 새 9세대 5~P 는 기록 없이 새 클럽으로 시작한다.
+   8세대 클럽은 지난 기록을 품은 채 '예비'로 물러나고 이름에 (8세대)가 붙는다.
+   v78 에서 8세대 클럽을 그 자리에서 9세대로 고쳐 둔 경우도 되돌려 나눈다.
+   서버에서 받은 자료에만, 새 클럽(ix…)이 아직 없을 때만 적용된다. */
 function migrateIX(){
-  var DAY="2026-11-22", n=0;
-  S.clubs.forEach(function(c){
-    if(c.cat!=="iron" && c.id!=="pw") return;
-    var m=String(c.model||"");
-    if(!/VIII|8세대/.test(m)) return;
-    var is4=c.id==="i4"||/^4번/.test(c.name||"");
-    var c2=JSON.parse(JSON.stringify(c));
-    if(is4){
-      if(c2.spare) return;
-      c2.spare=true;
-      c2.note="8세대 — 9세대 세트(5~P)로 바꾸며 판매 예정."+(c2.note?"\n"+c2.note:"");
-    } else {
-      c2.model="투어B V300 IX (9세대)";
-      c2.bought=DAY;
-      if(c2.spec) c2.spec=c2.spec.replace(/V300 VIII/g,"V300 IX")+"\n\n("+DAY+" 9세대로 교체, 같은 샤프트. 위 실측은 8세대 기준 — 9세대로 다시 재면 바뀐다.)";
-      c2.issues=(c2.issues||[]).filter(function(x){ return !/교체는 보류|교체하거나/.test(x); });
-      c2.note=DAY+" 8세대에서 9세대로 교체. 로프트는 9세대 스펙 카드로 확인할 것."
-        +(c2.note?"\n"+String(c2.note).replace(/로프트는 제조사 표기 기준입니다\. 다르면 수정하세요\.\n?/g,"").trim():"");
-      c2.note=c2.note.trim();
-    }
-    n++; put("clubs",c2,true).catch(function(){});
+  var DAY="2026-11-22", OLD_BOUGHT="2026-06-07", n=0, jobs=[];
+  function has(id){ return S.clubs.some(function(c){ return c.id===id; }); }
+  S.clubs.slice().forEach(function(c){
+    var nm=String(c.name||""), m=String(c.model||""), note=String(c.note||"");
+    if(c.spare || /\(8세대\)/.test(nm)) return;
+    var k=/^([4-9])번/.exec(nm), isP=/피칭|^PW$/i.test(nm)||c.id==="pw";
+    if(!k && !isP) return;
+    var was8=/VIII|8세대/.test(m), v78=/IX|9세대/.test(m) && note.indexOf(DAY+" 8세대에서 9세대로 교체")>=0;
+    if(!was8 && !v78) return;
+    var nid = isP ? "ixp" : ("ix"+k[1]);
+    var o=JSON.parse(JSON.stringify(c));
+    o.name=nm+" (8세대)";
+    o.model="투어B V300 VIII (8세대)";
+    o.spare=true;
+    o.order=(num(o.order)||0)+1000;
+    if(o.bought===DAY) o.bought=OLD_BOUGHT;
+    if(o.spec) o.spec=String(o.spec).replace(/\n*\(2026-11-22 9세대로 교체[^)]*\)\s*$/,"").replace(/V300 IX/g,"V300 VIII");
+    note=note.replace(/^2026-11-22 8세대에서 9세대로 교체\.[^\n]*\n?/,"").replace(/^8세대 — 9세대 세트\(5~P\)로 바꾸며 판매 예정\.\n?/,"").trim();
+    o.note="8세대 — 9세대로 바꾸며 판매 예정. 지난 기록은 여기 남아 있다."+(note?"\n"+note:"");
+    n++; jobs.push(put("clubs",o,true).catch(function(){}));
+    if(k&&k[1]==="4") return;                     /* 4번은 새로 사지 않았다 */
+    if(has(nid)) return;
+    var x={id:nid, name:nm, cat:c.cat, loft:c.loft, brand:c.brand||"브리지스톤",
+      model:"투어B V300 IX (9세대)", shaft:c.shaft||"NS Pro 950GH neo", flex:c.flex||"R",
+      length:c.length||"", bought:DAY, order:c.order, spare:false,
+      note:DAY+" 새로 산 세트. 아직 측정 없음 — 로프트는 9세대 스펙 카드로 확인할 것."};
+    jobs.push(put("clubs",x,true).catch(function(){}));
   });
-  if(n) setTimeout(render,0);
+  if(n) Promise.all(jobs).then(function(){ render(); });
 }
 
 function loadAll(quiet){
@@ -3546,7 +3554,7 @@ function guessClub(raw){
   var t=String(raw||"").toUpperCase().replace(/\s+/g,"");
   if(!t) return null;
   function find(pred){ for(var i=0;i<S.clubs.length;i++){ if(pred(S.clubs[i])) return S.clubs[i]; } return null; }
-  function byId(id){ return find(function(c){ return c.id===id; }); }
+  function byId(id){ return find(function(c){ return c.id===id && !c.spare; }); }
 
   /* 드라이버 */
   if(/^(DR|D|W1|1W|드라이버|DRIVER)$/.test(t)){
@@ -3556,7 +3564,7 @@ function guessClub(raw){
   if(/^(PT|PUTTER|퍼터)$/.test(t)) return find(function(c){ return c.cat==="putter"; });
   /* 웨지 — 로프트 숫자 또는 기호 */
   var lw=/(\d{2})\s*°?/.exec(t);
-  if(/^(PW|P|피칭)/.test(t)) return byId("pw") || find(function(c){ return /피칭|PW/i.test(c.name||""); });
+  if(/^(PW|P|피칭)/.test(t)) return byId("ixp") || byId("pw") || find(function(c){ return !c.spare && /피칭|PW/i.test(c.name||""); });
   if(/^(AW|GW|A|G|갭)/.test(t)) return byId("w48") || find(function(c){ return c.cat==="wedge" && c.loft===48; });
   if(/^(SW|S|샌드)/.test(t)) return byId("w56") || find(function(c){ return c.cat==="wedge" && c.loft===56; });
   if(/^(LW|L|로브)/.test(t)) return find(function(c){ return c.cat==="wedge" && c.loft>=58; });
@@ -3585,7 +3593,8 @@ function guessClub(raw){
   var ir=/(\d)\s*(I|IRON|번|아이언)|^#?(\d)$|^I\s*(\d)$/.exec(t);
   if(ir){
     var n=parseInt(ir[1]||ir[3]||ir[4],10);
-    if(n>=3 && n<=9) return byId("i"+n) || find(function(c){ return c.cat==="iron" && new RegExp("^"+n+"번").test(c.name||""); });
+    if(n>=3 && n<=9) return byId("ix"+n) || byId("i"+n) || find(function(c){ return c.cat==="iron" && !c.spare && new RegExp("^"+n+"번").test(c.name||""); })
+      || find(function(c){ return c.cat==="iron" && new RegExp("^"+n+"번").test(c.name||""); });
   }
   /* 이름이 그대로 적힌 경우 */
   return find(function(c){ return String(c.name||"").toUpperCase().replace(/\s+/g,"")===t; });
