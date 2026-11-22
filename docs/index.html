@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v80">
+<meta name="app-version" content="v81">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -1023,7 +1023,29 @@ function migrateIX(){
       note:DAY+" 새로 산 세트. 아직 측정 없음 — 로프트는 9세대 스펙 카드로 확인할 것."};
     jobs.push(put("clubs",x,true).catch(function(){}));
   });
-  if(n) Promise.all(jobs).then(function(){ render(); });
+  Promise.all(jobs).then(function(){ try{ relinkIX(); }catch(e){} render(); });
+}
+
+/* 2026-11-22 부터 친 아이언은 9세대다. 새 클럽이 생기기 전에(옛 화면으로) 올린 세트가
+   8세대(i5…pw)에 붙어 있으면 9세대(ix5…ixp)로 옮긴다. 그 전 날짜의 기록은 건드리지 않는다. */
+function relinkIX(){
+  var DAY="2026-11-22", MAP={i5:"ix5",i6:"ix6",i7:"ix7",i8:"ix8",i9:"ix9",pw:"ixp"}, live={};
+  S.clubs.forEach(function(c){ if(!c.spare) live[c.id]=c; });
+  function fix(blocks){
+    var n=0;
+    (blocks||[]).forEach(function(b){
+      var to=MAP[b.clubId];
+      if(to && live[to]){ b.clubId=to; b.clubName=live[to].name; n++; }
+    });
+    return n;
+  }
+  var d=S.draft, did=d&&d.id;
+  if(d && String(d.date||"")>=DAY && fix(d.blocks)){ try{ watchDraft(); }catch(e){} }
+  S.sessions.forEach(function(x){
+    if(String(x.date||"")<DAY || (did && x.id===did)) return;
+    /* 화면 쪽 기록도 바로 고친다 — 오늘 것은 곧 여기서 이어 받아 다시 저장되기 때문이다 */
+    if(fix(x.blocks)) put("sessions",JSON.parse(JSON.stringify(x)),true).catch(function(){});
+  });
 }
 
 function loadAll(quiet){
