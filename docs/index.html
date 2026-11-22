@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="app-version" content="v77">
+<meta name="app-version" content="v78">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <base target="_top">
@@ -990,12 +990,41 @@ function showCached(){
   return true;
 }
 
+/* 2026-11-22 아이언 교체 — 8세대 5~P 를 9세대로 바꾼다. 4번(8세대)은 팔 때까지 예비로.
+   서버에서 받은 자료에만, 아직 8세대로 남은 것에만 한 번 적용된다. */
+function migrateIX(){
+  var DAY="2026-11-22", n=0;
+  S.clubs.forEach(function(c){
+    if(c.cat!=="iron" && c.id!=="pw") return;
+    var m=String(c.model||"");
+    if(!/VIII|8세대/.test(m)) return;
+    var is4=c.id==="i4"||/^4번/.test(c.name||"");
+    var c2=JSON.parse(JSON.stringify(c));
+    if(is4){
+      if(c2.spare) return;
+      c2.spare=true;
+      c2.note="8세대 — 9세대 세트(5~P)로 바꾸며 판매 예정."+(c2.note?"\n"+c2.note:"");
+    } else {
+      c2.model="투어B V300 IX (9세대)";
+      c2.bought=DAY;
+      if(c2.spec) c2.spec=c2.spec.replace(/V300 VIII/g,"V300 IX")+"\n\n("+DAY+" 9세대로 교체, 같은 샤프트. 위 실측은 8세대 기준 — 9세대로 다시 재면 바뀐다.)";
+      c2.issues=(c2.issues||[]).filter(function(x){ return !/교체는 보류|교체하거나/.test(x); });
+      c2.note=DAY+" 8세대에서 9세대로 교체. 로프트는 9세대 스펙 카드로 확인할 것."
+        +(c2.note?"\n"+String(c2.note).replace(/로프트는 제조사 표기 기준입니다\. 다르면 수정하세요\.\n?/g,"").trim():"");
+      c2.note=c2.note.trim();
+    }
+    n++; put("clubs",c2,true).catch(function(){});
+  });
+  if(n) setTimeout(render,0);
+}
+
 function loadAll(quiet){
   if(quiet) S.syncing=true;
   return call("apiLoad").then(function(d){
     applyPayload(d);
     putCache(d);
     S.conn.db=true; S.conn.user=true; S.conn.uid="sheet"; S.conn.err=null; S.offline=null;
+    try{ migrateIX(); }catch(e){}
     S.loaded=true; S.fromCache=false; S.syncing=false;
     if(S.loadTimer) clearTimeout(S.loadTimer); setTimeout(render,0);
   }).catch(function(e){
